@@ -232,6 +232,7 @@ public static class Strings
         ["DefaultGrid"] = new("Grid when a project opens", "打开项目时的网格", "プロジェクトを開いたときのグリッド"),
         ["SectionPlayback"] = new("Playback", "播放", "再生"),
         ["HitVolume"] = new("Hit sound volume", "击打音音量", "打音の音量"),
+        ["HitSoundSet"] = new("Hit sounds", "击打音色", "打音の種類"),
         ["PlayHits"] = new("Play hit sounds", "播放击打音", "打音を鳴らす"),
         ["Latency"] = new("Audio latency (ms)", "音频延迟（毫秒）", "オーディオ遅延（ミリ秒）"),
         ["LatencyHint"] = new("Raise it when notes reach the judge before you hear them; the playhead then waits for the sound.",

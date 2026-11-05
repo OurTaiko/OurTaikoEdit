@@ -518,6 +518,8 @@ public sealed partial class EditorViewModel : ViewModelBase
     }
 
     int caretLine = 1, caretColumn = 1;
+    // The hit sound set the player has.
+    int loadedHitSet;
 
     // The settings changed (the settings dialog): the words of the interface are made again and
     // the rest is taken over; the grid stays as it is, the setting is for opening a project.
@@ -529,6 +531,12 @@ public sealed partial class EditorViewModel : ViewModelBase
         Volume = Settings.Volume;
         HitSounds = Settings.HitSounds;
         if (player != null) player.HitVolume = (float)Settings.HitVolume;
+        if (player != null && loadedHitSet != Settings.HitSoundSet)
+        {
+            loadedHitSet = Settings.HitSoundSet;
+            var (don, ka) = HitSoundSets.Load(loadedHitSet);
+            player.SetHitSounds(don, ka);
+        }
         Caret = Loc.F("Caret", caretLine, caretColumn);
         AudioStatus = audioStatusText();
         if (MessageLanguage != Settings.MessageLanguage) MessageLanguage = Settings.MessageLanguage;
@@ -605,18 +613,19 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (path == null) { SetAudioStatus(() => Loc.T("NoAudioWave")); return; }
         if (!File.Exists(path)) { SetAudioStatus(() => Loc.F("FileMissing", audio)); return; }
         SetAudioStatus(() => Loc.F("AudioLoading", Path.GetFileName(path)));
+        int hitSet = loadedHitSet = Settings.HitSoundSet;
         Task.Run(() =>
         {
             var pcm = PcmAudio.Decode(path);
-            return (pcm, new Waveform(pcm));
+            return (pcm, new Waveform(pcm), HitSoundSets.Load(hitSet));
         }).ContinueWith(t => Dispatcher.UIThread.Post(() =>
         {
             if (load != audioLoad) return;
             if (t.IsFaulted) { string error = t.Exception!.InnerException?.Message ?? ""; SetAudioStatus(() => $"{Path.GetFileName(path)}: {error}"); return; }
-            var (pcm, wave) = t.Result;
+            var (pcm, wave, hits) = t.Result;
             Waveform = wave;
             player = OpenPlayer(pcm);
-            if (player != null) { player.Volume = (float)Volume; player.HitVolume = (float)Settings.HitVolume; }
+            if (player != null) { player.Volume = (float)Volume; player.HitVolume = (float)Settings.HitVolume; player.SetHitSounds(hits.Don, hits.Ka); }
             var length = TimeSpan.FromSeconds(pcm.Duration);
             bool silent = player == null;
             SetAudioStatus(() => $"♪ {Path.GetFileName(path)} {(int)length.TotalMinutes}:{length.Seconds:00}" + (silent ? Loc.T("NoAudioDevice") : ""));

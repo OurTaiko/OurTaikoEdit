@@ -17,6 +17,8 @@ public interface IAudioPlayer : IDisposable
     void Pause();
     void Seek(double seconds);
     void PlayHit(bool ka, bool big);
+    // The don and ka sounds to play from now on.
+    void SetHitSounds(PcmAudio don, PcmAudio ka);
 }
 
 // OpenAL Soft (bundled for Windows, macOS and Linux): the whole song in one buffer, so seeking and
@@ -27,7 +29,8 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
     readonly AL al;
     readonly Device* device;
     readonly Context* context;
-    readonly uint buffer, source, donBuffer, kaBuffer;
+    readonly uint buffer, source;
+    uint donBuffer, kaBuffer;
     readonly uint[] hitSources;
     int nextHit;
     readonly Stopwatch sinceReport = new();
@@ -140,6 +143,14 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         al.SetSourceProperty(source, SourceFloat.SecOffset, (float)seekTo);
         lastReport = IsPlaying ? seekTo : -1;
         sinceReport.Restart();
+    }
+
+    public void SetHitSounds(PcmAudio don, PcmAudio ka)
+    {
+        foreach (uint s in hitSources) { al.SourceStop(s); al.SetSourceProperty(s, SourceInteger.Buffer, 0); }
+        al.DeleteBuffer(donBuffer); al.DeleteBuffer(kaBuffer);
+        donBuffer = Upload(don);
+        kaBuffer = Upload(ka);
     }
 
     public void PlayHit(bool ka, bool big)

@@ -4,6 +4,19 @@ namespace CharTaiko.Tests;
 
 public class AudioTests
 {
+    [Fact]
+    public void TheGamesHitSoundSetsAreBundled()
+    {
+        var names = HitSoundSets.Names;
+        Assert.Equal(21, names.Count);
+        Assert.Equal("太鼓", names[0]);
+        var (don, ka) = HitSoundSets.Load(0);
+        Assert.True(don.Duration > 0.05 && ka.Duration > 0.02);
+        // A set that is not there gives the synthesised sounds.
+        var (fallback, _) = HitSoundSets.Load(999);
+        Assert.Equal(HitSounds.Don(44100).Frames, fallback.Frames);
+    }
+
     // One second of stereo: silence, then a loud half second.
     static PcmAudio Tone()
     {

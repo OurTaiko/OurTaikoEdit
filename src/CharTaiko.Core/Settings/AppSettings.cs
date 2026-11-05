@@ -28,6 +28,8 @@ public sealed class AppSettings
     [JsonPropertyName("volume")] public double Volume { get; set; } = 0.8;
     [JsonPropertyName("hitSounds")] public bool HitSounds { get; set; } = true;
     [JsonPropertyName("hitVolume")] public double HitVolume { get; set; } = 0.8;
+    // The game's hit sound set (0 is its default, 太鼓).
+    [JsonPropertyName("hitSoundSet")] public int HitSoundSet { get; set; }
     // Milliseconds between the device reporting a position and the sound being heard.
     [JsonPropertyName("latencyMs")] public double LatencyMs { get; set; }
 
@@ -70,6 +72,7 @@ public sealed class AppSettings
         if (!Divisions.Contains(Division)) Division = 16;
         Volume = Unit(Volume, 0.8);
         HitVolume = Unit(HitVolume, 0.8);
+        if (HitSoundSet < 0) HitSoundSet = 0;
         LatencyMs = double.IsFinite(LatencyMs) ? Math.Clamp(Math.Round(LatencyMs), 0, 500) : 0;
         if (Window is { } w && !(w.Width >= 400 && w.Height >= 300 && double.IsFinite(w.Width) && double.IsFinite(w.Height))) Window = null;
 
@@ -97,6 +100,7 @@ public sealed class AppSettings
         Volume = edited.Volume;
         HitSounds = edited.HitSounds;
         HitVolume = edited.HitVolume;
+        HitSoundSet = edited.HitSoundSet;
         LatencyMs = edited.LatencyMs;
         Save();
     }

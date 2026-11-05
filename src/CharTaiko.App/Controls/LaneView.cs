@@ -15,7 +15,7 @@ namespace CharTaiko.App.Controls;
 // panel): the lane from x 498 with the judge 120 in, 200 high, the note-text strip under it, notes
 // placed by the game's NoteScroll (normal, BM and HB scrolling, #SUDDEN, rolls as rigid bodies),
 // #JPOSSCROLL moving the judge, bar lines 3 wide (6 and gold at a branch), the route's lane colour,
-// go-go time and #LANE_ALPHA. Notes are drawn plain (the game's sprites are its art). Notes that
+// go-go time and #LANE_ALPHA, and the game's note and note-text sprites. Notes that
 // reach the judge are taken as hit; rolls stay until they end, balloons at the judge with their
 // count. Clicking a note shows it in the code.
 public sealed class LaneView : Control
@@ -23,13 +23,14 @@ public sealed class LaneView : Control
     // The design units of the game's lane (NoteLaneRenderer, NoteScroll).
     const double LaneWidth = 1920 - 498, LaneHeight = 200, StripHeight = 64, JudgeX = 120, JudgeY = 100;
     const double SmallRadius = 51, BigRadius = 76, MojiDrop = 123, MeasureWidth = NoteScroll.MeasureWidth;
+    // Sprite sizes: note frames 192 square, text frames 256×48, a balloon's face shifted by 12/128.
+    const double NoteSize = 192, MojiWidth = 256, MojiHeight = 48, BalloonFace = 12.0 / 128;
 
     EditorViewModel? editor;
     ScrollClockTimeline? clocks;
     TaikoChart? clocksOf;
     readonly Typeface typeface = new(FontFamily.Default);
     readonly Typeface bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
-    readonly Typeface moji = new(new FontFamily("Hiragino Sans, Yu Gothic UI, Noto Sans CJK JP, Microsoft YaHei, sans-serif"), FontStyle.Normal, FontWeight.Black);
     // Where notes were drawn in the last frame, for clicks.
     readonly List<(ChartNote Note, Point Center, double Radius)> drawn = new();
 
@@ -47,14 +48,6 @@ public sealed class LaneView : Control
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
         GradientStops = { new GradientStop(Color.FromArgb(230, 0x98, 0x14, 0x28), 0), new GradientStop(Color.FromArgb(120, 0xC8, 0x3C, 0x1E), 1) },
     };
-    static readonly IBrush Don = new SolidColorBrush(Color.Parse("#F14B2E"));
-    static readonly IBrush Ka = new SolidColorBrush(Color.Parse("#5BC0CB"));
-    static readonly IBrush Roll = new SolidColorBrush(Color.Parse("#FCC31C"));
-    static readonly IBrush Balloon = new SolidColorBrush(Color.Parse("#FF7E1C"));
-    static readonly IBrush Kadon = new SolidColorBrush(Color.Parse("#A562E8"));
-    static readonly IBrush Mine = new SolidColorBrush(Color.Parse("#3B3B44"));
-    static readonly IBrush Rim = new SolidColorBrush(Color.Parse("#F7F0E0"));
-    static readonly IBrush Outline = new SolidColorBrush(Color.Parse("#1C1C1C"));
 
     public LaneView()
     {
@@ -133,7 +126,9 @@ public sealed class LaneView : Control
             ctx.FillRectangle(brush, new Rect(x - w / 2, y - 4 * s - 100 * s, w, 200 * s));
         }
 
-        // Notes, later ones under earlier ones; their text in the strip.
+        // Notes, later ones under earlier ones; then their text, in its own layer above the notes
+        // (the game's draw_notes second pass), again earlier over later.
+        var texts = new List<(ChartNote Note, Point At, double Length)>();
         for (int i = chart.Notes.Count - 1; i >= 0; i--)
         {
             var n = chart.Notes[i];
@@ -142,21 +137,24 @@ public sealed class LaneView : Control
             if (n.Time < now && !rolling) continue;
             double radius = (ChartPalette.IsBig(n.Kind) ? BigRadius : SmallRadius) * s;
             var (hx, hy) = n.IsBalloon && rolling ? (jx, jy) : Place(n);
-            if (hx - radius > b.Width) continue;
-            double tailX = hx;
+            if (hx - NoteSize / 2 * s > b.Width) continue;
+            double length = 0, rise = 0;
             if (n.IsDrumroll)
             {
                 var (tx, ty) = Tail(n);
-                tailX = tx;
-                if (tx > -radius) DrawRoll(ctx, n.Kind, new Point(hx, hy), new Point(tx, ty), radius, s);
+                length = tx - hx;
+                rise = ty - hy;
             }
-            if (hx + radius < 0 && tailX < 0) continue;
-            DrawNote(ctx, n.Kind, new Point(hx, hy), radius, s);
+            if (hx + NoteSize * s < 0 && hx + length + NoteSize * s < 0) continue;
+            var head = new Point(hx, hy);
+            if (n.IsDrumroll) DrawRoll(ctx, n.Kind == NoteKind.BigRoll, head, length, rise, s);
+            DrawNote(ctx, n.Kind, head, s, balloonTail: !(n.IsBalloon && rolling));
             if (n.IsBalloon && rolling)
                 Label(ctx, n.BalloonHits.ToString(CultureInfo.InvariantCulture), new Point(hx + radius * 0.9, hy - radius * 1.6), 26 * s + 6, ChartPalette.Text, bold);
-            DrawMoji(ctx, n, new Point(hx, jy + MojiDrop * s), tailX, s);
-            drawn.Add((n, new Point(hx, hy), radius));
+            texts.Add((n, new Point(hx, hy + MojiDrop * s), length));
+            drawn.Add((n, head, radius));
         }
+        foreach (var (n, at, length) in texts) DrawMoji(ctx, n, at, length, s);
 
         var measure = editor.Analysis.Measures.LastOrDefault(m => m.Time <= now && (m.BranchId < 0 || Shown(chart, m.BranchId, m.Route, route)));
         var tempo = chart.Tempos.LastOrDefault(t => t.Time <= now && Shown(chart, t.BranchId, t.Route, route));
@@ -169,101 +167,59 @@ public sealed class LaneView : Control
         Label(ctx, $"{chart.Course} ★{chart.Level} · {summary}", new Point(12, b.Height - 22), 12, ChartPalette.Muted);
     }
 
-    static IBrush Fill(NoteKind kind) => kind switch
+    // A note's head from the game's sheet, 192 units square about its centre. A balloon's face
+    // is shifted left by 12/128 of its width with its tail joined on the right (draw_balloon); the
+    // tail goes while it is being popped. An ad-lib, which the game does not draw, is a faint ring.
+    static void DrawNote(DrawingContext ctx, NoteKind kind, Point c, double s, bool balloonTail)
     {
-        NoteKind.Don or NoteKind.BigDon => Don,
-        NoteKind.Ka or NoteKind.BigKa => Ka,
-        NoteKind.Roll or NoteKind.BigRoll => Roll,
-        NoteKind.Balloon or NoteKind.Kusudama => Balloon,
-        NoteKind.Kadon => Kadon,
-        NoteKind.Mine => Mine,
-        _ => ChartPalette.AdLib,
-    };
-
-    // A note as the game's sprites are shaped: a dark outline, a cream rim, the colour.
-    static void DrawNote(DrawingContext ctx, NoteKind kind, Point c, double r, double s)
-    {
-        if (kind == NoteKind.AdLib)
+        if (GameSprites.Note(kind) is not { } frame)
         {
-            // Not drawn in play; a faint ring here so it can be found.
-            ctx.DrawEllipse(null, ChartPalette.AdLibRim, c, r * 0.8, r * 0.8);
+            ctx.DrawEllipse(null, ChartPalette.AdLibRim, c, SmallRadius * s * 0.8, SmallRadius * s * 0.8);
             return;
         }
-        if (kind is NoteKind.Balloon or NoteKind.Kusudama)
+        double size = NoteSize * s, left = c.X - size / 2, top = c.Y - size / 2;
+        if (kind == NoteKind.Balloon)
         {
-            // The balloon's knot trailing behind the face.
-            var knot = new StreamGeometry();
-            using (var g = knot.Open())
-            {
-                g.BeginFigure(new Point(c.X + r * 0.55, c.Y - r * 0.55), true);
-                g.LineTo(new Point(c.X + r * 1.45, c.Y));
-                g.LineTo(new Point(c.X + r * 0.55, c.Y + r * 0.55));
-                g.EndFigure(true);
-            }
-            ctx.DrawGeometry(Balloon, new Pen(Outline, 3 * s), knot);
+            left -= BalloonFace * size;
+            if (balloonTail) ctx.DrawImage(GameSprites.Notes, GameSprites.BalloonTail, new Rect(left + size, top, size, size));
         }
-        ctx.DrawEllipse(Outline, null, c, r, r);
-        ctx.DrawEllipse(Rim, null, c, r - 3 * s, r - 3 * s);
-        double face = r - 10 * s;
-        ctx.DrawEllipse(Fill(kind), null, c, face, face);
-        if (kind == NoteKind.Mine)
-        {
-            var cross = new Pen(Don, 6 * s);
-            double d = face * 0.5;
-            ctx.DrawLine(cross, new Point(c.X - d, c.Y - d), new Point(c.X + d, c.Y + d));
-            ctx.DrawLine(cross, new Point(c.X - d, c.Y + d), new Point(c.X + d, c.Y - d));
-        }
-        else if (kind == NoteKind.Kusudama) ctx.DrawEllipse(null, new Pen(Rim, 5 * s), c, face * 0.62, face * 0.62);
-        else if (kind == NoteKind.Kadon) ctx.DrawLine(new Pen(Ka, face * 0.5), new Point(c.X, c.Y - face * 0.75), new Point(c.X, c.Y + face * 0.75));
+        ctx.DrawImage(GameSprites.Notes, frame, new Rect(left, top, size, size));
     }
 
-    // A drumroll's body from the head to its tail (turned toward a tail that a vertical SCROLL
-    // put off the line), with a rounded end, under the head.
-    static void DrawRoll(DrawingContext ctx, NoteKind kind, Point head, Point tail, double r, double s)
+    // A drumroll's body from the head's centre and its tail at the end, turned toward a tail that a
+    // vertical SCROLL put off the line, under the head (NoteLaneRenderer: the body is the length
+    // plus 1/128 of the note's height, the tail as wide as its sprite's aspect).
+    static void DrawRoll(DrawingContext ctx, bool big, Point head, double length, double rise, double s)
     {
-        double dx = tail.X - head.X, dy = tail.Y - head.Y, length = Math.Sqrt(dx * dx + dy * dy);
-        double angle = Math.Atan2(dy, dx);
-        using var _ = ctx.PushTransform(Matrix.CreateRotation(angle) * Matrix.CreateTranslation(head.X, head.Y));
-        ctx.DrawRectangle(Outline, null, new Rect(0, -r, length + r, 2 * r), r, r);
-        ctx.DrawRectangle(Rim, null, new Rect(0, -(r - 3 * s), length + r - 3 * s, 2 * (r - 3 * s)), r - 3 * s, r - 3 * s);
-        double face = r - 10 * s;
-        ctx.DrawRectangle(Fill(kind), null, new Rect(0, -face, length + face, 2 * face), face, face);
+        double size = NoteSize * s, direction = length < 0 ? -1 : 1;
+        double span = Math.Sqrt(length * length + rise * rise);
+        var body = GameSprites.RollBody(big);
+        var tail = GameSprites.RollTail(big);
+        double angle = Math.Atan2(direction * rise, Math.Abs(length));
+        var turn = Matrix.CreateScale(direction, 1) * Matrix.CreateRotation(angle);
+        using (ctx.PushTransform(turn * Matrix.CreateTranslation(head.X, head.Y)))
+            ctx.DrawImage(GameSprites.Notes, body, new Rect(0, -size / 2, span + size / 128, size));
+        using (ctx.PushTransform(turn * Matrix.CreateTranslation(head.X + length, head.Y + rise)))
+            ctx.DrawImage(GameSprites.Notes, tail, new Rect(0, -size / 2, size * tail.Width / tail.Height, size));
     }
 
-    // The note's text (NoteMoji) in the strip under it; a roll's 連打 runs to its ーっ!!.
-    void DrawMoji(DrawingContext ctx, ChartNote n, Point at, double tailX, double s)
+    // The note's text (NoteMoji) from the game's sheet, 256×48 under the note; a roll's 連打 runs
+    // along moji_drumroll_mid to its ーっ!! at the tail.
+    static void DrawMoji(DrawingContext ctx, ChartNote n, Point at, double length, double s)
     {
-        string? text = n.Moji switch
+        if (GameSprites.MojiFrame(n.Moji) is not { } frame) return;
+        double w = MojiWidth * s, h = MojiHeight * s;
+        if (n.IsDrumroll)
         {
-            NoteMoji.Don => "ドン", NoteMoji.DonShort => "ド", NoteMoji.Ko => "コ", NoteMoji.Ka => "カッ", NoteMoji.KaShort => "カ",
-            NoteMoji.BigDon => "ドン(大)", NoteMoji.BigKa => "カッ(大)", NoteMoji.Roll => "連打", NoteMoji.BigRoll => "連打(大)",
-            NoteMoji.Balloon => "ふうせん", NoteMoji.Kusudama => "くすだま", NoteMoji.Kadon => "カドン",
-            _ => null,
-        };
-        if (text == null) return;
-        double size = 30 * s + 2;
-        var head = MojiText(text, size);
-        // The outline under the letters, so they stay white.
-        var outline = new Pen(Outline, 5 * s + 1.5) { LineJoin = PenLineJoin.Round };
-        void Text(FormattedText t, Point origin)
-        {
-            var g = t.BuildGeometry(origin)!;
-            ctx.DrawGeometry(null, outline, g);
-            ctx.DrawGeometry(Brushes.White, null, g);
+            // The strip is its native width plus the length, from the head's centre.
+            double strip = h * GameSprites.MojiRoll.Size.Width / GameSprites.MojiRoll.Size.Height + length;
+            var stripRect = strip >= 0 ? new Rect(at.X, at.Y - h / 2, strip, h) : new Rect(at.X + strip, at.Y - h / 2, -strip, h);
+            ctx.DrawImage(GameSprites.MojiRoll, stripRect);
         }
-        if (n.IsDrumroll && tailX > at.X + head.Width)
-        {
-            var end = MojiText("ーっ!!", size);
-            var from = new Point(at.X + head.Width / 2, at.Y);
-            var to = new Point(tailX - end.Width / 2, at.Y);
-            ctx.DrawLine(new Pen(Outline, 9 * s + 2), from, to);
-            ctx.DrawLine(new Pen(Brushes.White, 5 * s + 1), from, to);
-            Text(end, new Point(tailX - end.Width / 2, at.Y - end.Height / 2));
-        }
-        Text(head, new Point(at.X - head.Width / 2, at.Y - head.Height / 2));
+        ctx.DrawImage(GameSprites.Moji, frame, new Rect(at.X - w / 2, at.Y - h / 2, w, h));
+        if (n.IsDrumroll && GameSprites.MojiFrame(NoteMoji.Tail) is { } tail)
+            ctx.DrawImage(GameSprites.Moji, tail, new Rect(at.X + length - w / 2, at.Y - h / 2, w, h));
     }
-
-    FormattedText MojiText(string text, double size) => new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, moji, size, Brushes.White);
 
     static string Time(double seconds)
     {

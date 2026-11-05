@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CharTaiko.App.Localization;
+using CharTaiko.Audio;
 using CharTaiko.Core.Localization;
 using CharTaiko.Core.Settings;
 
@@ -35,6 +36,9 @@ public partial class SettingsDialog : Window
         VolumeBox.Value = s.Volume;
         HitsBox.IsChecked = s.HitSounds;
         HitVolumeBox.Value = s.HitVolume;
+        var sets = HitSoundSets.Names;
+        HitSetBox.ItemsSource = sets.Count > 0 ? sets : new[] { "—" };
+        HitSetBox.SelectedIndex = Math.Clamp(s.HitSoundSet, 0, Math.Max(0, sets.Count - 1));
         LatencyBox.Value = (decimal)s.LatencyMs;
         FileText.Text = s.File == null ? "" : Loc.F("SettingsFile", s.File);
     }
@@ -61,6 +65,7 @@ public partial class SettingsDialog : Window
         s.Volume = VolumeBox.Value;
         s.HitSounds = HitsBox.IsChecked == true;
         s.HitVolume = HitVolumeBox.Value;
+        s.HitSoundSet = Math.Max(0, HitSetBox.SelectedIndex);
         s.LatencyMs = (double)(LatencyBox.Value ?? 0);
         return s;
     }
