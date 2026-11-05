@@ -24,5 +24,6 @@
   <ItemGroup>
     <ProjectReference Include="../CharTaiko.Core/CharTaiko.Core.csproj" />
     <ProjectReference Include="../CharTaiko.Tja/CharTaiko.Tja.csproj" />
+    <ProjectReference Include="../CharTaiko.Audio/CharTaiko.Audio.csproj" />
   </ItemGroup>
 </Project>

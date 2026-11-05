@@ -60,7 +60,7 @@ public sealed class TimelineView : Control
     {
         if (e.PropertyName == nameof(EditorViewModel.Playhead) && editor != null) Follow(editor.Playhead, editor.IsPlaying);
         if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Route)
-            or nameof(EditorViewModel.Division) or nameof(EditorViewModel.Tool))
+            or nameof(EditorViewModel.Division) or nameof(EditorViewModel.Tool) or nameof(EditorViewModel.Waveform))
             InvalidateVisual();
     }
 
@@ -123,10 +123,13 @@ public sealed class TimelineView : Control
         var rows = Rows;
 
         for (int row = 0; row < rows.Count; row++)
+            ctx.FillRectangle(RowBrushes[row % 2], new Rect(HeaderWidth, RowTop(row), b.Width - HeaderWidth, RowHeight));
+        DrawWaveform(ctx);
+
+        for (int row = 0; row < rows.Count; row++)
         {
             var route = rows[row];
             double top = RowTop(row), h = RowHeight, cy = top + h / 2;
-            ctx.FillRectangle(RowBrushes[row % 2], new Rect(HeaderWidth, top, b.Width - HeaderWidth, h));
             foreach (var m in analysis.Measures)
             {
                 if (!m.IsOn(route) || m.EndTime < t0 || m.Time > t1) continue;
@@ -169,6 +172,24 @@ public sealed class TimelineView : Control
 
         double px = XOf(editor.Playhead);
         if (px >= HeaderWidth) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, b.Height));
+    }
+
+    static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.FromArgb(70, 92, 200, 232)), 2);
+
+    // The song's loudness behind the rows, mirrored about their middle, two pixels a line.
+    void DrawWaveform(DrawingContext ctx)
+    {
+        if (editor?.Waveform is not { } wave) return;
+        double top = RulerHeight, height = RowHeight * Rows.Count, mid = top + height / 2;
+        double step = 2 / pixelsPerSecond;
+        for (double x = HeaderWidth; x < Bounds.Width; x += 2)
+        {
+            double t = TimeOf(x);
+            if (t < 0) continue;
+            double peak = wave.Peak(t, t + step) * height * 0.45;
+            if (peak < 0.5) continue;
+            ctx.DrawLine(WavePen, new Point(x, mid - peak), new Point(x, mid + peak));
+        }
     }
 
     static void DrawNote(DrawingContext ctx, NoteKind kind, double x, double tailX, double cy, double r, bool isLong, double opacity)

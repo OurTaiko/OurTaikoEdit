@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
 using CharTaiko.App.Controls;
+using CharTaiko.Audio;
 using CharTaiko.App.ViewModels;
 using CharTaiko.App.Views;
 using CharTaiko.Core.Languages;
@@ -26,6 +27,8 @@ public class SceneTests : IDisposable
     public SceneTests()
     {
         ChartLanguages.Register(new TjaLanguage());
+        // No sound from the tests: the song is decoded and drawn, never played.
+        EditorViewModel.OpenPlayer = _ => null;
         Directory.CreateDirectory(root);
     }
 
@@ -139,6 +142,33 @@ public class SceneTests : IDisposable
         code.Undo();
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(before, code.Text);
+    }
+
+    [AvaloniaFact]
+    public void TheSongIsDrawnUnderTheTimeline()
+    {
+        var (window, vm, registry) = Open();
+        var project = SampleProject(registry);
+        // Twenty seconds of beeps on the chart's beats (BPM 150 from 1.5 s).
+        const int rate = 8000;
+        var samples = new float[rate * 20];
+        for (double beat = 1.5; beat < 20; beat += 0.4)
+            for (int i = 0; i < rate / 20; i++)
+            {
+                int f = (int)(beat * rate) + i;
+                if (f < samples.Length) samples[f] = (float)(Math.Sin(2 * Math.PI * 660 * i / rate) * (1 - i / (rate / 20.0)));
+            }
+        File.WriteAllBytes(Path.Combine(project.Folder, "song.wav"), new PcmAudio { SampleRate = rate, Channels = 1, Samples = samples }.ToWav());
+        File.WriteAllText(project.ChartPath, File.ReadAllText(project.ChartPath).Replace("WAVE:\n", "WAVE:song.wav\n"));
+
+        var editor = new EditorViewModel(project, new DialogService(window), () => { });
+        vm.Scene = editor;
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (editor.Waveform == null && DateTime.UtcNow < until) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(20); }
+        Assert.NotNull(editor.Waveform);
+        Assert.Contains("song.wav 0:20", editor.AudioStatus);
+        editor.Seek(3);
+        Shot(window, "editor-waveform");
     }
 
     // The timeline's x for a time, as it lays it out (header 78 px, 180 px a second from -0.5 s

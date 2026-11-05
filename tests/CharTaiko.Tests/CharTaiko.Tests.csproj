@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/CharTaiko.Core/CharTaiko.Core.csproj" />
     <ProjectReference Include="../../src/CharTaiko.Tja/CharTaiko.Tja.csproj" />
+    <ProjectReference Include="../../src/CharTaiko.Audio/CharTaiko.Audio.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

@@ -18,6 +18,7 @@ dotnet test CharTaiko.slnx
 external/TJAParser/      子模块（暂指 main 的提交，库打 tag 后改指 tag）
 src/CharTaiko.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型
 src/CharTaiko.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
+src/CharTaiko.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLayer）／WAV，波形，OpenAL Soft 播放与合成的咚／咔音效
 src/CharTaiko.App/       Avalonia 应用：Projects 与编辑两个场景
 tests/CharTaiko.Tests/   语言与项目的单元测试
 tests/CharTaiko.UiTests/ Headless UI 测试与截图
@@ -37,7 +38,8 @@ tests/CharTaiko.UiTests/ Headless UI 测试与截图
 - **难度标签**：文件里每个 `#START` 块一个标签；光标进入哪个块就切到哪个。
 - **轨道预览**：在播放头处按每个音符自己的 BPM × SCROLL 滚动，含 go-go、`#LANE_ALPHA`、分歧路线（Route 选择）、连打与气球；点音符跳到代码。
 - **时间轴**：每条路线一行（无分歧时一行），小节按 Grid（1/4–1/192，以 4/4 小节计）切分；选音符工具后单击放置，连打／气球拖到终点，右键删除；Select 工具单击音符跳到代码；点或拖标尺跳转播放头；滚轮横移，⌘/Ctrl + 滚轮缩放；1–9、G、C、F、Q 选工具，空格播放。
-- **播放**：无声时钟（第一版没有音频），代码里正在演奏的字符会被框出并跟随滚动。
+- **代码辅助**（都来自 TJAParser）：悬停提示（含该处诊断）、写指令参数时的参数提示、块／分歧／路线折叠、行尾的小节号·时刻·BPM 提示、右键菜单或 ⌘/Ctrl+. 的快速修复与重构（拆分／合并小节、气球打数写成内联），工具栏 Format（Shift+Alt+F，保证每块哈希不变）；轨道下方显示所选块的音符数、最大连击、时长、峰值密度与哈希；诊断可切换英／中／日文。
+- **播放**：读 `WAVE:` 指定的音频（OGG、MP3、WAV），后台解码，时间轴行背后画波形；播放头跟随歌曲位置（`OFFSET` 已含在音符时刻里，所以波形与音符直接对齐），播放头在 0 之前或歌曲之后用时钟走；可调音量，`Hits` 勾选时音符经过判定点播放合成的咚／咔。没有音频设备时退回无声时钟。代码里正在演奏的字符会被框出并跟随滚动。
 - 撤销覆盖时间轴编辑（一次放置是一次撤销）。保存保持原编码（UTF-8 / Shift-JIS，BOM 原样）。
 
 ### 时间轴编辑如何写回文本

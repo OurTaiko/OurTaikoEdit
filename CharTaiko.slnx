@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/CharTaiko.App/CharTaiko.App.csproj" />
+    <Project Path="src/CharTaiko.Audio/CharTaiko.Audio.csproj" />
     <Project Path="src/CharTaiko.Core/CharTaiko.Core.csproj" />
     <Project Path="src/CharTaiko.Tja/CharTaiko.Tja.csproj" />
   </Folder>

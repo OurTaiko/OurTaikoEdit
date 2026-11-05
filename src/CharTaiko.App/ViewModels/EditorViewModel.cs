@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Threading;
+using CharTaiko.Audio;
 using CharTaiko.Core.Languages;
 using CharTaiko.Core.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -65,6 +66,18 @@ public sealed partial class EditorViewModel : ViewModelBase
     // Per analysis: foldable ranges, and the hints drawn at the end of lines (line → label).
     public IReadOnlyList<FoldRange> Folds { get; private set; } = Array.Empty<FoldRange>();
     public IReadOnlyDictionary<int, string> Hints { get; private set; } = new Dictionary<int, string>();
+
+    // The song: its waveform for the timeline, the player (null without an audio device: the
+    // playhead then runs on a silent clock), and what the toolbar says about it.
+    public static Func<PcmAudio, IAudioPlayer?> OpenPlayer { get; set; } = OpenAlPlayer.Open;
+    IAudioPlayer? player;
+    string? audioPath;
+    int audioLoad;
+    [ObservableProperty] Waveform? waveform;
+    [ObservableProperty] string audioStatus = "No audio";
+    [ObservableProperty] bool hitSounds = true;
+    [ObservableProperty] double volume = 0.8;
+    double lastTick;
 
     public ObservableCollection<DiagnosticItem> Diagnostics { get; } = new();
     public ObservableCollection<ChartBlock> Blocks { get; } = new();
@@ -141,6 +154,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         ChartIsCurrent = next.Chart != null && !next.HasErrors;
         // While the chosen block does not parse, keep showing the last chart that did.
         if (next.Chart == null && previous.Chart != null && previous.Block == next.Block) next = Keep(previous, next);
+        LoadAudio(next.Audio);
         Folds = Language.Folds(text);
         Hints = Language.Hints(text, 1, int.MaxValue).GroupBy(h => h.Line).ToDictionary(g => g.Key, g => string.Join("  ", g.Select(h => h.Label)));
         Summary = Language.Summaries(text).FirstOrDefault(b => b.Block == next.Block)?.Text ?? "";
@@ -273,7 +287,61 @@ public sealed partial class EditorViewModel : ViewModelBase
     public void Seek(double time)
     {
         Playhead = time;
-        if (IsPlaying) { playFrom = time; playClock.Restart(); }
+        lastTick = time;
+        if (!IsPlaying) return;
+        playFrom = time;
+        playClock.Restart();
+        if (player == null) return;
+        if (time >= 0 && time < player.Duration) { player.Seek(time); if (!player.IsPlaying) player.Play(); }
+        else if (player.IsPlaying) player.Pause();
+    }
+
+    // Loads the song named by the chart (WAVE) when it changes; decoding runs in the background.
+    void LoadAudio(string? audio)
+    {
+        string? path = audio == null ? null : Path.GetFullPath(Path.Combine(Project.Folder, audio));
+        if (path == audioPath) return;
+        audioPath = path;
+        int load = ++audioLoad;
+        StopAudio();
+        Waveform = null;
+        if (path == null) { AudioStatus = "No audio (WAVE:)"; return; }
+        if (!File.Exists(path)) { AudioStatus = $"{audio} not found"; return; }
+        AudioStatus = $"Loading {Path.GetFileName(path)}…";
+        Task.Run(() =>
+        {
+            var pcm = PcmAudio.Decode(path);
+            return (pcm, new Waveform(pcm));
+        }).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+        {
+            if (load != audioLoad) return;
+            if (t.IsFaulted) { AudioStatus = $"{Path.GetFileName(path)}: {t.Exception!.InnerException?.Message}"; return; }
+            var (pcm, wave) = t.Result;
+            Waveform = wave;
+            player = OpenPlayer(pcm);
+            if (player != null) player.Volume = (float)Volume;
+            var length = TimeSpan.FromSeconds(pcm.Duration);
+            AudioStatus = $"♪ {Path.GetFileName(path)} {(int)length.TotalMinutes}:{length.Seconds:00}" + (player == null ? " (no audio device)" : "");
+        }));
+    }
+
+    void StopAudio()
+    {
+        player?.Dispose();
+        player = null;
+    }
+
+    partial void OnVolumeChanged(double value)
+    {
+        if (player != null) player.Volume = (float)value;
+    }
+
+    // Leaving the editor: the device is let go.
+    public void Close()
+    {
+        if (IsPlaying) TogglePlay();
+        audioLoad++;
+        StopAudio();
     }
 
     [RelayCommand]
@@ -284,13 +352,15 @@ public sealed partial class EditorViewModel : ViewModelBase
             IsPlaying = false;
             playTimer.Stop();
             playClock.Stop();
+            if (player?.IsPlaying == true) player.Pause();
             return;
         }
         EnsureFresh();
         if (Analysis.Chart is { } c && Playhead >= c.Duration) Playhead = StartTime;
-        playFrom = Playhead;
+        playFrom = lastTick = Playhead;
         playClock.Restart();
         IsPlaying = true;
+        if (player != null && Playhead >= 0 && Playhead < player.Duration) { player.Seek(Playhead); player.Play(); }
         playTimer.Start();
     }
 
@@ -302,8 +372,32 @@ public sealed partial class EditorViewModel : ViewModelBase
 
     void Tick()
     {
-        Playhead = playFrom + playClock.Elapsed.TotalSeconds;
+        double clock = playFrom + playClock.Elapsed.TotalSeconds;
+        if (player != null && player.IsPlaying) Playhead = player.Position;
+        else
+        {
+            Playhead = clock;
+            // From before the song (a negative OFFSET start), the song comes in at 0.
+            if (player != null && Playhead >= 0 && Playhead < player.Duration - 0.05) { player.Seek(Playhead); player.Play(); }
+        }
+        if (HitSounds && player != null && Analysis.Chart is { } chart) Hits(chart, lastTick, Playhead);
+        lastTick = Playhead;
         if (Analysis.Chart is not { } c || Playhead > c.Duration + 2) TogglePlay();
+    }
+
+    // The don and ka sounds of the notes the playhead passed, on the route being shown.
+    void Hits(TaikoChart chart, double from, double to)
+    {
+        if (to <= from || to - from > 0.25) return;
+        foreach (var n in chart.Notes)
+        {
+            if (n.Time <= from) continue;
+            if (n.Time > to) break;
+            if (n.BranchId >= 0 && !(n.BranchId < chart.Branches.Count && chart.Branches[n.BranchId].ResolveRoute(Route) == n.Route)) continue;
+            if (n.IsLong || n.IsAdLib || n.IsMine) continue;
+            if (n.IsKadon) { player!.PlayHit(false, true); player.PlayHit(true, true); }
+            else player!.PlayHit(n.IsKa, n.IsBigNote);
+        }
     }
 
     [RelayCommand]
@@ -335,7 +429,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     async Task Back()
     {
         if (!await ConfirmLeaveAsync()) return;
-        if (IsPlaying) TogglePlay();
+        Close();
         back();
     }
 

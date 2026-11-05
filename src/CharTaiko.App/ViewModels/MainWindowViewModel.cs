@@ -34,5 +34,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     // Whether the window may close: the editor asks about unsaved changes.
-    public Task<bool> CanCloseAsync() => Scene is EditorViewModel editor ? editor.ConfirmLeaveAsync() : Task.FromResult(true);
+    public async Task<bool> CanCloseAsync()
+    {
+        if (Scene is not EditorViewModel editor) return true;
+        if (!await editor.ConfirmLeaveAsync()) return false;
+        editor.Close();
+        return true;
+    }
 }
