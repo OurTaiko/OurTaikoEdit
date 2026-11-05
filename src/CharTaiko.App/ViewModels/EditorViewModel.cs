@@ -56,6 +56,16 @@ public sealed partial class EditorViewModel : ViewModelBase
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ProblemListVisible))] bool showProblems = true;
     public bool ProblemListVisible => ShowProblems && Diagnostics.Count > 0;
 
+    // The chosen block at a glance (notes, combo, length, hash), when the language gives one.
+    [ObservableProperty] string summary = "";
+    // Diagnostics' language: the language's own messages in English, Chinese or Japanese.
+    [ObservableProperty] string messageLanguage = "en";
+    public IReadOnlyList<string> MessageLanguages { get; } = new[] { "en", "zh", "ja" };
+
+    // Per analysis: foldable ranges, and the hints drawn at the end of lines (line → label).
+    public IReadOnlyList<FoldRange> Folds { get; private set; } = Array.Empty<FoldRange>();
+    public IReadOnlyDictionary<int, string> Hints { get; private set; } = new Dictionary<int, string>();
+
     public ObservableCollection<DiagnosticItem> Diagnostics { get; } = new();
     public ObservableCollection<ChartBlock> Blocks { get; } = new();
     public IReadOnlyList<int> Divisions { get; } = new[] { 4, 8, 12, 16, 24, 32, 48, 64, 96, 192 };
@@ -131,6 +141,9 @@ public sealed partial class EditorViewModel : ViewModelBase
         ChartIsCurrent = next.Chart != null && !next.HasErrors;
         // While the chosen block does not parse, keep showing the last chart that did.
         if (next.Chart == null && previous.Chart != null && previous.Block == next.Block) next = Keep(previous, next);
+        Folds = Language.Folds(text);
+        Hints = Language.Hints(text, 1, int.MaxValue).GroupBy(h => h.Line).ToDictionary(g => g.Key, g => string.Join("  ", g.Select(h => h.Label)));
+        Summary = Language.Summaries(text).FirstOrDefault(b => b.Block == next.Block)?.Text ?? "";
         Analysis = next;
         if (!Blocks.SequenceEqual(next.Blocks))
         {
@@ -212,6 +225,36 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (result.Edits.Count == 0) return;
         EditsRequested?.Invoke(result.Edits);
         EnsureFresh();
+    }
+
+    partial void OnMessageLanguageChanged(string value)
+    {
+        Language.MessageLanguage = value;
+        Reanalyze();
+    }
+
+    // Quick fixes and refactorings at a place of the code.
+    public IReadOnlyList<CodeAction> ActionsAt(int line, int column)
+    {
+        EnsureFresh();
+        return Language.Actions(Analysis, line, column);
+    }
+
+    public void Run(CodeAction action)
+    {
+        Message = null;
+        if (action.Edits.Count == 0) return;
+        EditsRequested?.Invoke(action.Edits);
+        EnsureFresh();
+        Message = action.Title;
+    }
+
+    [RelayCommand]
+    void FormatDocument()
+    {
+        EnsureFresh();
+        if (Language.Format(text) is { } format) Run(format);
+        else Message = "Already formatted";
     }
 
     // Shows a note in the code.

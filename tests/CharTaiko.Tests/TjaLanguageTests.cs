@@ -8,17 +8,7 @@ public class TjaLanguageTests
 {
     static readonly TjaLanguage Tja = new();
 
-    // Applies edits as the editor does: from the last to the first.
-    public static string Apply(string text, IEnumerable<TextEdit> edits)
-    {
-        var lines = text.Split('\n').ToList();
-        foreach (var e in edits.OrderByDescending(e => e.Line).ThenByDescending(e => e.Column))
-        {
-            string line = lines[e.Line - 1];
-            lines[e.Line - 1] = line.Substring(0, e.Column - 1) + e.NewText + line.Substring(e.Column - 1 + e.Length);
-        }
-        return string.Join("\n", lines);
-    }
+    public static string Apply(string text, IEnumerable<TextEdit> edits) => TextEdits.Apply(text, edits);
 
     static string Chart(string body, string headers = "") => $"BPM:120\n{headers}COURSE:Oni\nLEVEL:5\n#START\n{body}\n#END\n";
 

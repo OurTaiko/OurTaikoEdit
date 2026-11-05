@@ -37,7 +37,7 @@ public sealed class LaneView : Control
 
     void Changed(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Route))
+        if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Route) or nameof(EditorViewModel.Summary))
             InvalidateVisual();
     }
 
@@ -117,8 +117,9 @@ public sealed class LaneView : Control
         string info = $"{Time(now)}   BPM {bpm:0.###}   Measure {(measure?.Index ?? 0) + 1}";
         if (chart.Branches.Count > 0) info += "   Route " + route;
         Label(ctx, info, new Point(12, 10), 13, ChartPalette.Text);
-        Label(ctx, $"{chart.Course} ★{chart.Level} · {chart.Notes.Count(n => !n.IsLong && n.Kind != NoteKind.AdLib && n.Kind != NoteKind.Mine)} notes",
-            new Point(12, b.Height - 26), 12, ChartPalette.Muted);
+        string summary = editor.Summary.Length > 0 ? editor.Summary
+            : $"{chart.Notes.Count(n => !n.IsLong && n.Kind != NoteKind.AdLib && n.Kind != NoteKind.Mine)} notes";
+        Label(ctx, $"{chart.Course} ★{chart.Level} · {summary}", new Point(12, b.Height - 26), 12, ChartPalette.Muted);
     }
 
     static string Time(double seconds)

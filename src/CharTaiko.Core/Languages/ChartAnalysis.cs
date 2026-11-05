@@ -11,7 +11,8 @@ public readonly record struct SourceSpan(int Line, int Column, int Length)
 }
 
 // Code is the language's own (TJA1001 …), if it has codes.
-public sealed record ChartDiagnostic(SourceSpan Source, string Message, DiagnosticSeverity Severity, string? Code = null);
+// Tag is the language's own diagnostic, for its quick fixes.
+public sealed record ChartDiagnostic(SourceSpan Source, string Message, DiagnosticSeverity Severity, string? Code = null, object? Tag = null);
 
 // One playable block of the file (a TJA #START … #END).
 public sealed record ChartBlock(int Index, string Name, string Course, string Side, int Level, int StartLine, bool IsBranching);

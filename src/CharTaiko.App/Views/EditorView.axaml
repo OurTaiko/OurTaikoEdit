@@ -10,6 +10,7 @@
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="Meta+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="F5" Command="{Binding TogglePlayCommand}" />
+    <KeyBinding Gesture="Shift+Alt+F" Command="{Binding FormatDocumentCommand}" />
   </UserControl.KeyBindings>
 
   <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -23,6 +24,7 @@
           <Button Classes="toolbar" Content="Save" Command="{Binding SaveCommand}" Margin="12,0,0,0" ToolTip.Tip="Save (⌘S / Ctrl+S)" />
           <Button Classes="toolbar" x:Name="UndoButton" Content="Undo" ToolTip.Tip="Undo (covers timeline edits)" />
           <Button Classes="toolbar" x:Name="RedoButton" Content="Redo" />
+          <Button Classes="toolbar" Content="Format" Command="{Binding FormatDocumentCommand}" ToolTip.Tip="Format the document (Shift+Alt+F); every block's hash stays the same" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <Button Classes="toolbar" Content="⏮" Command="{Binding RewindCommand}" ToolTip.Tip="Back to the start" />
@@ -79,7 +81,11 @@
           <Grid ColumnDefinitions="Auto,*,Auto">
             <TextBlock Text="Problems" FontWeight="SemiBold" VerticalAlignment="Center" />
             <TextBlock Grid.Column="1" Text="{Binding Problems}" Classes="muted" Margin="10,0" VerticalAlignment="Center" />
-            <Button Grid.Column="2" Classes="toolbar" Content="Show / hide" Command="{Binding ToggleProblemsCommand}" Padding="6,1" MinHeight="22" FontSize="11" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+              <ComboBox ItemsSource="{Binding MessageLanguages}" SelectedItem="{Binding MessageLanguage}" MinHeight="22" Padding="6,0" FontSize="11"
+                        ToolTip.Tip="Language of the messages" />
+              <Button Classes="toolbar" Content="Show / hide" Command="{Binding ToggleProblemsCommand}" Padding="6,1" MinHeight="22" FontSize="11" />
+            </StackPanel>
           </Grid>
         </Border>
         <ListBox Grid.Row="2" x:Name="ProblemList" ItemsSource="{Binding Diagnostics}" Height="140" IsVisible="{Binding ProblemListVisible}"

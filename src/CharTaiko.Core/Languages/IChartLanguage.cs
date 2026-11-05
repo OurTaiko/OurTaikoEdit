@@ -30,6 +30,19 @@ public interface IChartLanguage
     Stream? OpenHighlighting();
 
     IChartEditing Editing { get; }
+
+    // The editor's language features (LanguageFeatures.cs); a language offers what it has.
+    HoverInfo? Hover(string text, int line, int column) => null;
+    SignatureInfo? Signature(string text, int line, int column) => null;
+    IReadOnlyList<FoldRange> Folds(string text) => Array.Empty<FoldRange>();
+    IReadOnlyList<InlayHint> Hints(string text, int fromLine, int toLine) => Array.Empty<InlayHint>();
+    // Quick fixes for the diagnostics at a place and refactorings there, in the given block.
+    IReadOnlyList<CodeAction> Actions(ChartAnalysis analysis, int line, int column) => Array.Empty<CodeAction>();
+    // The whole text formatted, or null when the language cannot.
+    CodeAction? Format(string text) => null;
+    IReadOnlyList<BlockSummary> Summaries(string text) => Array.Empty<BlockSummary>();
+    // Diagnostics' messages in a language ("en", "zh", "ja") where the language has them.
+    string MessageLanguage { get => "en"; set { } }
 }
 
 // Text is what is inserted; Label what the list shows (Text when null).

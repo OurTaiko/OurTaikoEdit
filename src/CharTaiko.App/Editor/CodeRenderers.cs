@@ -73,3 +73,28 @@ sealed class PlayheadRenderer : IBackgroundRenderer
             ctx.DrawRectangle(Fill, Rim, rect.Inflate(new Thickness(1, 0)), 2, 2);
     }
 }
+
+// The language's hints (measure numbers, times, tempo changes), drawn after the end of their line.
+sealed class HintRenderer : IBackgroundRenderer
+{
+    static readonly IBrush Brush = new SolidColorBrush(Color.FromArgb(150, 154, 160, 166));
+    readonly Typeface typeface;
+
+    public HintRenderer(FontFamily font) => typeface = new Typeface(font);
+
+    public IReadOnlyDictionary<int, string> Hints { get; set; } = new Dictionary<int, string>();
+    public KnownLayer Layer => KnownLayer.Background;
+
+    public void Draw(TextView textView, DrawingContext ctx)
+    {
+        if (!textView.VisualLinesValid || Hints.Count == 0) return;
+        foreach (var visual in textView.VisualLines)
+        {
+            var line = visual.LastDocumentLine;
+            if (!Hints.TryGetValue(line.LineNumber, out var label)) continue;
+            var end = textView.GetVisualPosition(new AvaloniaEdit.TextViewPosition(line.LineNumber, line.Length + 1), VisualYPosition.TextTop) - textView.ScrollOffset;
+            var text = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 11, Brush);
+            ctx.DrawText(text, new Point(end.X + 20, end.Y + 2));
+        }
+    }
+}

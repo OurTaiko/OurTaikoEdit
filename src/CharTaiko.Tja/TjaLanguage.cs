@@ -17,6 +17,8 @@ public sealed class TjaLanguage : IChartLanguage
     // The last document, so the next text becomes its next version.
     TjaDocument? document;
 
+    public string MessageLanguage { get; set; } = "en";
+
     public string CreateTemplate(string title, string? audioFile) => string.Join("\n",
         $"TITLE:{title}",
         "SUBTITLE:--",
@@ -82,12 +84,12 @@ public sealed class TjaLanguage : IChartLanguage
         }
 
         var diagnostics = doc.Diagnostics()
-            .Select(d => new ChartDiagnostic(Span(d.Span), $"{d.Code}: {d.Message}", d.Severity switch
+            .Select(d => new ChartDiagnostic(Span(d.Span), $"{d.Code}: {d.MessageIn(MessageLanguage)}", d.Severity switch
             {
                 TjaSeverity.Error => DiagnosticSeverity.Error,
                 TjaSeverity.Warning => DiagnosticSeverity.Warning,
                 _ => DiagnosticSeverity.Information,
-            }, d.Code))
+            }, d.Code, d))
             .OrderBy(d => d.Source.Line).ThenBy(d => d.Source.Column).ToList();
 
         // Stars and the title from SongInfo, which refuses some files the document still reads.
@@ -118,6 +120,89 @@ public sealed class TjaLanguage : IChartLanguage
             TailOf = n => map.TryGetTailSpan(n, out var s) ? Span(s) : default,
             StartLine = lines.Line(analysis.StartSpan.Start), EndLine = lines.Line(analysis.EndSpan.Start),
         };
+    }
+
+    // ---- Editor features, from the library (TjaHover, TjaSignatureHelp, TjaFolding, TjaSummary,
+    // TjaQuickFix, TjaRefactor, TjaFormat).
+
+    static TextEdit Edit(TjaDocument doc, TjaTextEdit e)
+    {
+        var (line, column) = doc.Lines.Position(e.Span.Start);
+        return new TextEdit(line, column + 1, e.Span.Length, e.NewText);
+    }
+
+    static CodeAction? Action(TjaDocument doc, TjaCodeAction? a, bool quickFix = false)
+        => a == null || a.Edits.Count == 0 ? null : new CodeAction(a.Title, a.Edits.Select(e => Edit(doc, e)).ToList(), quickFix);
+
+    int OffsetOf(TjaDocument doc, int line, int column) => doc.Lines.Offset(line, column - 1);
+
+    public HoverInfo? Hover(string text, int line, int column)
+    {
+        var doc = Document(text);
+        if (TjaHover.At(doc, OffsetOf(doc, line, column)) is not { } h || string.IsNullOrWhiteSpace(h.Markdown)) return null;
+        var (l, c) = doc.Lines.Position(h.Span.Start);
+        return new HoverInfo(new SourceSpan(l, c + 1, h.Span.Length), h.Markdown);
+    }
+
+    public SignatureInfo? Signature(string text, int line, int column)
+    {
+        var doc = Document(text);
+        if (TjaSignatureHelp.At(doc, OffsetOf(doc, line, column)) is not { } s) return null;
+        return new SignatureInfo(s.Label, s.Parameters, s.Active, s.Keyword?.Summary);
+    }
+
+    public IReadOnlyList<FoldRange> Folds(string text)
+        => TjaFolding.Ranges(Document(text)).Select(r => new FoldRange(r.StartLine, r.EndLine, r.Kind.ToString())).ToList();
+
+    public IReadOnlyList<InlayHint> Hints(string text, int fromLine, int toLine)
+    {
+        var doc = Document(text);
+        int start = doc.Lines.LineStart(fromLine), end = toLine >= doc.Lines.LineCount ? doc.Text.Length : doc.Lines.LineStart(toLine + 1);
+        return TjaSummary.Hints(doc, TextSpan.FromBounds(start, end)).Select(h =>
+        {
+            var (l, c) = doc.Lines.Position(h.Offset);
+            return new InlayHint(l, c + 1, h.Label);
+        }).ToList();
+    }
+
+    public IReadOnlyList<CodeAction> Actions(ChartAnalysis analysis, int line, int column)
+    {
+        var doc = Document(analysis.Text);
+        int offset = OffsetOf(doc, line, column);
+        var actions = new List<CodeAction>();
+        foreach (var d in analysis.Diagnostics)
+            if (d.Tag is TjaDiagnostic diagnostic && d.Source.Line == line)
+                foreach (var fix in TjaQuickFix.For(doc, diagnostic))
+                    if (Action(doc, fix, quickFix: true) is { } a) actions.Add(a);
+        if (analysis.Block >= 0 && analysis.Block < analysis.Blocks.Count)
+        {
+            var b = analysis.Blocks[analysis.Block];
+            if (Action(doc, TjaRefactor.Split(doc, b.Course, b.Side, offset)) is { } split) actions.Add(split);
+            if (Action(doc, TjaRefactor.Join(doc, b.Course, b.Side, offset)) is { } join) actions.Add(join);
+            if (Action(doc, TjaQuickFix.InlineBalloons(doc, b.Course, b.Side)) is { } inline) actions.Add(inline);
+        }
+        return actions;
+    }
+
+    public CodeAction? Format(string text)
+    {
+        var doc = Document(text);
+        var edits = TjaFormat.Edits(doc);
+        return edits.Count == 0 ? null : new CodeAction("Format document", edits.Select(e => Edit(doc, e)).ToList());
+    }
+
+    public IReadOnlyList<BlockSummary> Summaries(string text)
+    {
+        var doc = Document(text);
+        var blocks = doc.Blocks;
+        return TjaSummary.Blocks(doc).Select(s => new BlockSummary(IndexOf(blocks, s.Block), s.Title, s.Hash)).ToList();
+    }
+
+    static int IndexOf(IReadOnlyList<TjaDocumentBlock> blocks, TjaDocumentBlock block)
+    {
+        for (int i = 0; i < blocks.Count; i++)
+            if (blocks[i].Line == block.Line) return i;
+        return -1;
     }
 
     // Each measure with its slots: the note, blank, 8 and unknown tokens in its span (an inline
