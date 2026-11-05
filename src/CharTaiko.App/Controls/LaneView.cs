@@ -6,7 +6,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 using CharTaiko.App.ViewModels;
 using CharTaiko.Core.Localization;
-using CharTaiko.Core.Play;
 using OurTaiko;
 
 namespace CharTaiko.App.Controls;

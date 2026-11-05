@@ -18,7 +18,7 @@ dotnet test CharTaiko.slnx
 ## 目录
 
 ```
-external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.10.0）
+external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.11.0）
 src/CharTaiko.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings）
 src/CharTaiko.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
 src/CharTaiko.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLayer）／WAV，波形，OpenAL Soft 播放，游戏的 21 套打击音（HitSounds/）
@@ -39,7 +39,7 @@ tests/CharTaiko.UiTests/ Headless UI 测试与截图
 
 - **代码**（AvaloniaEdit）：TJA 高亮；补全来自库的 `TjaCompletion`（头部、取值、指令、分歧条件、音符；输入时弹出，⌘/Ctrl+Space 手动）；诊断来自 `TjaDocument.Diagnostics`（解析器错误与警告 TJA1xxx／2xxx，加编辑器检查 TJA3xxx），画波浪线并列在 Problems 里，点击跳到行。解析出错后库会继续读，预览照常显示，但时间轴在该块有错误时拒绝编辑。
 - **难度标签**：文件里每个 `#START` 块一个标签；光标进入哪个块就切到哪个。
-- **轨道预览**：按 OurTaikoPlay 的轨道版式画（Nijiiro 1920 宽舞台按面板缩放：轨道 200 高、判定点在轨道左起 120、下方音符文字条），音符位置用从游戏移植的 `NoteScroll`／`ScrollClockTimeline`（`src/CharTaiko.Core/Play/`），所以普通／BM／HB 滚动、`#SUDDEN`、连打作为刚体、`#JPOSSCROLL` 移动判定点都与游戏一致；小节线 3 宽（分歧起点 6 宽金色）；分歧决定后轨道按路线着色（玄人蓝、達人紫），go-go 时轨道变红，`#LANE_ALPHA` 调轨道透明度；音符下方显示音符文字（ドン、カッ、連打…ーっ!! 等，取自解析器的 `NoteMoji`）。音符、连打身体与尾巴、气球、音符文字都用游戏的贴图（`Assets/Game/`，取自 OurTaikoPlay，见其中的 PROVENANCE.md），按游戏的切片与摆法画（`Controls/GameSprites.cs`）；表情帧固定为第一帧（游戏里 50 连击后才随拍子换）。Ad-lib 游戏里不画，这里画淡圈方便找。点音符跳到代码。
+- **轨道预览**：按 OurTaikoPlay 的轨道版式画（Nijiiro 1920 宽舞台按面板缩放：轨道 200 高、判定点在轨道左起 120、下方音符文字条），音符位置用 TJAParser 的 `NoteScroll`／`ScrollClockTimeline`（v0.11.0 起从游戏移入库，游戏、View_Web 与 CharTaiko 共用），所以普通／BM／HB 滚动、`#SUDDEN`、连打作为刚体、`#JPOSSCROLL` 移动判定点都与游戏一致；小节线 3 宽（分歧起点 6 宽金色）；分歧决定后轨道按路线着色（玄人蓝、達人紫），go-go 时轨道变红，`#LANE_ALPHA` 调轨道透明度；音符下方显示音符文字（ドン、カッ、連打…ーっ!! 等，取自解析器的 `NoteMoji`）。音符、连打身体与尾巴、气球、音符文字都用游戏的贴图（`Assets/Game/`，取自 OurTaikoPlay，见其中的 PROVENANCE.md），按游戏的切片与摆法画（`Controls/GameSprites.cs`）；表情帧固定为第一帧（游戏里 50 连击后才随拍子换）。Ad-lib 游戏里不画，这里画淡圈方便找。点音符跳到代码。
 - **时间轴**：每条路线一行（无分歧时一行），小节按 Grid（1/4–1/192，以 4/4 小节计）切分。
   - 音符工具：单击放置，连打／气球拖到终点，右键删除。
   - Select 工具（Q）：单击选中并在代码里定位，Shift 或 ⌘/Ctrl 单击加减选，空白处拖框选择；拖动选中的音符按网格整格移动（连打连同终点）；Delete 删除，Esc 取消选择，⌘/Ctrl+A 全选，⌘/Ctrl+C／X／V 复制、剪切、粘贴（粘贴到指针所在格，指针不在行上时到播放头）；←／→ 有选择时移动一格、没有时播放头走一格；有选择时按音符键（1–9、G、C、F）改种类（短音符之间、连打／气球之间）；右键菜单：删除、改为…、咚咔互换、剪切、复制、在此粘贴、全选。
