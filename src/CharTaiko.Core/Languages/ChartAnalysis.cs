@@ -86,6 +86,8 @@ public sealed class ChartAnalysis
     // Where a note was written, and where a long note ends.
     public Func<ChartNote, SourceSpan> SourceOf { get; init; } = _ => default;
     public Func<ChartNote, SourceSpan> TailOf { get; init; } = _ => default;
+    // Where an event of the chart (ChartTempo, ChartGogo, ChartSection …) is written.
+    public Func<object, SourceSpan> EventOf { get; init; } = _ => default;
     // The parsed block's lines (from its #START to its #END).
     public int StartLine { get; init; }
     public int EndLine { get; init; }

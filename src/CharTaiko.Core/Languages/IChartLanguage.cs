@@ -71,13 +71,31 @@ public readonly record struct GridPosition(MeasureView Measure, int Step, int St
     public double Time => Measure.TimeAt(Fraction);
 }
 
+// A note to put on the grid; a roll, balloon or kusudama with where it ends.
+public sealed record NotePlacement(GridPosition At, NoteKind Kind, GridPosition? End = null);
+
+// Timing commands the timeline can write.
+public enum ChartEventKind { Tempo, Scroll, Measure, GogoStart, GogoEnd, BarlineOff, BarlineOn, Delay }
+
 // Timeline edits as text edits on the analysed text.
 public interface IChartEditing
 {
-    // Puts a note at a grid position, replacing what is there. A roll, balloon or kusudama also
-    // needs where it ends.
-    EditResult PlaceNote(ChartAnalysis analysis, GridPosition at, NoteKind kind, GridPosition? end = null);
+    // Removes notes (a long note with its end) and places others, as one change: a placement
+    // wins over a removal at the same place, so moving notes is removing them and placing them
+    // again. Placing replaces what is there.
+    EditResult Edit(ChartAnalysis analysis, IReadOnlyList<ChartNote> remove, IReadOnlyList<NotePlacement> place);
 
-    // Removes a note (and a long note's end).
-    EditResult RemoveNote(ChartAnalysis analysis, ChartNote note);
+    EditResult PlaceNote(ChartAnalysis analysis, GridPosition at, NoteKind kind, GridPosition? end = null)
+        => Edit(analysis, Array.Empty<ChartNote>(), new[] { new NotePlacement(at, kind, end) });
+
+    EditResult RemoveNote(ChartAnalysis analysis, ChartNote note)
+        => Edit(analysis, new[] { note }, Array.Empty<NotePlacement>());
+
+    // Writes a timing command so that it takes effect at a grid position (value: the BPM, the
+    // speed, a/b, seconds).
+    EditResult InsertEvent(ChartAnalysis analysis, GridPosition at, ChartEventKind kind, string? value);
+
+    // An event of the chart (ChartTempo, ChartGogo …) as written: removed, or given a new value.
+    EditResult RemoveEvent(ChartAnalysis analysis, object chartEvent);
+    EditResult ChangeEvent(ChartAnalysis analysis, object chartEvent, string value);
 }

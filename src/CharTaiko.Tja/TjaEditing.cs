@@ -29,52 +29,153 @@ sealed class TjaEditing : IChartEditing
     // way to any other at the same place.
     sealed record Placement(MeasureView Measure, long Num, long Den, char Char, bool Weak = false);
 
-    public EditResult PlaceNote(ChartAnalysis analysis, GridPosition at, NoteKind kind, GridPosition? end = null)
+    public EditResult Edit(ChartAnalysis analysis, IReadOnlyList<ChartNote> remove, IReadOnlyList<NotePlacement> place)
     {
-        if (analysis.Chart == null) return EditResult.Fail("Fix the chart's errors first: the timeline edits what the parser reads.");
-        if (at.Steps <= 0 || at.Step < 0 || at.Step >= at.Steps) return EditResult.Fail("That is outside the measure.");
-        var route = RouteOf(at);
-        var placements = new List<Placement> { Place(at, CharOf(kind)) };
-        double start = at.Time;
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first: the timeline edits what the parser reads.");
+        var placements = new List<Placement>();
+        var removed = new HashSet<ChartNote>(remove);
 
-        // A note inside a roll would end it early; the roll has to go first.
-        if (RollAround(analysis, start, route, at.Measure) is { } roll)
-            return EditResult.Fail($"That is inside a {Describe(roll)}; remove it first.");
-
-        if (IsLong(kind))
+        // Removals first: a placement at the same place then wins.
+        foreach (var note in remove)
         {
-            if (end is not { } e || e.Steps <= 0) return EditResult.Fail("A roll needs an end.");
-            if (e.Step >= e.Steps) e = e with { Step = e.Steps - 1 };
-            if (!(e.Time > start)) return EditResult.Fail("A roll must end after it starts.");
-            if (Crosses(analysis, at.Measure, e.Measure)) return EditResult.Fail("Rolls across a branch boundary are written in the code.");
-            if (RollAround(analysis, e.Time, route, e.Measure) is { } other && other.Time != start)
+            var found = analysis.Measures.SelectMany(m => m.Slots.Select((s, i) => (m, i, s))).FirstOrDefault(x => ReferenceEquals(x.s.Note, note));
+            if (found.m == null) return EditResult.Fail("That note is not in the chart's text.");
+            placements.Add(new Placement(found.m, found.i, found.m.Slots.Count, '0'));
+            if (note.IsLong) ClearTail(analysis, note, placements);
+        }
+
+        // The rolls being placed, by route, to keep notes out of their bodies.
+        var newRolls = new List<(BranchRoute Route, double Start, double End)>();
+        foreach (var p in place)
+            if (IsLong(p.Kind) && p.End is { } e) newRolls.Add((RouteOf(p.At), p.At.Time, e.Time));
+
+        foreach (var p in place)
+        {
+            var at = p.At;
+            if (at.Steps <= 0 || at.Step < 0 || at.Step >= at.Steps) return EditResult.Fail("That is outside the measure.");
+            var route = RouteOf(at);
+            double start = at.Time;
+            // A note inside a roll would end it early; the roll has to go first.
+            if (RollAround(analysis, start, route, removed) is { } roll)
+                return EditResult.Fail($"That is inside a {Describe(roll)}; remove it first.");
+            if (newRolls.Any(r => r.Route == route && r.Start < start && start <= r.End))
+                return EditResult.Fail("A note would land inside a roll that is placed with it.");
+            placements.Add(Place(at, CharOf(p.Kind)));
+            if (!IsLong(p.Kind)) continue;
+
+            if (p.End is not { } end || end.Steps <= 0) return EditResult.Fail("A roll needs an end.");
+            if (end.Step >= end.Steps) end = end with { Step = end.Steps - 1 };
+            if (!(end.Time > start)) return EditResult.Fail("A roll must end after it starts.");
+            if (Crosses(analysis, at.Measure, end.Measure)) return EditResult.Fail("Rolls across a branch boundary are written in the code.");
+            if (RollAround(analysis, end.Time, route, removed) is { } other && other.Time != start)
                 return EditResult.Fail($"The end is inside a {Describe(other)}; remove it first.");
-            placements.Add(Place(e, '8'));
-            // What lies under the new roll would end it: clear it, with the ends of rolls cleared.
+            placements.Add(Place(end, '8'));
+            // What lies under the new roll would end it: it is cleared (weakly, so notes placed
+            // with the roll stay), with the ends of rolls cleared.
             foreach (var (measure, i, slot) in SlotsOn(analysis, route))
             {
                 double t = slot.Time;
-                if (t <= start || t >= e.Time || slot.Token == "0") continue;
-                placements.Add(new Placement(measure, i, measure.Slots.Count, '0'));
+                if (t <= start || t >= end.Time || slot.Token == "0") continue;
+                placements.Add(new Placement(measure, i, measure.Slots.Count, '0', Weak: true));
                 if (slot.Note is { IsLong: true } cleared) ClearTail(analysis, cleared, placements);
             }
         }
 
         // A roll replaced at its head loses its end.
         foreach (var p in placements.ToList())
-            if (SlotOf(p) is { Note: { IsLong: true } replaced } && !(p.Char == '8')) ClearTail(analysis, replaced, placements);
+            if (!p.Weak && p.Char != '8' && SlotOf(p) is { Note: { IsLong: true } replaced } && !removed.Contains(replaced))
+                ClearTail(analysis, replaced, placements);
 
         return Apply(analysis, placements);
     }
 
-    public EditResult RemoveNote(ChartAnalysis analysis, ChartNote note)
+    // ---- Timing commands.
+
+    static string CommandOf(ChartEventKind kind, string? value) => kind switch
     {
-        if (analysis.Chart == null) return EditResult.Fail("Fix the chart's errors first.");
-        var found = analysis.Measures.SelectMany(m => m.Slots.Select((s, i) => (m, i, s))).FirstOrDefault(x => ReferenceEquals(x.s.Note, note));
-        if (found.m == null) return EditResult.Fail("That note is not in the chart's text.");
-        var placements = new List<Placement> { new(found.m, found.i, found.m.Slots.Count, '0') };
-        if (note.IsLong) ClearTail(analysis, note, placements);
-        return Apply(analysis, placements);
+        ChartEventKind.Tempo => "#BPMCHANGE " + value,
+        ChartEventKind.Scroll => "#SCROLL " + value,
+        ChartEventKind.Measure => "#MEASURE " + value,
+        ChartEventKind.Delay => "#DELAY " + value,
+        ChartEventKind.GogoStart => "#GOGOSTART",
+        ChartEventKind.GogoEnd => "#GOGOEND",
+        ChartEventKind.BarlineOff => "#BARLINEOFF",
+        ChartEventKind.BarlineOn => "#BARLINEON",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    static string[] Lines(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+    static string Newline(string text) => text.Contains("\r\n") ? "\r\n" : "\n";
+
+    public EditResult InsertEvent(ChartAnalysis analysis, GridPosition at, ChartEventKind kind, string? value)
+    {
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first.");
+        if (kind is ChartEventKind.Tempo or ChartEventKind.Scroll or ChartEventKind.Measure or ChartEventKind.Delay && string.IsNullOrWhiteSpace(value))
+            return EditResult.Fail("The command needs a value.");
+        if (kind == ChartEventKind.Measure && at.Step != 0) return EditResult.Fail("#MEASURE takes effect from a measure's start.");
+        string nl = Newline(analysis.Text), command = CommandOf(kind, value?.Trim());
+        var lines = Lines(analysis.Text);
+        var m = at.Measure;
+        int n = m.Slots.Count;
+        if (n == 0)
+        {
+            if (m.Comma.IsEmpty) return EditResult.Fail("That measure has no comma.");
+            return new EditResult(new[] { BeforeOnLine(lines, m.Comma, command, nl) });
+        }
+        long g = Gcd(at.Step, at.Steps), num = at.Step / g, den = at.Steps / g;
+        long total = Lcm(n, den);
+        if (total > MaxSlots) return EditResult.Fail($"That needs {total} slots in one measure; use a coarser grid.");
+        int factor = (int)(total / n);
+        long target = num * total / den;
+        int j = (int)(target / factor), r = (int)(target % factor);
+        if (factor == 1) return new EditResult(new[] { BeforeOnLine(lines, m.Slots[j].Source, command, nl) });
+        // Between slots: split the measure and break the line at the place.
+        var edits = new List<TextEdit>();
+        for (int i = 0; i < n; i++)
+        {
+            var units = new List<string> { m.Slots[i].Token };
+            units.AddRange(Enumerable.Repeat("0", factor - 1));
+            if (i == j) units.Insert(r, nl + command + nl);
+            var slot = m.Slots[i].Source;
+            edits.Add(new TextEdit(slot.Line, slot.Column, slot.Length, string.Concat(units)));
+        }
+        return new EditResult(edits);
+    }
+
+    // A command line before what is written at a place: on its own line above it when it starts
+    // its line, else breaking the line there.
+    static TextEdit BeforeOnLine(string[] lines, SourceSpan at, string command, string nl)
+    {
+        string line = lines[at.Line - 1];
+        bool first = line.Substring(0, Math.Min(at.Column - 1, line.Length)).Trim().Length == 0;
+        return first ? new TextEdit(at.Line, 1, 0, command + nl) : new TextEdit(at.Line, at.Column, 0, nl + command + nl);
+    }
+
+    public EditResult RemoveEvent(ChartAnalysis analysis, object chartEvent)
+    {
+        var span = analysis.EventOf(chartEvent);
+        if (span.IsEmpty) return EditResult.Fail("That event is not in the chart's text.");
+        var lines = Lines(analysis.Text);
+        string line = lines[span.Line - 1];
+        // A command alone on its line goes with its line.
+        if (line.Trim().Length <= span.Length || span.Length == 0)
+        {
+            int newline = span.Line < lines.Length ? Newline(analysis.Text).Length : 0;
+            return new EditResult(new[] { new TextEdit(span.Line, 1, line.Length + newline, "") });
+        }
+        return new EditResult(new[] { new TextEdit(span.Line, span.Column, span.Length, "") });
+    }
+
+    public EditResult ChangeEvent(ChartAnalysis analysis, object chartEvent, string value)
+    {
+        var span = analysis.EventOf(chartEvent);
+        if (span.IsEmpty) return EditResult.Fail("That event is not in the chart's text.");
+        string line = Lines(analysis.Text)[span.Line - 1];
+        int length = span.Length > 0 ? span.Length : line.Length - (span.Column - 1);
+        string written = line.Substring(span.Column - 1, Math.Min(length, line.Length - (span.Column - 1))).Trim();
+        int space = written.IndexOfAny(new[] { ' ', '\t' });
+        string key = space < 0 ? written : written.Substring(0, space);
+        return new EditResult(new[] { new TextEdit(span.Line, span.Column, length, key + " " + value.Trim()) });
     }
 
     static string Describe(ChartNote n) => n.IsBalloon ? "balloon" : "drumroll";
@@ -98,9 +199,9 @@ sealed class TjaEditing : IChartEditing
     static IEnumerable<(MeasureView Measure, int Index, ChartSlot Slot)> SlotsOn(ChartAnalysis analysis, BranchRoute route)
         => analysis.Measures.Where(m => m.IsOn(route)).SelectMany(m => m.Slots.Select((s, i) => (m, i, s)));
 
-    // A roll on the route whose body (after its head, up to its end) contains the time.
-    static ChartNote? RollAround(ChartAnalysis analysis, double time, BranchRoute route, MeasureView measure)
-        => SlotsOn(analysis, route).Select(x => x.Slot.Note).FirstOrDefault(n => n is { IsLong: true } && n.Time < time && time <= n.EndTime);
+    // A roll on the route, not being removed, whose body (after its head, up to its end) contains the time.
+    static ChartNote? RollAround(ChartAnalysis analysis, double time, BranchRoute route, HashSet<ChartNote> removed)
+        => SlotsOn(analysis, route).Select(x => x.Slot.Note).FirstOrDefault(n => n is { IsLong: true } && !removed.Contains(n) && n.Time < time && time <= n.EndTime);
 
     // Whether the stretch between two measures leaves or enters a branch.
     static bool Crosses(ChartAnalysis analysis, MeasureView a, MeasureView b)

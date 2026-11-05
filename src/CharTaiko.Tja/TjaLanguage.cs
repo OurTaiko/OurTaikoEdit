@@ -118,6 +118,7 @@ public sealed class TjaLanguage : IChartLanguage
             Measures = measures, Diagnostics = diagnostics, Title = info?.Title ?? "", Audio = AudioFileOf(text),
             SourceOf = n => map.TryGetSpan(n, out var s) ? Span(s) : default,
             TailOf = n => map.TryGetTailSpan(n, out var s) ? Span(s) : default,
+            EventOf = e => map.TryGetSpan(e, out var s) ? Span(s) : default,
             StartLine = lines.Line(analysis.StartSpan.Start), EndLine = lines.Line(analysis.EndSpan.Start),
         };
     }

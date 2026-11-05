@@ -159,6 +159,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         Hints = Language.Hints(text, 1, int.MaxValue).GroupBy(h => h.Line).ToDictionary(g => g.Key, g => string.Join("  ", g.Select(h => h.Label)));
         Summary = Language.Summaries(text).FirstOrDefault(b => b.Block == next.Block)?.Text ?? "";
         Analysis = next;
+        ResolveSelection();
         if (!Blocks.SequenceEqual(next.Blocks))
         {
             Blocks.Clear();
@@ -213,6 +214,216 @@ public sealed partial class EditorViewModel : ViewModelBase
         }
         if (line < Analysis.StartLine || line > Analysis.EndLine) return;
         if (Analysis.SlotAt(line, column) is { } slot) Playhead = slot.Time;
+    }
+
+    // ---- Selection on the timeline. Kept as places (measure number and fraction), since every
+    // edit reads the chart again and makes new notes; resolved to notes after each analysis.
+
+    readonly List<(int Measure, double Fraction)> selectionKeys = new();
+    HashSet<ChartNote> selected = new();
+    public IReadOnlyCollection<ChartNote> SelectedNotes => selected;
+
+    // Copied notes: beats from the first, kind, and a long note's length in beats.
+    static List<(double Beat, NoteKind Kind, double? Length)> clipboard = new();
+
+    (int, double)? KeyOf(ChartNote note)
+    {
+        foreach (var m in Analysis.Measures)
+            for (int i = 0; i < m.Slots.Count; i++)
+                if (ReferenceEquals(m.Slots[i].Note, note)) return (m.Index, (double)i / m.Slots.Count);
+        return null;
+    }
+
+    void ResolveSelection()
+    {
+        var notes = new HashSet<ChartNote>();
+        foreach (var (index, fraction) in selectionKeys)
+            foreach (var m in Analysis.Measures)
+            {
+                if (m.Index != index) continue;
+                for (int i = 0; i < m.Slots.Count; i++)
+                    if (Math.Abs((double)i / m.Slots.Count - fraction) < 1e-9 && m.Slots[i].Note is { } n) notes.Add(n);
+            }
+        selected = notes;
+        OnPropertyChanged(nameof(SelectedNotes));
+    }
+
+    public void Select(IEnumerable<ChartNote> notes, bool add = false)
+    {
+        if (!add) selectionKeys.Clear();
+        foreach (var n in notes)
+            if (KeyOf(n) is { } key && !selectionKeys.Contains(key)) selectionKeys.Add(key);
+        ResolveSelection();
+    }
+
+    public void ToggleSelected(ChartNote note)
+    {
+        if (KeyOf(note) is not { } key) return;
+        if (!selectionKeys.Remove(key)) selectionKeys.Add(key);
+        ResolveSelection();
+    }
+
+    public void ClearSelection()
+    {
+        selectionKeys.Clear();
+        ResolveSelection();
+    }
+
+    public void SelectAll() => Select(Analysis.Chart?.Notes ?? new List<ChartNote>());
+
+    MeasureGrid Grid(BranchRoute route) => new(Analysis, route, Division);
+
+    static BranchRoute RouteOf(ChartNote note, BranchRoute row) => note.BranchId >= 0 ? note.Route : row;
+
+    static bool IsLongKind(NoteKind k) => k is NoteKind.Roll or NoteKind.BigRoll or NoteKind.Balloon or NoteKind.Kusudama;
+
+    // Each note again, moved by some beats and snapped to the grid, kind changed if asked; the
+    // selection follows.
+    bool Replace(IReadOnlyList<ChartNote> notes, double beats, BranchRoute row, Func<ChartNote, NoteKind>? kind = null)
+    {
+        EnsureFresh();
+        if (!ChartIsCurrent) { Message = "Fix the errors in the code first."; return false; }
+        var places = new List<NotePlacement>();
+        foreach (var n in notes)
+        {
+            var grid = Grid(RouteOf(n, row));
+            if (grid.BeatOf(n) is not { } beat || grid.At(beat + beats) is not { } at) { Message = "That would move a note out of the chart."; return false; }
+            var newKind = kind?.Invoke(n) ?? n.Kind;
+            GridPosition? end = null;
+            if (IsLongKind(newKind))
+            {
+                if (grid.BeatOf(n, tail: true) is not { } tail || grid.At(tail + beats) is not { } e) { Message = "A roll's end is not on the grid; move it in the code."; return false; }
+                end = e;
+            }
+            places.Add(new NotePlacement(at, newKind, end));
+        }
+        var result = Language.Editing.Edit(Analysis, notes, places);
+        if (!result.Ok) { Message = result.Error; return false; }
+        selectionKeys.Clear();
+        selectionKeys.AddRange(places.Select(p => (p.At.Measure.Index, p.At.Fraction)));
+        Apply(result);
+        ResolveSelection();
+        return true;
+    }
+
+    // Moves the selection by grid steps of the current division.
+    public void MoveSelection(int steps, BranchRoute row)
+    {
+        if (selected.Count == 0 || steps == 0) return;
+        Replace(selected.ToList(), steps * 4.0 / Division, row);
+    }
+
+    public void DeleteSelection()
+    {
+        if (selected.Count == 0) return;
+        EnsureFresh();
+        var result = Language.Editing.Edit(Analysis, selected.ToList(), Array.Empty<NotePlacement>());
+        if (!result.Ok) { Message = result.Error; return; }
+        selectionKeys.Clear();
+        Apply(result);
+        ResolveSelection();
+    }
+
+    // Changes the kind of the selected notes: short notes to a short kind, long ones to a long one.
+    public void ChangeSelectionKind(NoteKind kind)
+    {
+        var notes = selected.Where(n => n.IsLong == IsLongKind(kind) && n.Kind != kind).ToList();
+        if (notes.Count == 0) { Message = IsLongKind(kind) ? "Only rolls and balloons change into rolls and balloons." : "Only short notes change into short notes."; return; }
+        Replace(notes, 0, Route, _ => kind);
+    }
+
+    // Don ↔ ka, big stays big.
+    public void SwapSelectionColour()
+    {
+        var notes = selected.Where(n => n.Kind is NoteKind.Don or NoteKind.Ka or NoteKind.BigDon or NoteKind.BigKa).ToList();
+        if (notes.Count == 0) return;
+        Replace(notes, 0, Route, n => n.Kind switch
+        {
+            NoteKind.Don => NoteKind.Ka, NoteKind.Ka => NoteKind.Don, NoteKind.BigDon => NoteKind.BigKa, _ => NoteKind.BigDon,
+        });
+    }
+
+    public void CopySelection(BranchRoute row)
+    {
+        if (selected.Count == 0) return;
+        var items = new List<(double, NoteKind, double?)>();
+        foreach (var n in selected)
+        {
+            var grid = Grid(RouteOf(n, row));
+            if (grid.BeatOf(n) is not { } beat) continue;
+            double? length = n.IsLong && grid.BeatOf(n, tail: true) is { } tail ? tail - beat : null;
+            items.Add((beat, n.Kind, length));
+        }
+        if (items.Count == 0) return;
+        double first = items.Min(i => i.Item1);
+        clipboard = items.Select(i => (i.Item1 - first, i.Item2, i.Item3)).OrderBy(i => i.Item1).ToList();
+        Message = $"Copied {clipboard.Count} note{(clipboard.Count == 1 ? "" : "s")}";
+    }
+
+    public void CutSelection(BranchRoute row)
+    {
+        CopySelection(row);
+        DeleteSelection();
+    }
+
+    // Pastes the copied notes with the first at a grid position; they become the selection.
+    public void Paste(GridPosition at)
+    {
+        if (clipboard.Count == 0) { Message = "Nothing copied"; return; }
+        EnsureFresh();
+        if (!ChartIsCurrent) { Message = "Fix the errors in the code first."; return; }
+        var grid = Grid(at.Route);
+        if (grid.Beat(at) is not { } start) return;
+        var places = new List<NotePlacement>();
+        foreach (var (beat, kind, length) in clipboard)
+        {
+            if (grid.At(start + beat) is not { } p) { Message = "The copied notes run past the chart's end."; return; }
+            GridPosition? end = length is { } l ? grid.At(start + beat + l) : null;
+            if (length != null && end == null) { Message = "The copied notes run past the chart's end."; return; }
+            places.Add(new NotePlacement(p, kind, end));
+        }
+        var result = Language.Editing.Edit(Analysis, Array.Empty<ChartNote>(), places);
+        if (!result.Ok) { Message = result.Error; return; }
+        selectionKeys.Clear();
+        selectionKeys.AddRange(places.Select(p => (p.At.Measure.Index, p.At.Fraction)));
+        Apply(result);
+        ResolveSelection();
+    }
+
+    // ---- Timing commands from the timeline.
+
+    public async Task InsertEvent(GridPosition at, ChartEventKind kind)
+    {
+        EnsureFresh();
+        string? value = null;
+        if (kind is ChartEventKind.Tempo or ChartEventKind.Scroll or ChartEventKind.Measure or ChartEventKind.Delay)
+        {
+            var (title, prompt, initial) = kind switch
+            {
+                ChartEventKind.Tempo => ("#BPMCHANGE", "The tempo from here (BPM):", at.Measure.Bpm.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)),
+                ChartEventKind.Scroll => ("#SCROLL", "The scroll speed from here (1 is normal; 1+2i moves vertically):", "1"),
+                ChartEventKind.Measure => ("#MEASURE", "The time signature from this measure (a/b):", "4/4"),
+                _ => ("#DELAY", "Seconds to shift everything after this place:", "0"),
+            };
+            value = await dialogs.PromptAsync(title, prompt, initial);
+            if (string.IsNullOrWhiteSpace(value)) return;
+            EnsureFresh();
+        }
+        Apply(Language.Editing.InsertEvent(Analysis, at, kind, value));
+    }
+
+    public async Task EditEvent(object chartEvent, string title, string current)
+    {
+        var value = await dialogs.PromptAsync(title, "New value:", current);
+        if (string.IsNullOrWhiteSpace(value)) return;
+        EnsureFresh();
+        Apply(Language.Editing.ChangeEvent(Analysis, chartEvent, value));
+    }
+
+    public void RemoveEvent(object chartEvent)
+    {
+        EnsureFresh();
+        Apply(Language.Editing.RemoveEvent(Analysis, chartEvent));
     }
 
     // Timeline: a note at a grid position (a long note with its end).

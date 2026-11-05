@@ -30,6 +30,35 @@ public sealed class DialogService(Window owner) : IDialogService
     public async Task<bool> ConfirmAsync(string title, string message, string confirm)
         => await Ask(title, message, (confirm, true), ("Cancel", false));
 
+    public async Task<string?> PromptAsync(string title, string message, string value)
+    {
+        var box = new TextBox { Text = value, MinWidth = 260 };
+        var window = new Window
+        {
+            Title = title, Width = 380, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+        string? result = null;
+        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+        ok.Classes.Add("accent");
+        ok.Click += (_, _) => { result = box.Text; window.Close(); };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+        cancel.Click += (_, _) => window.Close();
+        window.Content = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(20), Spacing = 12,
+            Children =
+            {
+                new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                box,
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { ok, cancel } },
+            },
+        };
+        window.Opened += (_, _) => { box.Focus(); box.SelectAll(); };
+        await window.ShowDialog(owner);
+        return result;
+    }
+
     public Task<SaveChoice> AskSaveAsync(string name)
         => Ask($"Save {name}?", "Your changes are lost if you don't save them.",
             ("Save", SaveChoice.Save), ("Don't Save", SaveChoice.Discard), ("Cancel", SaveChoice.Cancel));

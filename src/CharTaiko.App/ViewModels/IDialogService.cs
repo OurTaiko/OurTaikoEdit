@@ -11,5 +11,7 @@ public interface IDialogService
     Task<NewProjectRequest?> NewProjectAsync();
     Task MessageAsync(string title, string message);
     Task<bool> ConfirmAsync(string title, string message, string confirm);
+    // A line of text, or null when cancelled.
+    Task<string?> PromptAsync(string title, string message, string value);
     Task<SaveChoice> AskSaveAsync(string name);
 }

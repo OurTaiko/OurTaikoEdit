@@ -22,8 +22,15 @@ public sealed class TimelineView : Control
     EditorViewModel? editor;
     double viewStart = -0.5, pixelsPerSecond = 180;
     Point? hover;
+    // What a press started: seeking on the ruler, drawing a roll, a selection box, or moving the
+    // selection (by whole grid steps, from where the press snapped).
+    enum Drag { None, Seek, Roll, Box, Move }
+    Drag drag;
     GridPosition? dragStart;
-    bool seeking;
+    Point pressPoint;
+    BranchRoute dragRow;
+    double moveBeats;
+    bool seeking => drag == Drag.Seek;
     readonly Typeface typeface = new(FontFamily.Default);
     static readonly IBrush HeaderBrush = new SolidColorBrush(Color.Parse("#1D1F23"));
     static readonly IBrush[] RowBrushes = { new SolidColorBrush(Color.Parse("#202227")), new SolidColorBrush(Color.Parse("#23252B")) };
@@ -60,7 +67,8 @@ public sealed class TimelineView : Control
     {
         if (e.PropertyName == nameof(EditorViewModel.Playhead) && editor != null) Follow(editor.Playhead, editor.IsPlaying);
         if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Route)
-            or nameof(EditorViewModel.Division) or nameof(EditorViewModel.Tool) or nameof(EditorViewModel.Waveform))
+            or nameof(EditorViewModel.Division) or nameof(EditorViewModel.Tool) or nameof(EditorViewModel.Waveform)
+            or nameof(EditorViewModel.SelectedNotes))
             InvalidateVisual();
     }
 
@@ -155,7 +163,8 @@ public sealed class TimelineView : Control
                 var n = chart.Notes[i];
                 if (n.BranchId >= 0 && n.Route != route) continue;
                 if (n.EndTime < t0 || n.Time > t1) continue;
-                DrawNote(ctx, n.Kind, XOf(n.Time), XOf(n.EndTime), cy, r, n.IsLong, 1);
+                bool picked = editor.SelectedNotes.Contains(n);
+                DrawNote(ctx, n.Kind, XOf(n.Time), XOf(n.EndTime), cy, r, n.IsLong, drag == Drag.Move && picked && moveBeats != 0 ? 0.35 : 1, picked);
             }
         }
 
@@ -192,34 +201,63 @@ public sealed class TimelineView : Control
         }
     }
 
-    static void DrawNote(DrawingContext ctx, NoteKind kind, double x, double tailX, double cy, double r, bool isLong, double opacity)
+    static readonly IPen SelectedPen = new Pen(new SolidColorBrush(Color.Parse("#FFE066")), 2.5);
+    static readonly IBrush BoxFill = new SolidColorBrush(Color.FromArgb(40, 255, 224, 102));
+    static readonly IPen BoxPen = new Pen(new SolidColorBrush(Color.FromArgb(180, 255, 224, 102)), 1);
+
+    static void DrawNote(DrawingContext ctx, NoteKind kind, double x, double tailX, double cy, double r, bool isLong, double opacity, bool selected = false)
     {
         double radius = ChartPalette.IsBig(kind) ? r * 1.3 : r;
         if (isLong && tailX > x)
         {
             using var _ = ctx.PushOpacity(opacity);
             var fill = ChartPalette.Fill(kind);
-            ctx.DrawRectangle(fill, ChartPalette.NoteOutline, new Rect(x, cy - radius * 0.7, tailX - x, radius * 1.4), radius * 0.7, radius * 0.7);
+            var body = new Rect(x, cy - radius * 0.7, tailX - x, radius * 1.4);
+            ctx.DrawRectangle(fill, selected ? SelectedPen : ChartPalette.NoteOutline, body, radius * 0.7, radius * 0.7);
         }
         ChartPalette.DrawHead(ctx, kind, new Point(x, cy), radius, opacity);
+        if (selected) ctx.DrawEllipse(null, SelectedPen, new Point(x, cy), radius + 3, radius + 3);
     }
 
+    double RowCenter(BranchRoute route)
+    {
+        int row = Rows.ToList().IndexOf(route);
+        return RowTop(Math.Max(0, row)) + RowHeight / 2;
+    }
+
+    // What the pointer would do: the note to place, the roll being drawn, the selection being
+    // moved, the box being drawn.
     void DrawGhost(DrawingContext ctx)
     {
-        if (editor?.Tool.Kind is not { } kind || hover is not { } p || seeking) return;
-        int row = RowAt(p.Y);
-        if (row < 0) return;
-        var route = Rows[row];
-        double cy = RowTop(row) + RowHeight / 2, r = Math.Min(RowHeight * 0.28, 11);
-        if (dragStart is { } start)
+        if (editor == null || hover is not { } p) return;
+        double r = Math.Min(RowHeight * 0.28, 11);
+        switch (drag)
         {
-            var end = Snap(p.X, start.Route);
-            double endX = end is { } e ? XOf(e.Time) : XOf(start.Time);
-            cy = RowTop(Rows.ToList().IndexOf(start.Route)) + RowHeight / 2;
-            DrawNote(ctx, kind, XOf(start.Time), Math.Max(endX, XOf(start.Time)), cy, r, true, 0.55);
-            return;
+            case Drag.Box:
+                ctx.DrawRectangle(BoxFill, BoxPen, new Rect(pressPoint, p));
+                return;
+            case Drag.Move when moveBeats != 0:
+                foreach (var n in editor.SelectedNotes)
+                {
+                    var route = n.BranchId >= 0 ? n.Route : dragRow;
+                    var grid = new MeasureGrid(editor.Analysis, route, editor.Division);
+                    if (grid.BeatOf(n) is not { } beat || grid.At(beat + moveBeats) is not { } at) continue;
+                    double tail = n.IsLong && grid.BeatOf(n, tail: true) is { } tb && grid.At(tb + moveBeats) is { } te ? XOf(te.Time) : XOf(at.Time);
+                    foreach (var row in Rows.Where(row => n.BranchId < 0 || row == n.Route))
+                        DrawNote(ctx, n.Kind, XOf(at.Time), tail, RowCenter(row), r, n.IsLong, 0.6, true);
+                }
+                return;
+            case Drag.Roll when dragStart is { } start && editor.Tool.Kind is { } rollKind:
+                var end = Snap(p.X, start.Route);
+                double endX = end is { } e ? XOf(e.Time) : XOf(start.Time);
+                DrawNote(ctx, rollKind, XOf(start.Time), Math.Max(endX, XOf(start.Time)), RowCenter(start.Route), r, true, 0.55);
+                return;
+            case Drag.None when editor.Tool.Kind is { } kind:
+                int rowAt = RowAt(p.Y);
+                if (rowAt < 0) return;
+                if (Snap(p.X, Rows[rowAt]) is { } place) DrawNote(ctx, kind, XOf(place.Time), XOf(place.Time), RowTop(rowAt) + RowHeight / 2, r, false, 0.45);
+                return;
         }
-        if (Snap(p.X, route) is { } at) DrawNote(ctx, kind, XOf(at.Time), XOf(at.Time), cy, r, false, 0.45);
     }
 
     void DrawRuler(DrawingContext ctx, ChartAnalysis analysis, double t0, double t1)
@@ -274,11 +312,34 @@ public sealed class TimelineView : Control
             if (x >= HeaderWidth) Label(ctx, tempo.Bpm.ToString("0.###", CultureInfo.InvariantCulture), new Point(x + 2, top + 5), 11, ChartPalette.Roll);
         }
 
+        // Time signatures where they change, and delays.
+        double lastLength = 1;
+        foreach (var m in analysis.Measures)
+        {
+            if (!m.IsOn(route)) continue;
+            if (Math.Abs(m.Length - lastLength) > 1e-9 && m.Time >= t0 && m.Time <= t1)
+                Label(ctx, Signature(m.Length), new Point(XOf(m.Time) + 2, top + 5 + 0), 10, ChartPalette.Muted);
+            lastLength = m.Length;
+        }
+        foreach (var d in chart.Tempos.Where(t => t.ResumeTime > t.Time && LaneView.Shown(chart, t.BranchId, t.Route, route)))
+            if (d.Time >= t0 && d.Time <= t1) Label(ctx, $"+{d.ResumeTime - d.Time:0.###}s", new Point(XOf(d.Time) + 2, top + 5), 10, ChartPalette.Ka);
+
         void Gogo(double from, double to)
         {
             if (to < t0 || from > t1) return;
             ctx.FillRectangle(GogoBrush, new Rect(XOf(from), top + EventsHeight - 6, Math.Max(1, XOf(to) - XOf(from)), 6));
         }
+    }
+
+    // A measure length (in whole notes) as a time signature: 0.75 → 3/4, 0.375 → 3/8.
+    static string Signature(double length)
+    {
+        foreach (int den in new[] { 4, 8, 16, 32 })
+        {
+            double num = length * den;
+            if (Math.Abs(num - Math.Round(num)) < 1e-6) return $"{Math.Round(num)}/{den}";
+        }
+        return length.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
     void Label(DrawingContext ctx, string text, Point at, double size, IBrush brush)
@@ -302,39 +363,72 @@ public sealed class TimelineView : Control
         return best;
     }
 
+    bool InEvents(double y) => y >= Bounds.Height - EventsHeight;
+
+    // The grid beat a point snaps to on a route.
+    double? BeatAt(double x, BranchRoute route)
+        => editor == null || Snap(x, route) is not { } at ? null : new MeasureGrid(editor.Analysis, route, editor.Division).Beat(at);
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
         Focus();
         if (editor == null) return;
         var p = e.GetPosition(this);
-        var props = e.GetCurrentPoint(this).Properties;
-        int row = RowAt(p.Y);
+        var point = e.GetCurrentPoint(this).Properties;
+        bool additive = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Meta | KeyModifiers.Control)) != 0;
         if (p.X < HeaderWidth) return;
-        if (row == -1)
+        pressPoint = p;
+        if (RowAt(p.Y) == -1)
         {
-            seeking = true;
+            drag = Drag.Seek;
             editor.Seek(TimeOf(p.X));
             e.Pointer.Capture(this);
             return;
         }
-        if (row < 0) return;
-        var route = Rows[row];
-        if (props.IsRightButtonPressed)
+        if (InEvents(p.Y))
         {
-            if (NoteAt(p, route) is { } note) editor.RemoveNote(note);
+            if (point.IsRightButtonPressed) EventMenu(p);
+            else if (e.ClickCount == 2 && TempoNear(p.X) is { } tempo) _ = EditTempo(tempo);
             return;
         }
-        if (!props.IsLeftButtonPressed) return;
+        int row = RowAt(p.Y);
+        if (row < 0) return;
+        var route = Rows[row];
+        dragRow = route;
+        var note = NoteAt(p, route);
+        if (point.IsRightButtonPressed)
+        {
+            if (editor.Tool.Kind != null) { if (note != null) editor.RemoveNote(note); }
+            else NoteMenu(p, route, note);
+            return;
+        }
+        if (!point.IsLeftButtonPressed) return;
+
         if (editor.Tool.Kind is not { } kind)
         {
-            if (NoteAt(p, route) is { } note) { editor.Reveal(note); editor.Seek(note.Time); }
-            else editor.Seek(TimeOf(p.X));
+            // Select: a note is picked (with Shift or ⌘/Ctrl added or taken away) and dragged to
+            // move; elsewhere a box is drawn.
+            if (note != null)
+            {
+                if (additive) { editor.ToggleSelected(note); return; }
+                if (!editor.SelectedNotes.Contains(note)) editor.Select(new[] { note });
+                editor.Reveal(note);
+                drag = Drag.Move;
+                moveBeats = 0;
+            }
+            else
+            {
+                if (!additive) editor.ClearSelection();
+                drag = Drag.Box;
+            }
+            e.Pointer.Capture(this);
             return;
         }
         if (Snap(p.X, route) is not { } at) return;
         if (kind is NoteKind.Roll or NoteKind.BigRoll or NoteKind.Balloon or NoteKind.Kusudama)
         {
+            drag = Drag.Roll;
             dragStart = at;
             e.Pointer.Capture(this);
         }
@@ -345,26 +439,159 @@ public sealed class TimelineView : Control
     {
         base.OnPointerMoved(e);
         hover = e.GetPosition(this);
-        if (seeking && editor != null) editor.Seek(TimeOf(Math.Max(HeaderWidth, hover.Value.X)));
+        if (editor == null) return;
+        var p = hover.Value;
+        switch (drag)
+        {
+            case Drag.Seek:
+                editor.Seek(TimeOf(Math.Max(HeaderWidth, p.X)));
+                break;
+            case Drag.Move:
+                // Whole grid steps from where the press snapped.
+                if (BeatAt(pressPoint.X, dragRow) is { } from && BeatAt(p.X, dragRow) is { } to)
+                {
+                    double step = 4.0 / editor.Division;
+                    moveBeats = Math.Round((to - from) / step) * step;
+                }
+                break;
+        }
         InvalidateVisual();
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        seeking = false;
-        if (dragStart is { } start && editor != null)
-        {
-            dragStart = null;
-            var p = e.GetPosition(this);
-            var end = Snap(p.X, start.Route);
-            // A click without a drag gives the shortest roll: one grid step.
-            if (end is not { } stop || stop.Time <= start.Time)
-                end = start.Step + 1 < start.Steps ? start with { Step = start.Step + 1 } : Snap(XOf(start.Measure.EndTime) + 0.5, start.Route);
-            editor.PlaceNote(start, end);
-        }
+        var p = e.GetPosition(this);
+        if (editor != null)
+            switch (drag)
+            {
+                case Drag.Roll when dragStart is { } start:
+                    var end = Snap(p.X, start.Route);
+                    // A click without a drag gives the shortest roll: one grid step.
+                    if (end is not { } stop || stop.Time <= start.Time)
+                        end = start.Step + 1 < start.Steps ? start with { Step = start.Step + 1 } : Snap(XOf(start.Measure.EndTime) + 0.5, start.Route);
+                    editor.PlaceNote(start, end);
+                    break;
+                case Drag.Move when moveBeats != 0:
+                    editor.MoveSelection((int)Math.Round(moveBeats * editor.Division / 4), dragRow);
+                    break;
+                case Drag.Box:
+                    BoxSelect(new Rect(pressPoint, p), (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Meta | KeyModifiers.Control)) != 0);
+                    break;
+            }
+        drag = Drag.None;
+        dragStart = null;
+        moveBeats = 0;
         e.Pointer.Capture(null);
         InvalidateVisual();
+    }
+
+    // The notes whose heads are in a box, row by row.
+    void BoxSelect(Rect box, bool add)
+    {
+        if (editor?.Analysis.Chart is not { } chart) return;
+        var picked = new List<ChartNote>();
+        for (int row = 0; row < Rows.Count; row++)
+        {
+            double cy = RowTop(row) + RowHeight / 2;
+            if (cy < box.Top || cy > box.Bottom) continue;
+            var route = Rows[row];
+            foreach (var n in chart.Notes)
+            {
+                if (n.BranchId >= 0 && n.Route != route) continue;
+                double x = XOf(n.Time);
+                if (x >= box.Left && x <= box.Right) picked.Add(n);
+            }
+        }
+        editor.Select(picked, add);
+    }
+
+    static MenuItem Item(string header, Action run, bool enabled = true)
+    {
+        var item = new MenuItem { Header = header, IsEnabled = enabled };
+        item.Click += (_, _) => run();
+        return item;
+    }
+
+    // With Select: what to do with the notes (the one under the pointer joins the selection).
+    void NoteMenu(Point p, BranchRoute route, ChartNote? note)
+    {
+        if (editor == null) return;
+        if (note != null && !editor.SelectedNotes.Contains(note)) editor.Select(new[] { note });
+        bool any = editor.SelectedNotes.Count > 0;
+        var kinds = new MenuItem { Header = "Change to", IsEnabled = any };
+        foreach (var tool in editor.Tools.Where(t => t.Kind != null))
+        {
+            var kind = tool.Kind!.Value;
+            kinds.Items.Add(Item(tool.Label, () => editor.ChangeSelectionKind(kind)));
+        }
+        var items = new List<object>
+        {
+            Item("Delete", editor.DeleteSelection, any),
+            kinds,
+            Item("Swap don and ka", editor.SwapSelectionColour, any),
+            new Separator(),
+            Item("Cut", () => editor.CutSelection(route), any),
+            Item("Copy", () => editor.CopySelection(route), any),
+        };
+        if (Snap(p.X, route) is { } at) items.Add(Item("Paste here", () => editor.Paste(at)));
+        items.Add(Item("Select all", editor.SelectAll));
+        new ContextMenu { ItemsSource = items }.Open(this);
+    }
+
+    ChartTempo? TempoNear(double x)
+    {
+        if (editor?.Analysis.Chart is not { } chart) return null;
+        return chart.Tempos.Where(t => LaneView.Shown(chart, t.BranchId, t.Route, editor.Route) && !editor.Analysis.EventOf(t).IsEmpty)
+            .Select(t => (t, d: Math.Abs(XOf(t.Time) - x))).Where(c => c.d <= 24).OrderBy(c => c.d).Select(c => c.t).FirstOrDefault();
+    }
+
+    ChartGogo? GogoNear(double x)
+    {
+        if (editor?.Analysis.Chart is not { } chart) return null;
+        return chart.Gogos.Where(g => LaneView.Shown(chart, g.BranchId, g.Route, editor.Route) && !editor.Analysis.EventOf(g).IsEmpty)
+            .Select(g => (g, d: Math.Abs(XOf(g.Time) - x))).Where(c => c.d <= 8).OrderBy(c => c.d).Select(c => c.g).FirstOrDefault();
+    }
+
+    Task EditTempo(ChartTempo tempo)
+    {
+        bool delay = tempo.ResumeTime > tempo.Time;
+        return editor!.EditEvent(tempo, delay ? "#DELAY" : "#BPMCHANGE",
+            (delay ? tempo.ResumeTime - tempo.Time : tempo.Bpm).ToString("0.###", CultureInfo.InvariantCulture));
+    }
+
+    // The tempo row's menu: commands to write at the place, and the one near it to change or remove.
+    void EventMenu(Point p)
+    {
+        if (editor == null) return;
+        var items = new List<object>();
+        if (Snap(p.X, editor.Route) is { } at)
+        {
+            foreach (var (label, kind) in new[]
+            {
+                ("Insert #BPMCHANGE here…", ChartEventKind.Tempo), ("Insert #SCROLL here…", ChartEventKind.Scroll),
+                ("Insert #MEASURE at this measure…", ChartEventKind.Measure), ("Insert #DELAY here…", ChartEventKind.Delay),
+                ("Insert #GOGOSTART here", ChartEventKind.GogoStart), ("Insert #GOGOEND here", ChartEventKind.GogoEnd),
+                ("Insert #BARLINEOFF here", ChartEventKind.BarlineOff), ("Insert #BARLINEON here", ChartEventKind.BarlineOn),
+            })
+            {
+                var position = kind == ChartEventKind.Measure ? at with { Step = 0 } : at;
+                items.Add(Item(label, () => _ = editor.InsertEvent(position, kind)));
+            }
+        }
+        if (TempoNear(p.X) is { } tempo)
+        {
+            bool delay = tempo.ResumeTime > tempo.Time;
+            items.Add(new Separator());
+            items.Add(Item(delay ? $"Edit #DELAY {tempo.ResumeTime - tempo.Time:0.###}…" : $"Edit #BPMCHANGE {tempo.Bpm:0.###}…", () => _ = EditTempo(tempo)));
+            items.Add(Item(delay ? "Remove this #DELAY" : "Remove this #BPMCHANGE", () => editor.RemoveEvent(tempo)));
+        }
+        if (GogoNear(p.X) is { } gogo)
+        {
+            items.Add(new Separator());
+            items.Add(Item(gogo.On ? "Remove this #GOGOSTART" : "Remove this #GOGOEND", () => editor.RemoveEvent(gogo)));
+        }
+        if (items.Count > 0) new ContextMenu { ItemsSource = items }.Open(this);
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
@@ -394,13 +621,44 @@ public sealed class TimelineView : Control
     {
         base.OnKeyDown(e);
         if (editor == null) return;
-        if (e.Key == Key.Space) { editor.TogglePlayCommand.Execute(null); e.Handled = true; return; }
+        bool command = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+        var route = editor.Route;
+        bool selection = editor.SelectedNotes.Count > 0;
+        e.Handled = true;
+        switch (e.Key)
+        {
+            case Key.Space: editor.TogglePlayCommand.Execute(null); return;
+            case Key.Escape: editor.ClearSelection(); return;
+            case Key.Delete or Key.Back: editor.DeleteSelection(); return;
+            case Key.A when command: editor.SelectAll(); return;
+            case Key.C when command: editor.CopySelection(route); return;
+            case Key.X when command: editor.CutSelection(route); return;
+            case Key.V when command:
+                // At the pointer when it is over a row, else at the playhead.
+                int row = hover is { } h ? RowAt(h.Y) : -1;
+                var at = row >= 0 ? Snap(hover!.Value.X, Rows[row]) : Snap(XOf(editor.Playhead), route);
+                if (at is { } place) editor.Paste(place);
+                return;
+            case Key.Left or Key.Right:
+                int steps = e.Key == Key.Left ? -1 : 1;
+                if (selection) editor.MoveSelection(steps, route);
+                else
+                {
+                    var bpm = editor.Analysis.Measures.LastOrDefault(m => m.IsOn(route) && m.Time <= editor.Playhead)?.Bpm ?? 120;
+                    editor.Seek(editor.Playhead + steps * 60 / bpm * 4 / editor.Division);
+                }
+                return;
+        }
+        if (command) { e.Handled = false; return; }
         string key = e.Key switch
         {
             >= Key.D0 and <= Key.D9 => ((int)(e.Key - Key.D0)).ToString(CultureInfo.InvariantCulture),
             >= Key.NumPad0 and <= Key.NumPad9 => ((int)(e.Key - Key.NumPad0)).ToString(CultureInfo.InvariantCulture),
             _ => e.Key.ToString().ToUpperInvariant(),
         };
-        if (editor.Tools.FirstOrDefault(t => t.Key == key) is { } tool) { editor.Tool = tool; e.Handled = true; }
+        if (editor.Tools.FirstOrDefault(t => t.Key == key) is not { } tool) { e.Handled = false; return; }
+        // With notes selected under Select, a note key changes their kind.
+        if (selection && editor.Tool.Kind == null && tool.Kind is { } kind) editor.ChangeSelectionKind(kind);
+        else editor.Tool = tool;
     }
 }

@@ -145,6 +145,67 @@ public class SceneTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void SelectingDraggingPastingAndATempoChangeOnTheTimeline()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        var code = Find<TextEditor>(window);
+        var timeline = Find<TimelineView>(window);
+        string original = code.Text;
+        editor.Division = 16;
+        editor.Tool = editor.Tools.First(t => t.Kind == null);
+        editor.Seek(0);
+        Dispatcher.UIThread.RunJobs();
+        Point At(double time, double y = 44) => timeline.TranslatePoint(new Point(TimeX(timeline, editor, time), y), window)!.Value;
+
+        // Drag the first don one sixteenth later.
+        var first = editor.Analysis.Measures[0];
+        var from = At(first.TimeAt(0));
+        var to = At(first.TimeAt(1 / 16.0));
+        window.MouseMove(from);
+        window.MouseDown(from, MouseButton.Left);
+        window.MouseMove(new Point((from.X + to.X) / 2, from.Y));
+        window.MouseMove(to);
+        window.MouseUp(to, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(editor.Message);
+        Assert.StartsWith("0100100010001000,", code.Text.Split('\n')[12]);
+        Assert.Single(editor.SelectedNotes);
+        Assert.Equal(first.TimeAt(1 / 16.0), editor.SelectedNotes.Single().Time, 3);
+
+        // A box over the rest of the first measure picks its other three dons.
+        // (Row 0 runs from the ruler, 24 px, down a third of the rows: the box spans its middle.)
+        double rowMiddle = 24 + (timeline.Bounds.Height - 48) / 6;
+        var a = At(first.TimeAt(3 / 16.0), rowMiddle - 15);
+        var b = At(first.TimeAt(15 / 16.0), rowMiddle + 15);
+        window.MouseMove(a);
+        window.MouseDown(a, MouseButton.Left);
+        window.MouseMove(b);
+        window.MouseUp(b, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, editor.SelectedNotes.Count);
+        Shot(window, "timeline-selection");
+
+        // Copy them and paste one measure on, over the second measure's notes.
+        editor.CopySelection(BranchRoute.Normal);
+        var second = editor.Analysis.Measures[1];
+        editor.Paste(new GridPosition(second, 4, 16));
+        Assert.Null(editor.Message);
+        Assert.StartsWith("1010100010101000,", code.Text.Split('\n')[13]);
+        Assert.Equal(3, editor.SelectedNotes.Count);
+
+        // A command at measure 3's first slot goes right before its note line (after the
+        // #GOGOSTART already there); then undo takes each step back.
+        var task = editor.InsertEvent(new GridPosition(editor.Analysis.Measures[2], 0, 16), ChartEventKind.GogoEnd);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(task.IsCompleted);
+        Assert.Contains("#GOGOSTART\n#GOGOEND\n3000400030004000,", code.Text);
+        for (int i = 0; i < 3; i++) code.Undo();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(original, code.Text);
+    }
+
+    [AvaloniaFact]
     public void TheSongIsDrawnUnderTheTimeline()
     {
         var (window, vm, registry) = Open();
