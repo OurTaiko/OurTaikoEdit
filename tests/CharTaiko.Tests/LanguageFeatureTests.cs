@@ -7,6 +7,18 @@ namespace CharTaiko.Tests;
 // The editor features CharTaiko takes from TJAParser, through IChartLanguage.
 public class LanguageFeatureTests
 {
+    [Fact]
+    public void TheLibrarysHelpFollowsTheMessageLanguage()
+    {
+        var tja = new TjaLanguage { MessageLanguage = "zh" };
+        string text = "BPM:120\nCOURSE:Oni\nLEVEL:5\n#START\n1020,\n#END\n";
+        Assert.StartsWith("**咚**", tja.Hover(text, 5, 1)!.Markdown);
+        Assert.Equal("咚", tja.Complete(text, 5, 1).Items.Single(i => i.Text == "1").Description);
+        Assert.StartsWith("2 个音符", tja.Summaries(text).Single().Text);
+        tja.MessageLanguage = "ja";
+        Assert.Equal("ここで小節を分ける", tja.Actions(tja.Analyze(text, 0), 5, 3).Single(a => !a.IsQuickFix && a.Title.Contains("分ける")).Title);
+    }
+
     const string Text = "TITLE:X\nBPM:120\nCOURSE:Oni\nLEVEL:5\n#START\n1000,\n#BPMCHANGE 180\n10201020,\n#END\n";
 
     static IChartLanguage Tja() => new TjaLanguage();

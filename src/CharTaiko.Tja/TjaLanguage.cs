@@ -57,7 +57,7 @@ public sealed class TjaLanguage : IChartLanguage
     {
         var doc = Document(text);
         int offset = doc.Lines.Offset(line, column - 1);
-        var items = TjaCompletion.At(doc, offset);
+        var items = TjaCompletion.At(doc, offset, language: MessageLanguage);
         if (items.Count == 0) return CompletionResult.None;
         int start = items.Min(i => i.Replace.Start);
         var (startLine, startColumn) = doc.Lines.Position(start);
@@ -141,7 +141,7 @@ public sealed class TjaLanguage : IChartLanguage
     public HoverInfo? Hover(string text, int line, int column)
     {
         var doc = Document(text);
-        if (TjaHover.At(doc, OffsetOf(doc, line, column)) is not { } h || string.IsNullOrWhiteSpace(h.Markdown)) return null;
+        if (TjaHover.At(doc, OffsetOf(doc, line, column), language: MessageLanguage) is not { } h || string.IsNullOrWhiteSpace(h.Markdown)) return null;
         var (l, c) = doc.Lines.Position(h.Span.Start);
         return new HoverInfo(new SourceSpan(l, c + 1, h.Span.Length), h.Markdown);
     }
@@ -150,7 +150,7 @@ public sealed class TjaLanguage : IChartLanguage
     {
         var doc = Document(text);
         if (TjaSignatureHelp.At(doc, OffsetOf(doc, line, column)) is not { } s) return null;
-        return new SignatureInfo(s.Label, s.Parameters, s.Active, s.Keyword?.Summary);
+        return new SignatureInfo(s.Label, s.Parameters, s.Active, s.Keyword?.SummaryIn(MessageLanguage));
     }
 
     public IReadOnlyList<FoldRange> Folds(string text)
@@ -174,14 +174,14 @@ public sealed class TjaLanguage : IChartLanguage
         var actions = new List<CodeAction>();
         foreach (var d in analysis.Diagnostics)
             if (d.Tag is TjaDiagnostic diagnostic && d.Source.Line == line)
-                foreach (var fix in TjaQuickFix.For(doc, diagnostic))
+                foreach (var fix in TjaQuickFix.For(doc, diagnostic, MessageLanguage))
                     if (Action(doc, fix, quickFix: true) is { } a) actions.Add(a);
         if (analysis.Block >= 0 && analysis.Block < analysis.Blocks.Count)
         {
             var b = analysis.Blocks[analysis.Block];
-            if (Action(doc, TjaRefactor.Split(doc, b.Course, b.Side, offset)) is { } split) actions.Add(split);
-            if (Action(doc, TjaRefactor.Join(doc, b.Course, b.Side, offset)) is { } join) actions.Add(join);
-            if (Action(doc, TjaQuickFix.InlineBalloons(doc, b.Course, b.Side)) is { } inline) actions.Add(inline);
+            if (Action(doc, TjaRefactor.Split(doc, b.Course, b.Side, offset, language: MessageLanguage)) is { } split) actions.Add(split);
+            if (Action(doc, TjaRefactor.Join(doc, b.Course, b.Side, offset, language: MessageLanguage)) is { } join) actions.Add(join);
+            if (Action(doc, TjaQuickFix.InlineBalloons(doc, b.Course, b.Side, language: MessageLanguage)) is { } inline) actions.Add(inline);
         }
         return actions;
     }
@@ -197,7 +197,7 @@ public sealed class TjaLanguage : IChartLanguage
     {
         var doc = Document(text);
         var blocks = doc.Blocks;
-        return TjaSummary.Blocks(doc).Select(s => new BlockSummary(IndexOf(blocks, s.Block), s.Title, s.Hash)).ToList();
+        return TjaSummary.Blocks(doc).Select(s => new BlockSummary(IndexOf(blocks, s.Block), s.TitleIn(MessageLanguage), s.Hash)).ToList();
     }
 
     static int IndexOf(IReadOnlyList<TjaDocumentBlock> blocks, TjaDocumentBlock block)
