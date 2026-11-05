@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!-- TJA highlighting for AvaloniaEdit (dark editor background). Note colours follow the lane view. -->
+<SyntaxDefinition name="TJA" extensions=".tja" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+  <Color name="Comment" foreground="#6A9955" />
+  <Color name="HeaderKey" foreground="#9CDCFE" />
+  <Color name="HeaderValue" foreground="#CE9178" />
+  <Color name="Course" foreground="#C586C0" fontWeight="bold" />
+  <Color name="Block" foreground="#C586C0" fontWeight="bold" />
+  <Color name="Command" foreground="#DCDCAA" />
+  <Color name="CommandArg" foreground="#B5CEA8" />
+  <Color name="Branch" foreground="#4EC9B0" fontWeight="bold" />
+  <Color name="Blank" foreground="#5A5A5A" />
+  <Color name="Don" foreground="#FF6A4D" />
+  <Color name="Ka" foreground="#5CC8E8" />
+  <Color name="BigDon" foreground="#FF6A4D" fontWeight="bold" />
+  <Color name="BigKa" foreground="#5CC8E8" fontWeight="bold" />
+  <Color name="Roll" foreground="#F5C542" />
+  <Color name="Balloon" foreground="#FF9F43" />
+  <Color name="Special" foreground="#B38CFF" />
+  <Color name="Comma" foreground="#D4D4D4" fontWeight="bold" />
+  <Color name="BalloonCount" foreground="#FF9F43" />
+
+  <RuleSet ignoreCase="true">
+    <Span color="Comment" begin="//" />
+    <Span color="Comment" multiline="true" begin="/\*" end="\*/" />
+
+    <Rule color="Block">^\s*\#(START|END)\b.*$</Rule>
+    <Rule color="Branch">^\s*\#(BRANCHSTART|BRANCHEND|N|E|M|LEVELHOLD|SECTION)\b</Rule>
+    <Span color="Command" ruleSet="Args" begin="^\s*\#[A-Z_]+" end="$" />
+
+    <Span color="Course" ruleSet="HeaderValue" begin="^\s*COURSE\s*:" end="$" />
+    <Span color="HeaderKey" ruleSet="HeaderValue" begin="^\s*[A-Z][A-Z0-9_\-]*\s*:" end="$" />
+
+    <Rule color="BalloonCount">\[[^\]]*\]</Rule>
+    <Rule color="Blank">0+</Rule>
+    <Rule color="Don">1</Rule>
+    <Rule color="Ka">2</Rule>
+    <Rule color="BigDon">3</Rule>
+    <Rule color="BigKa">4</Rule>
+    <Rule color="Roll">[568]</Rule>
+    <Rule color="Balloon">[79]</Rule>
+    <Rule color="Special">[CEFG]</Rule>
+    <Rule color="Comma">,</Rule>
+  </RuleSet>
+
+  <RuleSet name="Args">
+    <Span color="Comment" begin="//" />
+    <Rule color="CommandArg">[^/]+</Rule>
+  </RuleSet>
+
+  <RuleSet name="HeaderValue">
+    <Span color="Comment" begin="//" />
+    <Rule color="HeaderValue">[^/]+</Rule>
+  </RuleSet>
+</SyntaxDefinition>

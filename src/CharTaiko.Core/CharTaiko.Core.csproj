@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Projects, the chart-language extension point and the language-neutral analysis model. -->
+  <ItemGroup>
+    <ProjectReference Include="../../external/TJAParser/dotnet~/OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,9 @@
+<Project>
+  <!-- CharTaiko's own projects; the TJAParser submodule under external/ keeps its own settings. -->
+  <PropertyGroup Condition="!$(MSBuildProjectDirectory.Contains('external'))">
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>

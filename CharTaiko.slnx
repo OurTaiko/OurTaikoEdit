@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CharTaiko.App/CharTaiko.App.csproj" />
+    <Project Path="src/CharTaiko.Core/CharTaiko.Core.csproj" />
+    <Project Path="src/CharTaiko.Tja/CharTaiko.Tja.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CharTaiko.Tests/CharTaiko.Tests.csproj" />
+    <Project Path="tests/CharTaiko.UiTests/CharTaiko.UiTests.csproj" />
+  </Folder>
+  <Folder Name="/external/">
+    <Project Path="external/TJAParser/dotnet~/OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,118 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:CharTaiko.App.ViewModels"
+             xmlns:core="using:CharTaiko.Core.Languages"
+             xmlns:controls="using:CharTaiko.App.Controls"
+             xmlns:ae="using:AvaloniaEdit"
+             x:Class="CharTaiko.App.Views.EditorView"
+             x:DataType="vm:EditorViewModel">
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Meta+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="F5" Command="{Binding TogglePlayCommand}" />
+  </UserControl.KeyBindings>
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <!-- Toolbar -->
+    <Border Classes="panel" BorderThickness="0,0,0,1" Padding="8,6">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Classes="toolbar" Content="← Projects" Command="{Binding BackCommand}" />
+          <TextBlock Text="{Binding Project.Name}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <TextBlock Text="●" Foreground="{StaticResource AccentBrush}" IsVisible="{Binding IsDirty}" VerticalAlignment="Center" ToolTip.Tip="Unsaved changes" />
+          <Button Classes="toolbar" Content="Save" Command="{Binding SaveCommand}" Margin="12,0,0,0" ToolTip.Tip="Save (⌘S / Ctrl+S)" />
+          <Button Classes="toolbar" x:Name="UndoButton" Content="Undo" ToolTip.Tip="Undo (covers timeline edits)" />
+          <Button Classes="toolbar" x:Name="RedoButton" Content="Redo" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Classes="toolbar" Content="⏮" Command="{Binding RewindCommand}" ToolTip.Tip="Back to the start" />
+          <Button Classes="toolbar" MinWidth="64" Command="{Binding TogglePlayCommand}" ToolTip.Tip="Play / pause (Space in the previews, F5)">
+            <Panel>
+              <TextBlock Text="▶ Play" IsVisible="{Binding !IsPlaying}" />
+              <TextBlock Text="❚❚ Pause" IsVisible="{Binding IsPlaying}" />
+            </Panel>
+          </Button>
+          <TextBlock Text="Route" VerticalAlignment="Center" Margin="12,0,0,0" Classes="muted" />
+          <ComboBox ItemsSource="{Binding Routes}" SelectedItem="{Binding Route}" MinWidth="96" />
+          <TextBlock Text="Grid 1/" VerticalAlignment="Center" Margin="8,0,0,0" Classes="muted" />
+          <ComboBox ItemsSource="{Binding Divisions}" SelectedItem="{Binding Division}" MinWidth="70" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Blocks and note tools -->
+    <Border Grid.Row="1" Classes="panel" BorderThickness="0,0,0,1" Padding="8,4">
+      <Grid ColumnDefinitions="*,Auto">
+        <ListBox ItemsSource="{Binding Blocks}" SelectedIndex="{Binding BlockIndex}" Background="Transparent">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="core:ChartBlock">
+              <TextBlock Text="{Binding Name}" Margin="4,0" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <ListBox Grid.Column="1" ItemsSource="{Binding Tools}" SelectedItem="{Binding Tool}" Background="Transparent">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ToolItem">
+              <StackPanel Orientation="Horizontal" Spacing="4" ToolTip.Tip="{Binding Tip}">
+                <TextBlock Text="{Binding Key}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <!-- Code on the left; lane over timeline on the right -->
+    <Grid Grid.Row="2" ColumnDefinitions="5*,5,6*">
+      <Grid RowDefinitions="*,Auto,Auto">
+        <ae:TextEditor x:Name="Code" ShowLineNumbers="True" FontFamily="{StaticResource CodeFont}" FontSize="14"
+                       Background="#1A1B1E" Foreground="#D4D4D4" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                       WordWrap="False" />
+        <Border Grid.Row="1" Classes="panel" BorderThickness="0,1,0,0" Padding="8,3">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Text="Problems" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding Problems}" Classes="muted" Margin="10,0" VerticalAlignment="Center" />
+            <Button Grid.Column="2" Classes="toolbar" Content="Show / hide" Command="{Binding ToggleProblemsCommand}" Padding="6,1" MinHeight="22" FontSize="11" />
+          </Grid>
+        </Border>
+        <ListBox Grid.Row="2" x:Name="ProblemList" ItemsSource="{Binding Diagnostics}" Height="140" IsVisible="{Binding ProblemListVisible}"
+                 Background="#1D1F23" FontSize="12">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DiagnosticItem">
+              <Grid ColumnDefinitions="18,56,*">
+                <TextBlock Text="{Binding Icon}" Foreground="#E5B53A" IsVisible="{Binding !IsError}" />
+                <TextBlock Text="{Binding Icon}" Foreground="#FF5A5A" IsVisible="{Binding IsError}" />
+                <TextBlock Grid.Column="1" Text="{Binding Where}" Classes="muted" />
+                <TextBlock Grid.Column="2" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+      <GridSplitter Grid.Column="1" Background="#2E3036" ResizeDirection="Columns" />
+      <Grid Grid.Column="2" RowDefinitions="2*,5,3*">
+        <controls:LaneView />
+        <GridSplitter Grid.Row="1" Background="#2E3036" ResizeDirection="Rows" />
+        <controls:TimelineView Grid.Row="2" />
+      </Grid>
+    </Grid>
+
+    <!-- Status bar -->
+    <Border Grid.Row="3" Classes="panel" BorderThickness="0,1,0,0" Padding="10,3">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="18">
+        <TextBlock Text="{Binding FilePath}" Classes="muted" FontSize="12" TextTrimming="PathSegmentEllipsis" />
+        <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="12" Foreground="#E5B53A" />
+        <TextBlock Grid.Column="2" Text="{Binding Caret}" FontSize="12" />
+        <TextBlock Grid.Column="3" Text="{Binding Encoding}" Classes="muted" FontSize="12" />
+        <TextBlock Grid.Column="4" Text="{Binding Language.DisplayName}" Classes="muted" FontSize="12" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>
