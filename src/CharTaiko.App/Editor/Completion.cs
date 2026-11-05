@@ -11,7 +11,7 @@ sealed class CompletionData(CompletionItem item) : ICompletionData
 {
     public IImage? Image => null;
     public string Text => item.Text;
-    public object Content => item.Text;
+    public object Content => item.Label ?? item.Text;
     public object Description => new TextBlock
     {
         Text = item.Detail == null ? item.Description : item.Description + "\n" + item.Detail,

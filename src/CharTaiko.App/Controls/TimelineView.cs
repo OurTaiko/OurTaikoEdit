@@ -90,7 +90,7 @@ public sealed class TimelineView : Control
         return row < Rows.Count ? row : -2;
     }
 
-    int Steps(ChartMeasure m) => Math.Max(1, (int)Math.Round((editor?.Division ?? 16) * m.Length));
+    int Steps(MeasureView m) => Math.Max(1, (int)Math.Round((editor?.Division ?? 16) * m.Length));
 
     // The grid position nearest an x on a row's route.
     GridPosition? Snap(double x, BranchRoute route)

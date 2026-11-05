@@ -2,7 +2,7 @@ using OurTaiko;
 
 namespace CharTaiko.Core.Languages;
 
-public enum DiagnosticSeverity { Warning, Error }
+public enum DiagnosticSeverity { Information, Warning, Error }
 
 // 1-based line and column; Length 0 marks the whole line.
 public readonly record struct SourceSpan(int Line, int Column, int Length)
@@ -10,7 +10,8 @@ public readonly record struct SourceSpan(int Line, int Column, int Length)
     public bool IsEmpty => Line <= 0;
 }
 
-public sealed record ChartDiagnostic(SourceSpan Source, string Message, DiagnosticSeverity Severity);
+// Code is the language's own (TJA1001 …), if it has codes.
+public sealed record ChartDiagnostic(SourceSpan Source, string Message, DiagnosticSeverity Severity, string? Code = null);
 
 // One playable block of the file (a TJA #START … #END).
 public sealed record ChartBlock(int Index, string Name, string Course, string Side, int Level, int StartLine, bool IsBranching);
@@ -19,7 +20,7 @@ public sealed record ChartBlock(int Index, string Name, string Course, string Si
 public sealed record ChartSlot(SourceSpan Source, string Token, double Time, ChartNote? Note);
 
 // A measure of the parsed block, on the common part (BranchId -1) or one route of a branch.
-public sealed class ChartMeasure
+public sealed class MeasureView
 {
     public int Index { get; init; }
     public int BranchId { get; init; } = -1;
@@ -73,9 +74,11 @@ public sealed class ChartAnalysis
     public IReadOnlyList<ChartBlock> Blocks { get; init; } = Array.Empty<ChartBlock>();
     // Index into Blocks of the parsed block, -1 when there is none.
     public int Block { get; init; } = -1;
-    // Null when the block failed to parse (see Diagnostics).
+    // The chosen block's chart, read on past errors where the language can; null when there is
+    // none. Timeline edits need HasErrors false: they must land where the parser reads them.
     public TaikoChart? Chart { get; init; }
-    public IReadOnlyList<ChartMeasure> Measures { get; init; } = Array.Empty<ChartMeasure>();
+    public bool HasErrors { get; init; }
+    public IReadOnlyList<MeasureView> Measures { get; init; } = Array.Empty<MeasureView>();
     public IReadOnlyList<ChartDiagnostic> Diagnostics { get; init; } = Array.Empty<ChartDiagnostic>();
     public string Title { get; init; } = "";
     public string? Audio { get; init; }

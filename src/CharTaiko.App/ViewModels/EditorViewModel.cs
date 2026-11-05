@@ -12,7 +12,9 @@ namespace CharTaiko.App.ViewModels;
 public sealed record DiagnosticItem(ChartDiagnostic Diagnostic)
 {
     public bool IsError => Diagnostic.Severity == DiagnosticSeverity.Error;
-    public string Icon => IsError ? "●" : "▲";
+    public bool IsWarning => Diagnostic.Severity == DiagnosticSeverity.Warning;
+    public bool IsInformation => Diagnostic.Severity == DiagnosticSeverity.Information;
+    public string Icon => IsError ? "●" : IsWarning ? "▲" : "ℹ";
     public string Where => Diagnostic.Source.IsEmpty ? "" : $"Ln {Diagnostic.Source.Line}";
     public string Message => Diagnostic.Message;
 }
@@ -125,7 +127,8 @@ public sealed partial class EditorViewModel : ViewModelBase
         stale = false;
         var previous = Analysis;
         var next = Language.Analyze(text, BlockIndex);
-        ChartIsCurrent = next.Chart != null;
+        // The parser reads on past errors, but edits must land where it reads cleanly.
+        ChartIsCurrent = next.Chart != null && !next.HasErrors;
         // While the chosen block does not parse, keep showing the last chart that did.
         if (next.Chart == null && previous.Chart != null && previous.Block == next.Block) next = Keep(previous, next);
         Analysis = next;
@@ -143,7 +146,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         Diagnostics.Clear();
         foreach (var d in next.Diagnostics) Diagnostics.Add(new DiagnosticItem(d));
         int errors = next.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
-        int warnings = next.Diagnostics.Count - errors;
+        int warnings = next.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
         OnPropertyChanged(nameof(ProblemListVisible));
         Problems = errors + warnings == 0 ? "No problems" : $"{errors} error{(errors == 1 ? "" : "s")}, {warnings} warning{(warnings == 1 ? "" : "s")}";
     }

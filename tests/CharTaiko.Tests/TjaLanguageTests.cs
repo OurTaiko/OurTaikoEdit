@@ -49,7 +49,9 @@ public class TjaLanguageTests
     public void ErrorsAndWarningsAreDiagnosticsWithLines()
     {
         var a = Tja.Analyze(Chart("10,\n#SCROLL x\n1H,"), 0);
-        Assert.Null(a.Chart);
+        // The parser reads on past the error; the timeline refuses to edit such a chart.
+        Assert.NotNull(a.Chart);
+        Assert.True(a.HasErrors);
         var error = Assert.Single(a.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         Assert.Equal((7, 2), (error.Source.Line, error.Source.Column));
         Assert.Contains(a.Diagnostics, d => d.Severity == DiagnosticSeverity.Warning && d.Source.Line == 6);
@@ -59,7 +61,8 @@ public class TjaLanguageTests
     public void AFileErrorIsAtItsLine()
     {
         var a = Tja.Analyze("BPM:120\nCOURSE:Tower\n#START\n1,\n#END\n", 0);
-        Assert.Equal(2, Assert.Single(a.Diagnostics).Source.Line);
+        var error = Assert.Single(a.Diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Equal((2, "TJA3001"), (error.Source.Line, error.Code));
     }
 
     [Fact]
@@ -136,7 +139,7 @@ public class TjaLanguageTests
     }
 
     [Theory]
-    [InlineData("BPM:120\nCOURSE:Oni\n#START\n#BPM\n#END\n", 4, 5, "#BPMCHANGE ")]
+    [InlineData("BPM:120\nCOURSE:Oni\n#START\n#BPM\n#END\n", 4, 5, "#BPMCHANGE")]
     [InlineData("BPM:120\nCOURSE:Oni\nLEV\n", 3, 4, "LEVEL:")]
     [InlineData("BPM:120\nCOURSE:O\n", 2, 9, "Oni")]
     [InlineData("BPM:120\nCOURSE:Oni\n#START\n10,\n#E", 5, 3, "#END")]
@@ -144,6 +147,6 @@ public class TjaLanguageTests
         => Assert.Contains(Tja.Complete(text, line, column).Items, i => i.Text == expected);
 
     [Fact]
-    public void ANoteLineDoesNotComplete()
-        => Assert.Empty(Tja.Complete("BPM:120\nCOURSE:Oni\n#START\n10\n#END\n", 4, 3).Items);
+    public void ANoteLineOffersTheNotes()
+        => Assert.Contains(Tja.Complete("BPM:120\nCOURSE:Oni\n#START\n10\n#END\n", 4, 3).Items, i => i.Text == "G");
 }

@@ -24,6 +24,7 @@ sealed class DiagnosticRenderer : IBackgroundRenderer
 {
     static readonly IPen ErrorPen = new Pen(new SolidColorBrush(Color.Parse("#FF5A5A")), 1.2);
     static readonly IPen WarningPen = new Pen(new SolidColorBrush(Color.Parse("#E5B53A")), 1.2);
+    static readonly IPen InfoPen = new Pen(new SolidColorBrush(Color.Parse("#6CA8E8")), 1);
 
     public IReadOnlyList<ChartDiagnostic> Diagnostics { get; set; } = Array.Empty<ChartDiagnostic>();
     public KnownLayer Layer => KnownLayer.Selection;
@@ -35,7 +36,7 @@ sealed class DiagnosticRenderer : IBackgroundRenderer
         foreach (var d in Diagnostics)
         {
             if (Spans.Segment(doc, d.Source) is not { } segment) continue;
-            var pen = d.Severity == DiagnosticSeverity.Error ? ErrorPen : WarningPen;
+            var pen = d.Severity switch { DiagnosticSeverity.Error => ErrorPen, DiagnosticSeverity.Warning => WarningPen, _ => InfoPen };
             foreach (var rect in BackgroundGeometryBuilder.GetRectsForSegment(textView, segment))
             {
                 var geometry = new StreamGeometry();

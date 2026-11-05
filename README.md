@@ -15,9 +15,9 @@ dotnet test CharTaiko.slnx
 ## 目录
 
 ```
-external/TJAParser/      子模块，按 tag 锁定
+external/TJAParser/      子模块（暂指 main 的提交，库打 tag 后改指 tag）
 src/CharTaiko.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型
-src/CharTaiko.Tja/       TJA 语言：分析（TJAParser + TjaSourceMap）、补全、高亮（Tja.xshd）、时间轴编辑转文本编辑
+src/CharTaiko.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
 src/CharTaiko.App/       Avalonia 应用：Projects 与编辑两个场景
 tests/CharTaiko.Tests/   语言与项目的单元测试
 tests/CharTaiko.UiTests/ Headless UI 测试与截图
@@ -33,7 +33,7 @@ tests/CharTaiko.UiTests/ Headless UI 测试与截图
 
 ## 编辑场景
 
-- **代码**（AvaloniaEdit）：TJA 高亮；块外补全头部字段，块内补全 `#` 指令，`COURSE:`／`STYLE:` 补全取值（输入时弹出，⌘/Ctrl+Space 手动）；错误与警告画波浪线并列在 Problems 里，点击跳到行。
+- **代码**（AvaloniaEdit）：TJA 高亮；补全来自库的 `TjaCompletion`（头部、取值、指令、分歧条件、音符；输入时弹出，⌘/Ctrl+Space 手动）；诊断来自 `TjaDocument.Diagnostics`（解析器错误与警告 TJA1xxx／2xxx，加编辑器检查 TJA3xxx），画波浪线并列在 Problems 里，点击跳到行。解析出错后库会继续读，预览照常显示，但时间轴在该块有错误时拒绝编辑。
 - **难度标签**：文件里每个 `#START` 块一个标签；光标进入哪个块就切到哪个。
 - **轨道预览**：在播放头处按每个音符自己的 BPM × SCROLL 滚动，含 go-go、`#LANE_ALPHA`、分歧路线（Route 选择）、连打与气球；点音符跳到代码。
 - **时间轴**：每条路线一行（无分歧时一行），小节按 Grid（1/4–1/192，以 4/4 小节计）切分；选音符工具后单击放置，连打／气球拖到终点，右键删除；Select 工具单击音符跳到代码；点或拖标尺跳转播放头；滚轮横移，⌘/Ctrl + 滚轮缩放；1–9、G、C、F、Q 选工具，空格播放。

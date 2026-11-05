@@ -32,7 +32,8 @@ public interface IChartLanguage
     IChartEditing Editing { get; }
 }
 
-public sealed record CompletionItem(string Text, string Description, string? Detail = null);
+// Text is what is inserted; Label what the list shows (Text when null).
+public sealed record CompletionItem(string Text, string Description, string? Detail = null, string? Label = null);
 
 // Items replace the text from ReplaceColumn (1-based) up to the caret.
 public sealed record CompletionResult(int ReplaceColumn, IReadOnlyList<CompletionItem> Items)
@@ -51,7 +52,7 @@ public sealed record EditResult(IReadOnlyList<TextEdit> Edits, string? Error = n
 
 // A place on a measure's grid: step Step of Steps across the whole measure, seen from a route's
 // row of the timeline (a common measure is on every route).
-public readonly record struct GridPosition(ChartMeasure Measure, int Step, int Steps, BranchRoute Route = BranchRoute.Normal)
+public readonly record struct GridPosition(MeasureView Measure, int Step, int Steps, BranchRoute Route = BranchRoute.Normal)
 {
     public double Fraction => Steps > 0 ? (double)Step / Steps : 0;
     public double Time => Measure.TimeAt(Fraction);

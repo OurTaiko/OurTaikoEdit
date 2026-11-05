@@ -27,7 +27,7 @@ sealed class TjaEditing : IChartEditing
 
     // A character to write at a place of a measure. Weak ones (clearing a removed roll's end) give
     // way to any other at the same place.
-    sealed record Placement(ChartMeasure Measure, long Num, long Den, char Char, bool Weak = false);
+    sealed record Placement(MeasureView Measure, long Num, long Den, char Char, bool Weak = false);
 
     public EditResult PlaceNote(ChartAnalysis analysis, GridPosition at, NoteKind kind, GridPosition? end = null)
     {
@@ -95,24 +95,24 @@ sealed class TjaEditing : IChartEditing
     }
 
     // The measures' slots on a route, in the order written.
-    static IEnumerable<(ChartMeasure Measure, int Index, ChartSlot Slot)> SlotsOn(ChartAnalysis analysis, BranchRoute route)
+    static IEnumerable<(MeasureView Measure, int Index, ChartSlot Slot)> SlotsOn(ChartAnalysis analysis, BranchRoute route)
         => analysis.Measures.Where(m => m.IsOn(route)).SelectMany(m => m.Slots.Select((s, i) => (m, i, s)));
 
     // A roll on the route whose body (after its head, up to its end) contains the time.
-    static ChartNote? RollAround(ChartAnalysis analysis, double time, BranchRoute route, ChartMeasure measure)
+    static ChartNote? RollAround(ChartAnalysis analysis, double time, BranchRoute route, MeasureView measure)
         => SlotsOn(analysis, route).Select(x => x.Slot.Note).FirstOrDefault(n => n is { IsLong: true } && n.Time < time && time <= n.EndTime);
 
     // Whether the stretch between two measures leaves or enters a branch.
-    static bool Crosses(ChartAnalysis analysis, ChartMeasure a, ChartMeasure b)
+    static bool Crosses(ChartAnalysis analysis, MeasureView a, MeasureView b)
     {
         if (a.BranchId != b.BranchId || a.Route != b.Route && a.BranchId >= 0) return true;
         int from = Order(analysis, a), to = Order(analysis, b);
         return a.BranchId < 0 && analysis.Measures.Where(m => Order(analysis, m) > from && Order(analysis, m) < to).Any(m => m.BranchId >= 0);
     }
 
-    static int Order(ChartAnalysis analysis, ChartMeasure m) => IndexOf(analysis.Measures, m);
+    static int Order(ChartAnalysis analysis, MeasureView m) => IndexOf(analysis.Measures, m);
 
-    static int IndexOf(IReadOnlyList<ChartMeasure> list, ChartMeasure m)
+    static int IndexOf(IReadOnlyList<MeasureView> list, MeasureView m)
     {
         for (int i = 0; i < list.Count; i++) if (ReferenceEquals(list[i], m)) return i;
         return -1;
@@ -155,7 +155,7 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(edits);
     }
 
-    static EditResult EditMeasure(ChartMeasure measure, List<Placement> placements)
+    static EditResult EditMeasure(MeasureView measure, List<Placement> placements)
     {
         int n = measure.Slots.Count;
         if (n == 0)

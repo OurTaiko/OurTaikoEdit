@@ -87,7 +87,8 @@
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:DiagnosticItem">
               <Grid ColumnDefinitions="18,56,*">
-                <TextBlock Text="{Binding Icon}" Foreground="#E5B53A" IsVisible="{Binding !IsError}" />
+                <TextBlock Text="{Binding Icon}" Foreground="#E5B53A" IsVisible="{Binding IsWarning}" />
+                <TextBlock Text="{Binding Icon}" Foreground="#6CA8E8" IsVisible="{Binding IsInformation}" />
                 <TextBlock Text="{Binding Icon}" Foreground="#FF5A5A" IsVisible="{Binding IsError}" />
                 <TextBlock Grid.Column="1" Text="{Binding Where}" Classes="muted" />
                 <TextBlock Grid.Column="2" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
