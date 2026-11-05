@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using CharTaiko.App.ViewModels;
+using CharTaiko.Core.Localization;
 using CharTaiko.Core.Languages;
 using OurTaiko;
 
@@ -178,8 +179,8 @@ public sealed class TimelineView : Control
         // Row headers over everything that scrolled under them.
         ctx.FillRectangle(HeaderBrush, new Rect(0, 0, HeaderWidth, b.Height));
         for (int row = 0; row < rows.Count; row++)
-            Label(ctx, rows.Count == 1 ? "Notes" : rows[row].ToString(), new Point(10, RowTop(row) + RowHeight / 2 - 8), 12, ChartPalette.Text);
-        Label(ctx, "Commands", new Point(10, b.Height - EventsHeight + 4), 12, ChartPalette.Muted);
+            Label(ctx, rows.Count == 1 ? Loc.T("Notes") : Localization.Names.Route(rows[row]), new Point(10, RowTop(row) + RowHeight / 2 - 8), 12, ChartPalette.Text);
+        Label(ctx, Loc.T("Commands"), new Point(10, b.Height - EventsHeight + 4), 12, ChartPalette.Muted);
         Label(ctx, $"1/{editor.Division}", new Point(10, 5), 11, ChartPalette.Muted);
 
         double px = XOf(editor.Playhead);
@@ -582,7 +583,7 @@ public sealed class TimelineView : Control
         if (editor == null) return;
         if (note != null && !editor.SelectedNotes.Contains(note)) editor.Select(new[] { note });
         bool any = editor.SelectedNotes.Count > 0;
-        var kinds = new MenuItem { Header = "Change to", IsEnabled = any };
+        var kinds = new MenuItem { Header = Loc.T("ChangeTo"), IsEnabled = any };
         foreach (var tool in editor.Tools.Where(t => t.Kind != null))
         {
             var kind = tool.Kind!.Value;
@@ -590,15 +591,15 @@ public sealed class TimelineView : Control
         }
         var items = new List<object>
         {
-            Item("Delete", editor.DeleteSelection, any),
+            Item(Loc.T("Delete"), editor.DeleteSelection, any),
             kinds,
-            Item("Swap don and ka", editor.SwapSelectionColour, any),
+            Item(Loc.T("SwapDonKa"), editor.SwapSelectionColour, any),
             new Separator(),
-            Item("Cut", () => editor.CutSelection(route), any),
-            Item("Copy", () => editor.CopySelection(route), any),
+            Item(Loc.T("Cut"), () => editor.CutSelection(route), any),
+            Item(Loc.T("Copy"), () => editor.CopySelection(route), any),
         };
-        if (Snap(p.X, route) is { } at) items.Add(Item("Paste here", () => editor.Paste(at)));
-        items.Add(Item("Select all", editor.SelectAll));
+        if (Snap(p.X, route) is { } at) items.Add(Item(Loc.T("PasteHere"), () => editor.Paste(at)));
+        items.Add(Item(Loc.T("SelectAll"), editor.SelectAll));
         new ContextMenu { ItemsSource = items }.Open(this);
     }
 
@@ -638,10 +639,10 @@ public sealed class TimelineView : Control
         {
             foreach (var (label, kind) in new[]
             {
-                ("Insert #BPMCHANGE here…", ChartEventKind.Tempo), ("Insert #SCROLL here…", ChartEventKind.Scroll),
-                ("Insert #MEASURE at this measure…", ChartEventKind.Measure), ("Insert #DELAY here…", ChartEventKind.Delay),
-                ("Insert #GOGOSTART here", ChartEventKind.GogoStart), ("Insert #GOGOEND here", ChartEventKind.GogoEnd),
-                ("Insert #BARLINEOFF here", ChartEventKind.BarlineOff), ("Insert #BARLINEON here", ChartEventKind.BarlineOn),
+                (Loc.F("InsertHereValue", "#BPMCHANGE"), ChartEventKind.Tempo), (Loc.F("InsertHereValue", "#SCROLL"), ChartEventKind.Scroll),
+                (Loc.F("InsertAtMeasure", "#MEASURE"), ChartEventKind.Measure), (Loc.F("InsertHereValue", "#DELAY"), ChartEventKind.Delay),
+                (Loc.F("InsertHere", "#GOGOSTART"), ChartEventKind.GogoStart), (Loc.F("InsertHere", "#GOGOEND"), ChartEventKind.GogoEnd),
+                (Loc.F("InsertHere", "#BARLINEOFF"), ChartEventKind.BarlineOff), (Loc.F("InsertHere", "#BARLINEON"), ChartEventKind.BarlineOn),
             })
             {
                 var position = kind == ChartEventKind.Measure ? at with { Step = 0 } : at;
@@ -652,9 +653,9 @@ public sealed class TimelineView : Control
         {
             items.Add(new Separator());
             string written = (command.Name + " " + command.Value).Trim();
-            if (command.Value.Length > 0) items.Add(Item($"Edit {written}…", () => _ = editor.EditCommand(command)));
-            items.Add(Item($"Remove {written}", () => editor.RemoveCommand(command)));
-            items.Add(Item("Show in code", () => editor.RevealCommand(command)));
+            if (command.Value.Length > 0) items.Add(Item(Loc.F("EditCommand", written), () => _ = editor.EditCommand(command)));
+            items.Add(Item(Loc.F("RemoveCommand", written), () => editor.RemoveCommand(command)));
+            items.Add(Item(Loc.T("ShowInCode"), () => editor.RevealCommand(command)));
         }
         if (items.Count > 0) new ContextMenu { ItemsSource = items }.Open(this);
     }

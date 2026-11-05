@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 
 namespace CharTaiko.Core.Projects;
 
@@ -67,7 +68,7 @@ public sealed class ProjectRegistry
     {
         string folder = Path.Combine(parent, SafeName(name));
         if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
-            throw new IOException($"The folder {folder} already exists and is not empty.");
+            throw new IOException(Loc.F("FolderNotEmpty", folder));
         Directory.CreateDirectory(folder);
         string? audio = null;
         if (!string.IsNullOrEmpty(audioSource))
@@ -93,7 +94,7 @@ public sealed class ProjectRegistry
         {
             var chart = Directory.EnumerateFiles(folder).OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                 .Select(f => (File: f, Language: ChartLanguages.ForFile(f))).FirstOrDefault(c => c.Language != null);
-            if (chart.Language == null) throw new FileNotFoundException("The folder has no chart file CharTaiko can open.");
+            if (chart.Language == null) throw new FileNotFoundException(Loc.T("NoChartFile"));
             project = ChartProject.Create(folder, Path.GetFileName(Path.TrimEndingDirectorySeparator(folder)), chart.Language.Id, Path.GetFileName(chart.File));
             project.Save();
         }

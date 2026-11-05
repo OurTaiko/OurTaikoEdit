@@ -11,7 +11,9 @@ using CharTaiko.Audio;
 using CharTaiko.App.ViewModels;
 using CharTaiko.App.Views;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 using CharTaiko.Core.Projects;
+using CharTaiko.Core.Settings;
 using CharTaiko.Tja;
 using OurTaiko;
 
@@ -41,7 +43,7 @@ public class SceneTests : IDisposable
     {
         var registry = new ProjectRegistry(Path.Combine(root, "data"));
         var window = new MainWindow { Width = 1440, Height = 900 };
-        var vm = new MainWindowViewModel(registry, new DialogService(window));
+        var vm = new MainWindowViewModel(registry, new DialogService(window), new AppSettings { Language = "en" });
         window.DataContext = vm;
         window.Show();
         Dispatcher.UIThread.RunJobs();
@@ -83,11 +85,70 @@ public class SceneTests : IDisposable
     EditorViewModel OpenEditor(MainWindow window, MainWindowViewModel vm, ProjectRegistry registry)
     {
         var project = SampleProject(registry);
-        var editor = new EditorViewModel(project, new DialogService(window), () => { });
+        var editor = new EditorViewModel(project, new DialogService(window), () => { }, vm.Settings);
         vm.Scene = editor;
         Dispatcher.UIThread.RunJobs();
         return editor;
     }
+
+    [AvaloniaFact]
+    public void TheInterfaceFollowsTheLanguageSetting()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        try
+        {
+            Assert.Contains(Texts(window), t => t == "Save");
+            editor.Route = BranchRoute.Expert;
+            editor.MessageLanguage = "ja";
+            Choose(vm.Settings, s => s.Language = "zh");
+            // The lists keep what is chosen in them.
+            Assert.Equal((BranchRoute.Expert, "ja"), (editor.Route, editor.MessageLanguage));
+            editor.MessageLanguage = "ui";
+            Assert.Equal("zh", Loc.Instance.Language);
+            // Words in the markup follow at once; those made in code are made again.
+            Assert.Contains(Texts(window), t => t == "保存");
+            Assert.DoesNotContain(Texts(window), t => t == "Save");
+            Assert.Equal("咚", editor.Tools[1].Label);
+            Assert.StartsWith("第 ", editor.Caret);
+            Assert.True(editor.Problems == "没有问题" || editor.Problems.Contains("个"), editor.Problems);
+            Shot(window, "editor-zh");
+
+            var dialog = new SettingsDialog(vm.Settings) { Width = 560 };
+            dialog.Show();
+            Dispatcher.UIThread.RunJobs();
+            Shot(dialog, "settings-zh");
+            dialog.Close();
+
+            vm.Scene = new ProjectsViewModel(registry, new DialogService(window), _ => { }, vm.Settings);
+            Shot(window, "projects-zh");
+
+            // The chart's messages follow the interface until a language is chosen for them.
+            Assert.Equal("zh", editor.Language.MessageLanguage);
+            vm.Scene = editor;
+            Dispatcher.UIThread.RunJobs();
+            Choose(vm.Settings, s => { s.Language = "ja"; s.MessageLanguage = "en"; });
+            Assert.Equal("en", editor.Language.MessageLanguage);
+            Assert.Equal("en", editor.MessageLanguage);
+            Assert.Contains(Texts(window), t => t == "保存");
+            Assert.Equal("ドン", editor.Tools[1].Label);
+            Shot(window, "editor-ja");
+        }
+        finally
+        {
+            Choose(vm.Settings, s => { s.Language = "en"; s.MessageLanguage = "ui"; });
+        }
+    }
+
+    static void Choose(AppSettings settings, Action<AppSettings> change)
+    {
+        var edited = settings.Clone();
+        change(edited);
+        settings.Apply(edited);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    static List<string> Texts(Window window) => window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
 
     [AvaloniaFact]
     public void TheEditorShowsCodeLaneAndTimeline()

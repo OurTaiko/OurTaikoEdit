@@ -1,4 +1,7 @@
 using Avalonia;
+using CharTaiko.App.Localization;
+using CharTaiko.Core.Projects;
+using CharTaiko.Core.Settings;
 
 namespace CharTaiko.App;
 
@@ -14,5 +17,6 @@ sealed class Program
             .WithDeveloperTools()
 #endif
             .WithInterFont()
+            .With(Fonts.Options(AppSettings.Load(ProjectRegistry.DefaultDataFolder).UiLanguage))
             .LogToTrace();
 }

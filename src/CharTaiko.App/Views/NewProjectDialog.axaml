@@ -1,37 +1,38 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="CharTaiko.App.Views.NewProjectDialog"
-        Title="New Project" Width="520" SizeToContent="Height" CanResize="False"
+        xmlns:l="using:CharTaiko.App.Localization"
+        Title="{l:T NewProject}" Width="520" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
   <StackPanel Margin="20" Spacing="12">
-    <TextBlock Classes="h1" Text="New Project" />
+    <TextBlock Classes="h1" Text="{l:T NewProject}" />
     <TextBlock Classes="muted" TextWrapping="Wrap"
-               Text="A project is a folder holding the chart, its audio and chartaiko.json." />
+               Text="{l:T NewProjectIntro}" />
 
-    <TextBlock Text="Name" />
-    <TextBox x:Name="NameBox" PlaceholderText="Song name" />
+    <TextBlock Text="{l:T Name}" />
+    <TextBox x:Name="NameBox" PlaceholderText="{l:T SongName}" />
 
-    <TextBlock Text="Location" />
+    <TextBlock Text="{l:T Location}" />
     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
       <TextBox x:Name="LocationBox" />
-      <Button Grid.Column="1" Content="Browse…" Click="BrowseLocation" />
+      <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseLocation" />
     </Grid>
 
-    <TextBlock Text="Chart type" />
+    <TextBlock Text="{l:T ChartType}" />
     <ComboBox x:Name="TypeBox" HorizontalAlignment="Stretch" />
 
-    <TextBlock Text="Audio (optional, copied into the project)" />
+    <TextBlock Text="{l:T AudioOptional}" />
     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
       <TextBox x:Name="AudioBox" PlaceholderText="song.ogg" />
-      <Button Grid.Column="1" Content="Browse…" Click="BrowseAudio" />
+      <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseAudio" />
     </Grid>
 
     <TextBlock x:Name="ErrorText" Foreground="#FF6A4D" TextWrapping="Wrap" IsVisible="False" />
     <TextBlock x:Name="FolderText" Classes="muted" TextWrapping="Wrap" />
 
     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button Classes="accent" Content="Create" IsDefault="True" Click="Create" />
-      <Button Content="Cancel" IsCancel="True" Click="Cancel" />
+      <Button Classes="accent" Content="{l:T Create}" IsDefault="True" Click="Create" />
+      <Button Content="{l:T Cancel}" IsCancel="True" Click="Cancel" />
     </StackPanel>
   </StackPanel>
 </Window>

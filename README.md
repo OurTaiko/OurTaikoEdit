@@ -16,7 +16,7 @@ dotnet test CharTaiko.slnx
 
 ```
 external/TJAParser/      子模块（暂指 main 的提交，库打 tag 后改指 tag）
-src/CharTaiko.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型
+src/CharTaiko.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings）
 src/CharTaiko.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
 src/CharTaiko.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLayer）／WAV，波形，OpenAL Soft 播放与合成的咚／咔音效
 src/CharTaiko.App/       Avalonia 应用：Projects 与编辑两个场景
@@ -43,9 +43,16 @@ tests/CharTaiko.UiTests/ Headless UI 测试与截图
   - 拖连打／气球的尾端（Select 下光标变为左右箭头）改长度。
   - Commands 行：块里的每条指令画成小刻度加标签（BPM 数值、×SCROLL、拍号、+DELAY、GO▸／◂GO、|off／|on，其余为指令名），另有 go-go 区间与开头的 BPM；拖动指令按网格移动（`#MEASURE` 只落在小节开头），双击改值，右键插入 `#BPMCHANGE`／`#SCROLL`／`#MEASURE`／`#DELAY`／`#GOGOSTART`／`#GOGOEND`／`#BARLINEOFF`／`#BARLINEON`，或改值、删除、在代码里显示附近的指令。
   - 点或拖标尺跳转播放头；滚轮横移，⌘/Ctrl + 滚轮缩放；空格播放。
-- **代码辅助**（都来自 TJAParser）：悬停提示（含该处诊断）、写指令参数时的参数提示、块／分歧／路线折叠、行尾的小节号·时刻·BPM 提示、右键菜单或 ⌘/Ctrl+. 的快速修复与重构（拆分／合并小节、气球打数写成内联），工具栏 Format（Shift+Alt+F，保证每块哈希不变）；轨道下方显示所选块的音符数、最大连击、时长、峰值密度与哈希；诊断可切换英／中／日文。
-- **播放**：读 `WAVE:` 指定的音频（OGG、MP3、WAV），后台解码，时间轴行背后画波形；播放头跟随歌曲位置（`OFFSET` 已含在音符时刻里，所以波形与音符直接对齐），播放头在 0 之前或歌曲之后用时钟走；可调音量，`Hits` 勾选时音符经过判定点播放合成的咚／咔。没有音频设备时退回无声时钟。代码里正在演奏的字符会被框出并跟随滚动。
+- **代码辅助**（都来自 TJAParser）：悬停提示（含该处诊断）、写指令参数时的参数提示、块／分歧／路线折叠、行尾的小节号·时刻·BPM 提示、右键菜单或 ⌘/Ctrl+. 的快速修复与重构（拆分／合并小节、气球打数写成内联），工具栏 Format（Shift+Alt+F，保证每块哈希不变）；轨道下方显示所选块的音符数、最大连击、时长、峰值密度与哈希；诊断消息可选英／中／日文（默认与界面相同）。
+- **播放**：读 `WAVE:` 指定的音频（OGG、MP3、WAV），后台解码，时间轴行背后画波形；播放头跟随歌曲位置（`OFFSET` 已含在音符时刻里，所以波形与音符直接对齐），播放头在 0 之前或歌曲之后用时钟走；可调音量，`Hits` 勾选时音符经过判定点播放合成的咚／咔；设置里的「音频延迟」让歌曲比播放头提前相应毫秒播放、打击音提前发声，用来抵消设备输出延迟。没有音频设备时退回无声时钟。代码里正在演奏的字符会被框出并跟随滚动。
 - 撤销覆盖时间轴编辑（一次放置是一次撤销）。保存保持原编码（UTF-8 / Shift-JIS，BOM 原样）。
+
+## 界面语言与设置
+
+- 界面有英文、简体中文、日文，默认跟随系统语言（其他语言用英文）。文字表在 `src/CharTaiko.Core/Localization/Strings.cs`，三种语言并排写；单元测试检查每条都有三种语言、占位符一致。XAML 里写 `{l:T 键}`，切换语言即时生效；代码里用 `Loc.T`／`Loc.F`／`Loc.Plural`。
+- 悬停说明、补全、重构标题与轨道下方的摘要来自 TJAParser，目前只有英文；诊断消息由库提供三种语言。
+- 中日文字体：先找 PingFang SC／微软雅黑／Noto Sans CJK 等（界面为日文时先找 Hiragino／Yu Gothic），避免同一行里字重不一；顺序在启动时按界面语言定，切换语言后重启才换。
+- 设置（Projects 场景右上或编辑场景工具栏的「设置…」）存在数据目录的 `settings.json`：界面语言、诊断消息语言、新项目的默认位置、代码字号、行尾提示、自动换行、打开项目时的网格、歌曲音量、打击音开关与音量、音频延迟（0–500 ms）；另记窗口大小。工具栏上改的音量与打击音开关也会存下来。文件读不了或数值越界时退回默认值。
 
 ### 时间轴编辑如何写回文本
 

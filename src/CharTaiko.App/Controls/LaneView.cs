@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using CharTaiko.App.ViewModels;
+using CharTaiko.Core.Localization;
 using CharTaiko.Core.Play;
 using OurTaiko;
 
@@ -87,7 +88,7 @@ public sealed class LaneView : Control
         drawn.Clear();
         if (editor?.Analysis.Chart is not { } chart)
         {
-            Label(ctx, "The chart appears here once its block parses.", new Point(16, 16), 13, ChartPalette.Muted);
+            Label(ctx, Loc.T("LaneEmpty"), new Point(16, 16), 13, ChartPalette.Muted);
             return;
         }
         if (!ReferenceEquals(chart, clocksOf)) { clocks = new ScrollClockTimeline(chart); clocksOf = chart; }
@@ -160,11 +161,11 @@ public sealed class LaneView : Control
         var measure = editor.Analysis.Measures.LastOrDefault(m => m.Time <= now && (m.BranchId < 0 || Shown(chart, m.BranchId, m.Route, route)));
         var tempo = chart.Tempos.LastOrDefault(t => t.Time <= now && Shown(chart, t.BranchId, t.Route, route));
         double bpm = tempo?.Bpm ?? chart.Bpm;
-        string info = $"{Time(now)}   BPM {bpm:0.###}   Measure {(measure?.Index ?? 0) + 1}";
-        if (chart.Branches.Count > 0) info += "   Route " + route;
+        string info = $"{Time(now)}   BPM {bpm.ToString("0.###", CultureInfo.InvariantCulture)}   {Loc.F("LaneMeasure", (measure?.Index ?? 0) + 1)}";
+        if (chart.Branches.Count > 0) info += "   " + Loc.F("LaneRoute", Localization.Names.Route(route));
         Label(ctx, info, new Point(12, 8), 13, ChartPalette.Text);
         string summary = editor.Summary.Length > 0 ? editor.Summary
-            : $"{chart.Notes.Count(n => !n.IsLong && n.Kind != NoteKind.AdLib && n.Kind != NoteKind.Mine)} notes";
+            : Loc.Plural("NoteCount", chart.Notes.Count(n => !n.IsLong && n.Kind != NoteKind.AdLib && n.Kind != NoteKind.Mine));
         Label(ctx, $"{chart.Course} ★{chart.Level} · {summary}", new Point(12, b.Height - 22), 12, ChartPalette.Muted);
     }
 

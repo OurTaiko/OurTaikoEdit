@@ -12,6 +12,7 @@ using AvaloniaEdit.Highlighting.Xshd;
 using CharTaiko.App.Editor;
 using CharTaiko.App.ViewModels;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 
 namespace CharTaiko.App.Views;
 
@@ -101,13 +102,25 @@ public partial class EditorView : UserControl
         vm.PropertyChanged += Changed;
         vm.EditsRequested += ApplyEdits;
         vm.CaretRequested += MoveCaret;
+        ApplySettings();
         if (vm.Analysis.StartLine > 0) MoveCaret(Math.Min(vm.Analysis.StartLine + 1, Code.Document.LineCount), 1);
         Refresh();
     }
 
     void Changed(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(EditorViewModel.Settings)) ApplySettings();
         if (e.PropertyName is nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Route)) Refresh();
+    }
+
+    // Font size, line wrapping and the hints at line ends, from the settings.
+    void ApplySettings()
+    {
+        if (vm == null) return;
+        Code.FontSize = vm.Settings.FontSize;
+        Code.WordWrap = vm.Settings.WordWrap;
+        hints.Visible = vm.Settings.ShowHints;
+        Code.TextArea.TextView.InvalidateLayer(AvaloniaEdit.Rendering.KnownLayer.Background);
     }
 
     void Refresh()
@@ -265,19 +278,19 @@ public partial class EditorView : UserControl
         var items = new List<object>();
         if (!atCaret)
         {
-            items.Add(Item("Cut", () => Code.Cut()));
-            items.Add(Item("Copy", () => Code.Copy()));
-            items.Add(Item("Paste", () => Code.Paste()));
+            items.Add(Item(Loc.T("Cut"), () => Code.Cut()));
+            items.Add(Item(Loc.T("Copy"), () => Code.Copy()));
+            items.Add(Item(Loc.T("Paste"), () => Code.Paste()));
             items.Add(new Separator());
         }
         foreach (var action in actions)
         {
             var a = action;
-            items.Add(Item((a.IsQuickFix ? "Fix: " : "") + a.Title, () => vm.Run(a)));
+            items.Add(Item(a.IsQuickFix ? Loc.F("FixPrefix", a.Title) : a.Title, () => vm.Run(a)));
         }
-        if (actions.Count == 0) items.Add(new MenuItem { Header = "No fixes or refactorings here", IsEnabled = false });
+        if (actions.Count == 0) items.Add(new MenuItem { Header = Loc.T("NoActions"), IsEnabled = false });
         items.Add(new Separator());
-        items.Add(Item("Format Document", () => vm.FormatDocumentCommand.Execute(null)));
+        items.Add(Item(Loc.T("FormatDocument"), () => vm.FormatDocumentCommand.Execute(null)));
         var menu = new ContextMenu { ItemsSource = items };
         if (atCaret)
         {

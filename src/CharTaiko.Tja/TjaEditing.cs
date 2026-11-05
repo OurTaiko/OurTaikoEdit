@@ -1,5 +1,6 @@
 using System.Globalization;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 using OurTaiko;
 
 namespace CharTaiko.Tja;
@@ -31,7 +32,7 @@ sealed class TjaEditing : IChartEditing
 
     public EditResult Edit(ChartAnalysis analysis, IReadOnlyList<ChartNote> remove, IReadOnlyList<NotePlacement> place)
     {
-        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first: the timeline edits what the parser reads.");
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsTimeline"));
         var placements = new List<Placement>();
         var removed = new HashSet<ChartNote>(remove);
 
@@ -39,7 +40,7 @@ sealed class TjaEditing : IChartEditing
         foreach (var note in remove)
         {
             var found = analysis.Measures.SelectMany(m => m.Slots.Select((s, i) => (m, i, s))).FirstOrDefault(x => ReferenceEquals(x.s.Note, note));
-            if (found.m == null) return EditResult.Fail("That note is not in the chart's text.");
+            if (found.m == null) return EditResult.Fail(Loc.T("NoteNotInText"));
             placements.Add(new Placement(found.m, found.i, found.m.Slots.Count, '0'));
             if (note.IsLong) ClearTail(analysis, note, placements);
         }
@@ -52,23 +53,23 @@ sealed class TjaEditing : IChartEditing
         foreach (var p in place)
         {
             var at = p.At;
-            if (at.Steps <= 0 || at.Step < 0 || at.Step >= at.Steps) return EditResult.Fail("That is outside the measure.");
+            if (at.Steps <= 0 || at.Step < 0 || at.Step >= at.Steps) return EditResult.Fail(Loc.T("OutsideMeasure"));
             var route = RouteOf(at);
             double start = at.Time;
             // A note inside a roll would end it early; the roll has to go first.
             if (RollAround(analysis, start, route, removed) is { } roll)
-                return EditResult.Fail($"That is inside a {Describe(roll)}; remove it first.");
+                return EditResult.Fail(Loc.F("InsideRoll", Describe(roll)));
             if (newRolls.Any(r => r.Route == route && r.Start < start && start <= r.End))
-                return EditResult.Fail("A note would land inside a roll that is placed with it.");
+                return EditResult.Fail(Loc.T("NoteInsidePlacedRoll"));
             placements.Add(Place(at, CharOf(p.Kind)));
             if (!IsLong(p.Kind)) continue;
 
-            if (p.End is not { } end || end.Steps <= 0) return EditResult.Fail("A roll needs an end.");
+            if (p.End is not { } end || end.Steps <= 0) return EditResult.Fail(Loc.T("RollNeedsEnd"));
             if (end.Step >= end.Steps) end = end with { Step = end.Steps - 1 };
-            if (!(end.Time > start)) return EditResult.Fail("A roll must end after it starts.");
-            if (Crosses(analysis, at.Measure, end.Measure)) return EditResult.Fail("Rolls across a branch boundary are written in the code.");
+            if (!(end.Time > start)) return EditResult.Fail(Loc.T("RollEndAfterStart"));
+            if (Crosses(analysis, at.Measure, end.Measure)) return EditResult.Fail(Loc.T("RollAcrossBranch"));
             if (RollAround(analysis, end.Time, route, removed) is { } other && other.Time != start)
-                return EditResult.Fail($"The end is inside a {Describe(other)}; remove it first.");
+                return EditResult.Fail(Loc.F("EndInsideRoll", Describe(other)));
             placements.Add(Place(end, '8'));
             // What lies under the new roll would end it: it is cleared (weakly, so notes placed
             // with the roll stay), with the ends of rolls cleared.
@@ -109,28 +110,28 @@ sealed class TjaEditing : IChartEditing
 
     public EditResult InsertEvent(ChartAnalysis analysis, GridPosition at, ChartEventKind kind, string? value)
     {
-        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first.");
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsFirst"));
         if (kind is ChartEventKind.Tempo or ChartEventKind.Scroll or ChartEventKind.Measure or ChartEventKind.Delay && string.IsNullOrWhiteSpace(value))
-            return EditResult.Fail("The command needs a value.");
+            return EditResult.Fail(Loc.T("CommandNeedsValue"));
         return Insert(analysis, at, CommandOf(kind, value?.Trim()));
     }
 
     // A command line written so that it takes effect at a grid position.
     static EditResult Insert(ChartAnalysis analysis, GridPosition at, string command)
     {
-        if (command.StartsWith("#MEASURE", StringComparison.OrdinalIgnoreCase) && at.Step != 0) return EditResult.Fail("#MEASURE takes effect from a measure's start.");
+        if (command.StartsWith("#MEASURE", StringComparison.OrdinalIgnoreCase) && at.Step != 0) return EditResult.Fail(Loc.T("MeasureAtStart"));
         string nl = Newline(analysis.Text);
         var lines = Lines(analysis.Text);
         var m = at.Measure;
         int n = m.Slots.Count;
         if (n == 0)
         {
-            if (m.Comma.IsEmpty) return EditResult.Fail("That measure has no comma.");
+            if (m.Comma.IsEmpty) return EditResult.Fail(Loc.T("MeasureNoComma"));
             return new EditResult(new[] { BeforeOnLine(lines, m.Comma, command, nl) });
         }
         long g = Gcd(at.Step, at.Steps), num = at.Step / g, den = at.Steps / g;
         long total = Lcm(n, den);
-        if (total > MaxSlots) return EditResult.Fail($"That needs {total} slots in one measure; use a coarser grid.");
+        if (total > MaxSlots) return EditResult.Fail(Loc.F("TooManySlots", total));
         int factor = (int)(total / n);
         long target = num * total / den;
         int j = (int)(target / factor), r = (int)(target % factor);
@@ -160,7 +161,7 @@ sealed class TjaEditing : IChartEditing
     public EditResult RemoveCommand(ChartAnalysis analysis, ChartCommand command)
     {
         var span = command.Source;
-        if (span.IsEmpty) return EditResult.Fail("That command is not in the chart's text.");
+        if (span.IsEmpty) return EditResult.Fail(Loc.T("CommandNotInText"));
         var lines = Lines(analysis.Text);
         string line = lines[span.Line - 1];
         // A command alone on its line goes with its line.
@@ -175,7 +176,7 @@ sealed class TjaEditing : IChartEditing
     public EditResult ChangeCommand(ChartAnalysis analysis, ChartCommand command, string value)
     {
         var span = command.Source;
-        if (span.IsEmpty) return EditResult.Fail("That command is not in the chart's text.");
+        if (span.IsEmpty) return EditResult.Fail(Loc.T("CommandNotInText"));
         string line = Lines(analysis.Text)[span.Line - 1];
         int length = span.Length > 0 ? span.Length : line.Length - (span.Column - 1);
         return new EditResult(new[] { new TextEdit(span.Line, span.Column, length, command.Name + " " + value.Trim()) });
@@ -183,7 +184,7 @@ sealed class TjaEditing : IChartEditing
 
     public EditResult MoveCommand(ChartAnalysis analysis, ChartCommand command, GridPosition to)
     {
-        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first.");
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsFirst"));
         if (Math.Abs(to.Time - command.Time) < 1e-6) return new EditResult(Array.Empty<TextEdit>());
         var insert = Insert(analysis, to, (command.Name + " " + command.Value).Trim());
         if (!insert.Ok) return insert;
@@ -193,7 +194,7 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(remove.Edits.Concat(insert.Edits).ToList());
     }
 
-    static string Describe(ChartNote n) => n.IsBalloon ? "balloon" : "drumroll";
+    static string Describe(ChartNote n) => Loc.T(n.IsBalloon ? "DescribeBalloon" : "DescribeRoll");
 
     static BranchRoute RouteOf(GridPosition at) => at.Measure.BranchId >= 0 ? at.Measure.Route : at.Route;
 
@@ -276,9 +277,9 @@ sealed class TjaEditing : IChartEditing
         int n = measure.Slots.Count;
         if (n == 0)
         {
-            if (measure.Comma.IsEmpty) return EditResult.Fail("That measure has no comma to write before.");
+            if (measure.Comma.IsEmpty) return EditResult.Fail(Loc.T("MeasureNoCommaBefore"));
             long size = placements.Aggregate(1L, (l, p) => Lcm(l, p.Den));
-            if (size > MaxSlots) return EditResult.Fail($"That needs {size} slots in one measure; use a coarser grid.");
+            if (size > MaxSlots) return EditResult.Fail(Loc.F("TooManySlots", size));
             var chars = Enumerable.Repeat('0', (int)size).ToArray();
             foreach (var p in placements) chars[p.Num * size / p.Den] = p.Char;
             if (chars.All(c => c == '0')) return new EditResult(Array.Empty<TextEdit>());
@@ -286,7 +287,7 @@ sealed class TjaEditing : IChartEditing
         }
 
         long total = placements.Aggregate((long)n, (l, p) => Lcm(l, p.Den));
-        if (total > MaxSlots) return EditResult.Fail($"That needs {total} slots in one measure; use a coarser grid.");
+        if (total > MaxSlots) return EditResult.Fail(Loc.F("TooManySlots", total));
         int factor = (int)(total / n);
         // Each slot becomes its token followed by factor-1 blanks.
         var texts = measure.Slots.Select(s => new List<string> { s.Token }.Concat(Enumerable.Repeat("0", factor - 1)).ToList()).ToList();

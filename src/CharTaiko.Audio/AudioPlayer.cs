@@ -11,6 +11,8 @@ public interface IAudioPlayer : IDisposable
     // Where the song is: between the device's reports it runs on from the last one by the clock.
     double Position { get; }
     float Volume { get; set; }
+    // The don and ka sounds, 0 to 1.
+    float HitVolume { get; set; }
     void Play();
     void Pause();
     void Seek(double seconds);
@@ -109,6 +111,8 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         }
     }
 
+    public float HitVolume { get; set; } = 0.8f;
+
     public float Volume
     {
         get { al.GetSourceProperty(source, SourceFloat.Gain, out float g); return g; }
@@ -143,7 +147,7 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         uint s = hitSources[nextHit++ % hitSources.Length];
         al.SourceStop(s);
         al.SetSourceProperty(s, SourceInteger.Buffer, ka ? kaBuffer : donBuffer);
-        al.SetSourceProperty(s, SourceFloat.Gain, big ? 1f : 0.7f);
+        al.SetSourceProperty(s, SourceFloat.Gain, (big ? 1f : 0.7f) * Math.Clamp(HitVolume, 0, 1));
         al.SourcePlay(s);
     }
 

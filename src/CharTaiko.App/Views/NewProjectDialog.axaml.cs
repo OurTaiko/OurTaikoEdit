@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using CharTaiko.App.ViewModels;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 
 namespace CharTaiko.App.Views;
 
@@ -12,10 +13,10 @@ public partial class NewProjectDialog : Window
 
     public NewProjectDialog() => InitializeComponent();
 
-    public NewProjectDialog(IDialogService dialogs) : this()
+    public NewProjectDialog(IDialogService dialogs, string location) : this()
     {
         this.dialogs = dialogs;
-        LocationBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CharTaiko");
+        LocationBox.Text = location;
         TypeBox.ItemsSource = languages.Select(l => l.DisplayName).ToList();
         TypeBox.SelectedIndex = 0;
         NameBox.TextChanged += (_, _) => ShowFolder();
@@ -24,25 +25,25 @@ public partial class NewProjectDialog : Window
     }
 
     void ShowFolder()
-        => FolderText.Text = string.IsNullOrWhiteSpace(NameBox.Text) ? "" : "Creates " + Path.Combine(LocationBox.Text ?? "", NameBox.Text.Trim());
+        => FolderText.Text = string.IsNullOrWhiteSpace(NameBox.Text) ? "" : Loc.F("Creates", Path.Combine(LocationBox.Text ?? "", NameBox.Text.Trim()));
 
     async void BrowseLocation(object? sender, RoutedEventArgs e)
     {
-        if (dialogs != null && await dialogs.PickFolderAsync("Where to create the project") is { } folder) LocationBox.Text = folder;
+        if (dialogs != null && await dialogs.PickFolderAsync(Loc.T("WhereToCreate")) is { } folder) LocationBox.Text = folder;
     }
 
     async void BrowseAudio(object? sender, RoutedEventArgs e)
     {
-        if (dialogs != null && await dialogs.PickFileAsync("Choose the song's audio", "Audio", "*.ogg", "*.mp3", "*.wav", "*.flac", "*.opus") is { } audio)
+        if (dialogs != null && await dialogs.PickFileAsync(Loc.T("ChooseAudio"), Loc.T("AudioFilter"), "*.ogg", "*.mp3", "*.wav", "*.flac", "*.opus") is { } audio)
             AudioBox.Text = audio;
     }
 
     void Create(object? sender, RoutedEventArgs e)
     {
         string name = NameBox.Text?.Trim() ?? "", location = LocationBox.Text?.Trim() ?? "", audio = AudioBox.Text?.Trim() ?? "";
-        string? error = name.Length == 0 ? "Give the project a name."
-            : location.Length == 0 ? "Choose where to create it."
-            : audio.Length > 0 && !File.Exists(audio) ? "The audio file does not exist."
+        string? error = name.Length == 0 ? Loc.T("NeedName")
+            : location.Length == 0 ? Loc.T("NeedLocation")
+            : audio.Length > 0 && !File.Exists(audio) ? Loc.T("AudioMissing")
             : null;
         ErrorText.Text = error;
         ErrorText.IsVisible = error != null;

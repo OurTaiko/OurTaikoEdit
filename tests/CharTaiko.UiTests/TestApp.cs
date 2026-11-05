@@ -10,5 +10,6 @@ public static class TestApp
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<CharTaiko.App.App>()
             .UseSkia()
+            .With(CharTaiko.App.Localization.Fonts.Options("zh"))
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }

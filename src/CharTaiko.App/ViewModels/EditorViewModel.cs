@@ -3,7 +3,9 @@ using System.Diagnostics;
 using Avalonia.Threading;
 using CharTaiko.Audio;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 using CharTaiko.Core.Projects;
+using CharTaiko.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OurTaiko;
@@ -16,11 +18,22 @@ public sealed record DiagnosticItem(ChartDiagnostic Diagnostic)
     public bool IsWarning => Diagnostic.Severity == DiagnosticSeverity.Warning;
     public bool IsInformation => Diagnostic.Severity == DiagnosticSeverity.Information;
     public string Icon => IsError ? "●" : IsWarning ? "▲" : "ℹ";
-    public string Where => Diagnostic.Source.IsEmpty ? "" : $"Ln {Diagnostic.Source.Line}";
+    public string Where => Diagnostic.Source.IsEmpty ? "" : Loc.F("LineN", Diagnostic.Source.Line);
     public string Message => Diagnostic.Message;
 }
 
-public sealed record ToolItem(NoteKind? Kind, string Label, string Tip, string Key);
+public sealed record ToolItem(NoteKind? Kind, string Label, string Tip, string Key)
+{
+    // The tool for a kind (null: Select), named in the interface language.
+    public static ToolItem For(NoteKind? kind, string key)
+    {
+        if (kind is not { } k) return new(null, Loc.T("ToolSelect"), Loc.T("ToolSelectTip"), key);
+        string name = k.ToString();
+        string tip = Loc.T("Tip" + name);
+        if (k is NoteKind.Roll or NoteKind.BigRoll or NoteKind.Balloon or NoteKind.Kusudama) tip = Loc.F("TipDrag", tip);
+        return new(k, Loc.T("Note" + name), $"{tip} ({key})", key);
+    }
+}
 
 // The editing scene. The code is the chart: every view reads the language's analysis of the
 // text, and timeline edits come back as text edits the code editor applies (so undo covers them).
@@ -51,7 +64,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     // Grid lines per 4/4 measure.
     [ObservableProperty] int division = 16;
     [ObservableProperty] ToolItem tool;
-    [ObservableProperty] string caret = "Ln 1, Col 1";
+    [ObservableProperty] string caret = Loc.F("Caret", 1, 1);
     [ObservableProperty] string? message;
     [ObservableProperty] string problems = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ProblemListVisible))] bool showProblems = true;
@@ -59,9 +72,11 @@ public sealed partial class EditorViewModel : ViewModelBase
 
     // The chosen block at a glance (notes, combo, length, hash), when the language gives one.
     [ObservableProperty] string summary = "";
-    // Diagnostics' language: the language's own messages in English, Chinese or Japanese.
-    [ObservableProperty] string messageLanguage = "en";
-    public IReadOnlyList<string> MessageLanguages { get; } = new[] { "en", "zh", "ja" };
+    // Diagnostics' language: "ui" (the interface's), or English, Chinese or Japanese.
+    [ObservableProperty] string messageLanguage;
+    public IReadOnlyList<string> MessageLanguages { get; } = new[] { "ui", "en", "zh", "ja" };
+
+    public AppSettings Settings { get; }
 
     // Per analysis: foldable ranges, and the hints drawn at the end of lines (line → label).
     public IReadOnlyList<FoldRange> Folds { get; private set; } = Array.Empty<FoldRange>();
@@ -74,30 +89,31 @@ public sealed partial class EditorViewModel : ViewModelBase
     string? audioPath;
     int audioLoad;
     [ObservableProperty] Waveform? waveform;
-    [ObservableProperty] string audioStatus = "No audio";
+    [ObservableProperty] string audioStatus = Loc.T("NoAudio");
+    // What makes the status, so that it is made again in another language.
+    Func<string> audioStatusText = () => Loc.T("NoAudio");
+
+    void SetAudioStatus(Func<string> text)
+    {
+        audioStatusText = text;
+        AudioStatus = text();
+    }
     [ObservableProperty] bool hitSounds = true;
     [ObservableProperty] double volume = 0.8;
     double lastTick;
 
     public ObservableCollection<DiagnosticItem> Diagnostics { get; } = new();
     public ObservableCollection<ChartBlock> Blocks { get; } = new();
-    public IReadOnlyList<int> Divisions { get; } = new[] { 4, 8, 12, 16, 24, 32, 48, 64, 96, 192 };
+    public IReadOnlyList<int> Divisions => AppSettings.Divisions;
     public IReadOnlyList<BranchRoute> Routes { get; } = new[] { BranchRoute.Normal, BranchRoute.Expert, BranchRoute.Master };
 
-    public IReadOnlyList<ToolItem> Tools { get; } = new ToolItem[]
+    [ObservableProperty] IReadOnlyList<ToolItem> tools = MakeTools();
+
+    static IReadOnlyList<ToolItem> MakeTools() => new[]
     {
-        new(null, "Select", "Select: click a note to find it in the code", "Q"),
-        new(NoteKind.Don, "Don", "Don (1)", "1"),
-        new(NoteKind.Ka, "Ka", "Ka (2)", "2"),
-        new(NoteKind.BigDon, "DON", "Big don (3)", "3"),
-        new(NoteKind.BigKa, "KA", "Big ka (4)", "4"),
-        new(NoteKind.Roll, "Roll", "Drumroll (5): drag from start to end", "5"),
-        new(NoteKind.BigRoll, "ROLL", "Big drumroll (6): drag from start to end", "6"),
-        new(NoteKind.Balloon, "Balloon", "Balloon (7): drag from start to end", "7"),
-        new(NoteKind.Kusudama, "Kusudama", "Kusudama (9): drag from start to end", "9"),
-        new(NoteKind.Kadon, "Kadon", "Kadon (G): don and ka together", "G"),
-        new(NoteKind.Mine, "Mine", "Mine (C): a note not to hit", "C"),
-        new(NoteKind.AdLib, "Ad-lib", "Ad-lib (F): a hidden bonus note", "F"),
+        ToolItem.For(null, "Q"), ToolItem.For(NoteKind.Don, "1"), ToolItem.For(NoteKind.Ka, "2"), ToolItem.For(NoteKind.BigDon, "3"),
+        ToolItem.For(NoteKind.BigKa, "4"), ToolItem.For(NoteKind.Roll, "5"), ToolItem.For(NoteKind.BigRoll, "6"), ToolItem.For(NoteKind.Balloon, "7"),
+        ToolItem.For(NoteKind.Kusudama, "9"), ToolItem.For(NoteKind.Kadon, "G"), ToolItem.For(NoteKind.Mine, "C"), ToolItem.For(NoteKind.AdLib, "F"),
     };
 
     // The code editor applies these as one undoable change.
@@ -105,12 +121,18 @@ public sealed partial class EditorViewModel : ViewModelBase
     // The code editor moves its caret there (1-based line and column) and shows it.
     public event Action<int, int>? CaretRequested;
 
-    public EditorViewModel(ChartProject project, IDialogService dialogs, Action back)
+    public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null)
     {
+        Settings = settings ?? new AppSettings();
+        division = Settings.Division;
+        volume = Settings.Volume;
+        hitSounds = Settings.HitSounds;
+        messageLanguage = Settings.MessageLanguage;
         Project = project;
         this.dialogs = dialogs;
         this.back = back;
-        Language = ChartLanguages.Find(project.ChartType) ?? throw new InvalidOperationException($"Unknown chart type {project.ChartType}");
+        Language = ChartLanguages.Find(project.ChartType) ?? throw new InvalidOperationException(Loc.F("UnknownChartType", project.ChartType));
+        Language.MessageLanguage = Settings.ChartMessageLanguage;
         file = File.Exists(project.ChartPath) ? ChartFile.Read(project.ChartPath) : new ChartText(Language.CreateTemplate(project.Name, null));
         text = InitialText = file.Text;
         tool = Tools[1];
@@ -176,7 +198,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         int errors = next.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
         int warnings = next.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
         OnPropertyChanged(nameof(ProblemListVisible));
-        Problems = errors + warnings == 0 ? "No problems" : $"{errors} error{(errors == 1 ? "" : "s")}, {warnings} warning{(warnings == 1 ? "" : "s")}";
+        Problems = errors + warnings == 0 ? Loc.T("NoProblems") : Loc.F("ProblemsCount", Loc.Plural("Errors", errors), Loc.Plural("Warnings", warnings));
     }
 
     // The failed analysis's diagnostics with the last good chart, which edits must not touch.
@@ -202,7 +224,8 @@ public sealed partial class EditorViewModel : ViewModelBase
     // The code editor's caret: the playhead follows it while stopped, and so does the block.
     public void OnCaretMoved(int line, int column)
     {
-        Caret = $"Ln {line}, Col {column}";
+        caretLine = line; caretColumn = column;
+        Caret = Loc.F("Caret", line, column);
         if (IsPlaying) return;
         EnsureFresh();
         var blocks = Analysis.Blocks;
@@ -282,17 +305,17 @@ public sealed partial class EditorViewModel : ViewModelBase
     bool Replace(IReadOnlyList<ChartNote> notes, double beats, BranchRoute row, Func<ChartNote, NoteKind>? kind = null)
     {
         EnsureFresh();
-        if (!ChartIsCurrent) { Message = "Fix the errors in the code first."; return false; }
+        if (!ChartIsCurrent) { Message = Loc.T("FixErrorsFirst"); return false; }
         var places = new List<NotePlacement>();
         foreach (var n in notes)
         {
             var grid = Grid(RouteOf(n, row));
-            if (grid.BeatOf(n) is not { } beat || grid.At(beat + beats) is not { } at) { Message = "That would move a note out of the chart."; return false; }
+            if (grid.BeatOf(n) is not { } beat || grid.At(beat + beats) is not { } at) { Message = Loc.T("MoveOut"); return false; }
             var newKind = kind?.Invoke(n) ?? n.Kind;
             GridPosition? end = null;
             if (IsLongKind(newKind))
             {
-                if (grid.BeatOf(n, tail: true) is not { } tail || grid.At(tail + beats) is not { } e) { Message = "A roll's end is not on the grid; move it in the code."; return false; }
+                if (grid.BeatOf(n, tail: true) is not { } tail || grid.At(tail + beats) is not { } e) { Message = Loc.T("RollEndOffGrid"); return false; }
                 end = e;
             }
             places.Add(new NotePlacement(at, newKind, end));
@@ -328,7 +351,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     public void ChangeSelectionKind(NoteKind kind)
     {
         var notes = selected.Where(n => n.IsLong == IsLongKind(kind) && n.Kind != kind).ToList();
-        if (notes.Count == 0) { Message = IsLongKind(kind) ? "Only rolls and balloons change into rolls and balloons." : "Only short notes change into short notes."; return; }
+        if (notes.Count == 0) { Message = Loc.T(IsLongKind(kind) ? "OnlyLongToLong" : "OnlyShortToShort"); return; }
         Replace(notes, 0, Route, _ => kind);
     }
 
@@ -357,7 +380,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (items.Count == 0) return;
         double first = items.Min(i => i.Item1);
         clipboard = items.Select(i => (i.Item1 - first, i.Item2, i.Item3)).OrderBy(i => i.Item1).ToList();
-        Message = $"Copied {clipboard.Count} note{(clipboard.Count == 1 ? "" : "s")}";
+        Message = Loc.Plural("CopiedNotes", clipboard.Count);
     }
 
     public void CutSelection(BranchRoute row)
@@ -369,17 +392,17 @@ public sealed partial class EditorViewModel : ViewModelBase
     // Pastes the copied notes with the first at a grid position; they become the selection.
     public void Paste(GridPosition at)
     {
-        if (clipboard.Count == 0) { Message = "Nothing copied"; return; }
+        if (clipboard.Count == 0) { Message = Loc.T("NothingCopied"); return; }
         EnsureFresh();
-        if (!ChartIsCurrent) { Message = "Fix the errors in the code first."; return; }
+        if (!ChartIsCurrent) { Message = Loc.T("FixErrorsFirst"); return; }
         var grid = Grid(at.Route);
         if (grid.Beat(at) is not { } start) return;
         var places = new List<NotePlacement>();
         foreach (var (beat, kind, length) in clipboard)
         {
-            if (grid.At(start + beat) is not { } p) { Message = "The copied notes run past the chart's end."; return; }
+            if (grid.At(start + beat) is not { } p) { Message = Loc.T("PastePastEnd"); return; }
             GridPosition? end = length is { } l ? grid.At(start + beat + l) : null;
-            if (length != null && end == null) { Message = "The copied notes run past the chart's end."; return; }
+            if (length != null && end == null) { Message = Loc.T("PastePastEnd"); return; }
             places.Add(new NotePlacement(p, kind, end));
         }
         var result = Language.Editing.Edit(Analysis, Array.Empty<ChartNote>(), places);
@@ -400,10 +423,10 @@ public sealed partial class EditorViewModel : ViewModelBase
         {
             var (title, prompt, initial) = kind switch
             {
-                ChartEventKind.Tempo => ("#BPMCHANGE", "The tempo from here (BPM):", at.Measure.Bpm.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)),
-                ChartEventKind.Scroll => ("#SCROLL", "The scroll speed from here (1 is normal; 1+2i moves vertically):", "1"),
-                ChartEventKind.Measure => ("#MEASURE", "The time signature from this measure (a/b):", "4/4"),
-                _ => ("#DELAY", "Seconds to shift everything after this place:", "0"),
+                ChartEventKind.Tempo => ("#BPMCHANGE", Loc.T("PromptTempo"), at.Measure.Bpm.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)),
+                ChartEventKind.Scroll => ("#SCROLL", Loc.T("PromptScroll"), "1"),
+                ChartEventKind.Measure => ("#MEASURE", Loc.T("PromptMeasure"), "4/4"),
+                _ => ("#DELAY", Loc.T("PromptDelay"), "0"),
             };
             value = await dialogs.PromptAsync(title, prompt, initial);
             if (string.IsNullOrWhiteSpace(value)) return;
@@ -414,7 +437,7 @@ public sealed partial class EditorViewModel : ViewModelBase
 
     public async Task EditCommand(ChartCommand command)
     {
-        var value = await dialogs.PromptAsync(command.Name, "New value:", command.Value);
+        var value = await dialogs.PromptAsync(command.Name, Loc.T("NewValue"), command.Value);
         if (string.IsNullOrWhiteSpace(value)) return;
         EnsureFresh();
         if (FindCommand(command) is { } current) Apply(Language.Editing.ChangeCommand(Analysis, current, value));
@@ -461,7 +484,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     {
         if (Tool.Kind is not { } kind) return;
         EnsureFresh();
-        if (!ChartIsCurrent) { Message = "Fix the errors in the code first; the timeline edits what the parser reads."; return; }
+        if (!ChartIsCurrent) { Message = Loc.T("FixErrorsTimeline"); return; }
         var result = Language.Editing.PlaceNote(Analysis, at, kind, end);
         Apply(result);
     }
@@ -469,7 +492,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     public void RemoveNote(ChartNote note)
     {
         EnsureFresh();
-        if (!ChartIsCurrent) { Message = "Fix the errors in the code first."; return; }
+        if (!ChartIsCurrent) { Message = Loc.T("FixErrorsFirst"); return; }
         Apply(Language.Editing.RemoveNote(Analysis, note));
     }
 
@@ -484,9 +507,36 @@ public sealed partial class EditorViewModel : ViewModelBase
 
     partial void OnMessageLanguageChanged(string value)
     {
-        Language.MessageLanguage = value;
+        Settings.MessageLanguage = value;
+        Language.MessageLanguage = Settings.ChartMessageLanguage;
         Reanalyze();
     }
+
+    int caretLine = 1, caretColumn = 1;
+
+    // The settings changed (the settings dialog): the words of the interface are made again and
+    // the rest is taken over; the grid stays as it is, the setting is for opening a project.
+    public void ApplySettings()
+    {
+        int tool = Tools.ToList().IndexOf(Tool);
+        Tools = MakeTools();
+        Tool = Tools[Math.Max(0, tool)];
+        Volume = Settings.Volume;
+        HitSounds = Settings.HitSounds;
+        if (player != null) player.HitVolume = (float)Settings.HitVolume;
+        Caret = Loc.F("Caret", caretLine, caretColumn);
+        AudioStatus = audioStatusText();
+        if (MessageLanguage != Settings.MessageLanguage) MessageLanguage = Settings.MessageLanguage;
+        else
+        {
+            Language.MessageLanguage = Settings.ChartMessageLanguage;
+            Reanalyze();
+        }
+        OnPropertyChanged(nameof(Settings));
+    }
+
+    [RelayCommand]
+    async Task OpenSettings() => await dialogs.SettingsAsync(Settings);
 
     // Quick fixes and refactorings at a place of the code.
     public IReadOnlyList<CodeAction> ActionsAt(int line, int column)
@@ -509,7 +559,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     {
         EnsureFresh();
         if (Language.Format(text) is { } format) Run(format);
-        else Message = "Already formatted";
+        else Message = Loc.T("AlreadyFormatted");
     }
 
     // Shows a note in the code.
@@ -533,7 +583,8 @@ public sealed partial class EditorViewModel : ViewModelBase
         playFrom = time;
         playClock.Restart();
         if (player == null) return;
-        if (time >= 0 && time < player.Duration) { player.Seek(time); if (!player.IsPlaying) player.Play(); }
+        double sound = time + Latency;
+        if (sound >= 0 && sound < player.Duration) { player.Seek(sound); if (!player.IsPlaying) player.Play(); }
         else if (player.IsPlaying) player.Pause();
     }
 
@@ -546,9 +597,9 @@ public sealed partial class EditorViewModel : ViewModelBase
         int load = ++audioLoad;
         StopAudio();
         Waveform = null;
-        if (path == null) { AudioStatus = "No audio (WAVE:)"; return; }
-        if (!File.Exists(path)) { AudioStatus = $"{audio} not found"; return; }
-        AudioStatus = $"Loading {Path.GetFileName(path)}…";
+        if (path == null) { SetAudioStatus(() => Loc.T("NoAudioWave")); return; }
+        if (!File.Exists(path)) { SetAudioStatus(() => Loc.F("FileMissing", audio)); return; }
+        SetAudioStatus(() => Loc.F("AudioLoading", Path.GetFileName(path)));
         Task.Run(() =>
         {
             var pcm = PcmAudio.Decode(path);
@@ -556,13 +607,14 @@ public sealed partial class EditorViewModel : ViewModelBase
         }).ContinueWith(t => Dispatcher.UIThread.Post(() =>
         {
             if (load != audioLoad) return;
-            if (t.IsFaulted) { AudioStatus = $"{Path.GetFileName(path)}: {t.Exception!.InnerException?.Message}"; return; }
+            if (t.IsFaulted) { string error = t.Exception!.InnerException?.Message ?? ""; SetAudioStatus(() => $"{Path.GetFileName(path)}: {error}"); return; }
             var (pcm, wave) = t.Result;
             Waveform = wave;
             player = OpenPlayer(pcm);
-            if (player != null) player.Volume = (float)Volume;
+            if (player != null) { player.Volume = (float)Volume; player.HitVolume = (float)Settings.HitVolume; }
             var length = TimeSpan.FromSeconds(pcm.Duration);
-            AudioStatus = $"♪ {Path.GetFileName(path)} {(int)length.TotalMinutes}:{length.Seconds:00}" + (player == null ? " (no audio device)" : "");
+            bool silent = player == null;
+            SetAudioStatus(() => $"♪ {Path.GetFileName(path)} {(int)length.TotalMinutes}:{length.Seconds:00}" + (silent ? Loc.T("NoAudioDevice") : ""));
         }));
     }
 
@@ -572,8 +624,11 @@ public sealed partial class EditorViewModel : ViewModelBase
         player = null;
     }
 
+    partial void OnHitSoundsChanged(bool value) => Settings.HitSounds = value;
+
     partial void OnVolumeChanged(double value)
     {
+        Settings.Volume = value;
         if (player != null) player.Volume = (float)value;
     }
 
@@ -583,6 +638,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (IsPlaying) TogglePlay();
         audioLoad++;
         StopAudio();
+        Settings.Save();
     }
 
     [RelayCommand]
@@ -601,7 +657,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         playFrom = lastTick = Playhead;
         playClock.Restart();
         IsPlaying = true;
-        if (player != null && Playhead >= 0 && Playhead < player.Duration) { player.Seek(Playhead); player.Play(); }
+        if (player != null && Playhead + Latency >= 0 && Playhead + Latency < player.Duration) { player.Seek(Playhead + Latency); player.Play(); }
         playTimer.Start();
     }
 
@@ -611,17 +667,22 @@ public sealed partial class EditorViewModel : ViewModelBase
         Seek(StartTime);
     }
 
+    // Seconds from the device taking a sample to it being heard: the song is played that much
+    // ahead of the playhead, and the hit sounds are started that much early, so that what is
+    // seen and what is heard meet.
+    double Latency => Settings.LatencyMs / 1000.0;
+
     void Tick()
     {
         double clock = playFrom + playClock.Elapsed.TotalSeconds;
-        if (player != null && player.IsPlaying) Playhead = player.Position;
+        if (player != null && player.IsPlaying) Playhead = player.Position - Latency;
         else
         {
             Playhead = clock;
             // From before the song (a negative OFFSET start), the song comes in at 0.
-            if (player != null && Playhead >= 0 && Playhead < player.Duration - 0.05) { player.Seek(Playhead); player.Play(); }
+            if (player != null && Playhead + Latency >= 0 && Playhead + Latency < player.Duration - 0.05) { player.Seek(Playhead + Latency); player.Play(); }
         }
-        if (HitSounds && player != null && Analysis.Chart is { } chart) Hits(chart, lastTick, Playhead);
+        if (HitSounds && player != null && Analysis.Chart is { } chart) Hits(chart, lastTick + Latency, Playhead + Latency);
         lastTick = Playhead;
         if (Analysis.Chart is not { } c || Playhead > c.Duration + 2) TogglePlay();
     }
@@ -656,12 +717,12 @@ public sealed partial class EditorViewModel : ViewModelBase
             Project.LastBlock = BlockIndex;
             Project.Save();
             IsDirty = false;
-            Message = "Saved " + Path.GetFileName(Project.ChartPath);
+            Message = Loc.F("Saved", Path.GetFileName(Project.ChartPath));
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.EncoderFallbackException)
         {
-            await dialogs.MessageAsync("Could not save", e.Message);
+            await dialogs.MessageAsync(Loc.T("CouldNotSave"), e.Message);
             return false;
         }
     }

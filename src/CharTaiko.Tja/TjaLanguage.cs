@@ -1,4 +1,5 @@
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 using OurTaiko;
 
 namespace CharTaiko.Tja;
@@ -104,7 +105,7 @@ public sealed class TjaLanguage : IChartLanguage
             return new ChartAnalysis
             {
                 Text = text, Title = info?.Title ?? "", Audio = AudioFileOf(text),
-                Diagnostics = diagnostics.Prepend(new ChartDiagnostic(new SourceSpan(1, 1, 0), "No chart yet: add COURSE: and a #START … #END block.", DiagnosticSeverity.Information)).ToList(),
+                Diagnostics = diagnostics.Prepend(new ChartDiagnostic(new SourceSpan(1, 1, 0), Loc.T("NoChartYet"), DiagnosticSeverity.Information)).ToList(),
             };
 
         int chosen = block >= 0 && block < blocks.Count ? block : 0;
@@ -189,7 +190,7 @@ public sealed class TjaLanguage : IChartLanguage
     {
         var doc = Document(text);
         var edits = TjaFormat.Edits(doc);
-        return edits.Count == 0 ? null : new CodeAction("Format document", edits.Select(e => Edit(doc, e)).ToList());
+        return edits.Count == 0 ? null : new CodeAction(Loc.T("FormatDocument"), edits.Select(e => Edit(doc, e)).ToList());
     }
 
     public IReadOnlyList<BlockSummary> Summaries(string text)

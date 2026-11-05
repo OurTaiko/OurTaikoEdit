@@ -83,11 +83,12 @@ sealed class HintRenderer : IBackgroundRenderer
     public HintRenderer(FontFamily font) => typeface = new Typeface(font);
 
     public IReadOnlyDictionary<int, string> Hints { get; set; } = new Dictionary<int, string>();
+    public bool Visible { get; set; } = true;
     public KnownLayer Layer => KnownLayer.Background;
 
     public void Draw(TextView textView, DrawingContext ctx)
     {
-        if (!textView.VisualLinesValid || Hints.Count == 0) return;
+        if (!Visible || !textView.VisualLinesValid || Hints.Count == 0) return;
         foreach (var visual in textView.VisualLines)
         {
             var line = visual.LastDocumentLine;

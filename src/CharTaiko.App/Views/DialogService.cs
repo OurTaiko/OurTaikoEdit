@@ -2,6 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using CharTaiko.App.ViewModels;
+using CharTaiko.Core.Localization;
+using CharTaiko.Core.Settings;
 
 namespace CharTaiko.App.Views;
 
@@ -23,12 +25,12 @@ public sealed class DialogService(Window owner) : IDialogService
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
-    public Task<NewProjectRequest?> NewProjectAsync() => new NewProjectDialog(this).ShowDialog<NewProjectRequest?>(owner);
+    public Task<NewProjectRequest?> NewProjectAsync(string location) => new NewProjectDialog(this, location).ShowDialog<NewProjectRequest?>(owner);
 
-    public Task MessageAsync(string title, string message) => Ask(title, message, ("OK", true));
+    public Task MessageAsync(string title, string message) => Ask(title, message, (Loc.T("Ok"), true));
 
     public async Task<bool> ConfirmAsync(string title, string message, string confirm)
-        => await Ask(title, message, (confirm, true), ("Cancel", false));
+        => await Ask(title, message, (confirm, true), (Loc.T("Cancel"), false));
 
     public async Task<string?> PromptAsync(string title, string message, string value)
     {
@@ -39,10 +41,10 @@ public sealed class DialogService(Window owner) : IDialogService
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
         string? result = null;
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var ok = new Button { Content = Loc.T("Ok"), IsDefault = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
         ok.Classes.Add("accent");
         ok.Click += (_, _) => { result = box.Text; window.Close(); };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var cancel = new Button { Content = Loc.T("Cancel"), IsCancel = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
         cancel.Click += (_, _) => window.Close();
         window.Content = new StackPanel
         {
@@ -60,8 +62,11 @@ public sealed class DialogService(Window owner) : IDialogService
     }
 
     public Task<SaveChoice> AskSaveAsync(string name)
-        => Ask($"Save {name}?", "Your changes are lost if you don't save them.",
-            ("Save", SaveChoice.Save), ("Don't Save", SaveChoice.Discard), ("Cancel", SaveChoice.Cancel));
+        => Ask(Loc.F("SaveQuestion", name), Loc.T("SaveLost"),
+            (Loc.T("Save"), SaveChoice.Save), (Loc.T("DontSave"), SaveChoice.Discard), (Loc.T("Cancel"), SaveChoice.Cancel));
+
+    public async Task<bool> SettingsAsync(AppSettings settings)
+        => await new SettingsDialog(settings).ShowDialog<bool>(owner);
 
     // A small modal window with a message and a row of buttons; closing it picks the last one.
     async Task<T> Ask<T>(string title, string message, params (string Label, T Value)[] buttons)

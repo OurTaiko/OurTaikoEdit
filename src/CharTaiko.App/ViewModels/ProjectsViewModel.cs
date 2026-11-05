@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using CharTaiko.Core.Languages;
+using CharTaiko.Core.Localization;
 using CharTaiko.Core.Projects;
+using CharTaiko.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -12,20 +14,22 @@ public sealed partial class ProjectsViewModel : ViewModelBase
     readonly ProjectRegistry registry;
     readonly IDialogService dialogs;
     readonly Action<ChartProject> open;
+    readonly AppSettings settings;
 
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = new();
     [ObservableProperty] ProjectItemViewModel? selected;
     [ObservableProperty] bool isEmpty;
 
-    public ProjectsViewModel(ProjectRegistry registry, IDialogService dialogs, Action<ChartProject> open)
+    public ProjectsViewModel(ProjectRegistry registry, IDialogService dialogs, Action<ChartProject> open, AppSettings? settings = null)
     {
+        this.settings = settings ?? new AppSettings();
         this.registry = registry;
         this.dialogs = dialogs;
         this.open = open;
         Refresh();
     }
 
-    void Refresh()
+    public void Refresh()
     {
         Projects.Clear();
         foreach (var tracked in registry.Projects) Projects.Add(ProjectItemViewModel.Load(tracked));
@@ -35,28 +39,28 @@ public sealed partial class ProjectsViewModel : ViewModelBase
     [RelayCommand]
     async Task NewProject()
     {
-        var request = await dialogs.NewProjectAsync();
+        var request = await dialogs.NewProjectAsync(settings.ProjectsFolderOrDefault);
         if (request == null) return;
         try
         {
-            var language = ChartLanguages.Find(request.ChartType) ?? throw new InvalidOperationException("Unknown chart type " + request.ChartType);
+            var language = ChartLanguages.Find(request.ChartType) ?? throw new InvalidOperationException(Loc.F("UnknownChartType", request.ChartType));
             open(registry.CreateProject(request.Location, request.Name, language, request.Audio));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            await dialogs.MessageAsync("Could not create the project", e.Message);
+            await dialogs.MessageAsync(Loc.T("CouldNotCreate"), e.Message);
         }
     }
 
     [RelayCommand]
     async Task OpenFolder()
     {
-        string? folder = await dialogs.PickFolderAsync("Open a project folder");
+        string? folder = await dialogs.PickFolderAsync(Loc.T("OpenProjectFolder"));
         if (folder == null) return;
         try { open(registry.OpenFolder(folder)); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidDataException)
         {
-            await dialogs.MessageAsync("Could not open the folder", e.Message);
+            await dialogs.MessageAsync(Loc.T("CouldNotOpenFolder"), e.Message);
         }
     }
 
@@ -67,18 +71,21 @@ public sealed partial class ProjectsViewModel : ViewModelBase
         if (item == null) return;
         if (item.Project == null)
         {
-            await dialogs.MessageAsync("Could not open the project", item.Problem ?? "The project could not be read.");
+            await dialogs.MessageAsync(Loc.T("CouldNotOpenProject"), item.Problem ?? Loc.T("ProjectUnreadable"));
             return;
         }
         open(item.Project);
     }
 
     [RelayCommand]
+    async Task Settings() => await dialogs.SettingsAsync(settings);
+
+    [RelayCommand]
     async Task Remove(ProjectItemViewModel? item)
     {
         item ??= Selected;
         if (item == null) return;
-        if (!await dialogs.ConfirmAsync("Remove from the list", $"Stop tracking “{item.Name}”? The folder and its files stay on disk.", "Remove")) return;
+        if (!await dialogs.ConfirmAsync(Loc.T("RemoveTitle"), Loc.F("RemoveMessage", item.Name), Loc.T("Remove"))) return;
         registry.Untrack(item.Folder);
         Refresh();
     }
@@ -97,21 +104,21 @@ public sealed class ProjectItemViewModel
 
     public static ProjectItemViewModel Load(TrackedProject tracked)
     {
-        string opened = tracked.LastOpened is { } t ? "Opened " + t.LocalDateTime.ToString("yyyy-MM-dd HH:mm") : "Never opened";
+        string opened = tracked.LastOpened is { } t ? Loc.F("OpenedAt", t.LocalDateTime.ToString("yyyy-MM-dd HH:mm")) : Loc.T("NeverOpened");
         string fallbackName = Path.GetFileName(Path.TrimEndingDirectorySeparator(tracked.Folder));
         try
         {
             if (!Directory.Exists(tracked.Folder))
-                return new() { Folder = tracked.Folder, Name = fallbackName, LastOpened = opened, Problem = "The folder is missing." };
+                return new() { Folder = tracked.Folder, Name = fallbackName, LastOpened = opened, Problem = Loc.T("FolderMissing") };
             var project = ChartProject.Load(tracked.Folder);
             var language = ChartLanguages.Find(project.ChartType);
             string summary;
-            if (language == null) summary = $"Unknown chart type “{project.ChartType}”";
-            else if (!File.Exists(project.ChartPath)) summary = $"{project.Chart} is missing";
+            if (language == null) summary = Loc.F("UnknownChartType", project.ChartType);
+            else if (!File.Exists(project.ChartPath)) summary = Loc.F("FileMissing", project.Chart);
             else
             {
                 var analysis = language.Analyze(ChartFile.Read(project.ChartPath).Text, -1);
-                string blocks = analysis.Blocks.Count == 0 ? "no blocks yet" : string.Join(" · ", analysis.Blocks.Select(b => b.Name));
+                string blocks = analysis.Blocks.Count == 0 ? Loc.T("NoBlocksYet") : string.Join(" · ", analysis.Blocks.Select(b => b.Name));
                 summary = $"{analysis.Title} — {blocks}";
             }
             return new()
