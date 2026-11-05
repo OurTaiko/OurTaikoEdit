@@ -412,18 +412,48 @@ public sealed partial class EditorViewModel : ViewModelBase
         Apply(Language.Editing.InsertEvent(Analysis, at, kind, value));
     }
 
-    public async Task EditEvent(object chartEvent, string title, string current)
+    public async Task EditCommand(ChartCommand command)
     {
-        var value = await dialogs.PromptAsync(title, "New value:", current);
+        var value = await dialogs.PromptAsync(command.Name, "New value:", command.Value);
         if (string.IsNullOrWhiteSpace(value)) return;
         EnsureFresh();
-        Apply(Language.Editing.ChangeEvent(Analysis, chartEvent, value));
+        if (FindCommand(command) is { } current) Apply(Language.Editing.ChangeCommand(Analysis, current, value));
     }
 
-    public void RemoveEvent(object chartEvent)
+    public void RevealCommand(ChartCommand command)
+    {
+        if (!command.Source.IsEmpty) CaretRequested?.Invoke(command.Source.Line, command.Source.Column);
+    }
+
+    public void RemoveCommand(ChartCommand command)
     {
         EnsureFresh();
-        Apply(Language.Editing.RemoveEvent(Analysis, chartEvent));
+        if (FindCommand(command) is { } current) Apply(Language.Editing.RemoveCommand(Analysis, current));
+    }
+
+    public void MoveCommand(ChartCommand command, GridPosition to)
+    {
+        EnsureFresh();
+        if (FindCommand(command) is { } current) Apply(Language.Editing.MoveCommand(Analysis, current, to));
+    }
+
+    // The same command in the current analysis (a dialog may have let the text change).
+    ChartCommand? FindCommand(ChartCommand command)
+        => Analysis.Commands.FirstOrDefault(c => c == command) ?? Analysis.Commands.FirstOrDefault(c => c.Source == command.Source && c.Name == command.Name);
+
+    // A roll, balloon or kusudama given a new end; it stays selected.
+    public void ResizeRoll(ChartNote roll, GridPosition end, BranchRoute row)
+    {
+        EnsureFresh();
+        if (!ChartIsCurrent || !roll.IsLong) return;
+        var grid = Grid(RouteOf(roll, row));
+        if (grid.BeatOf(roll) is not { } beat || grid.At(beat) is not { } head) return;
+        var result = Language.Editing.Edit(Analysis, new[] { roll }, new[] { new NotePlacement(head, roll.Kind, end) });
+        if (!result.Ok) { Message = result.Error; return; }
+        selectionKeys.Clear();
+        selectionKeys.Add((head.Measure.Index, head.Fraction));
+        Apply(result);
+        ResolveSelection();
     }
 
     // Timeline: a note at a grid position (a long note with its end).

@@ -24,8 +24,11 @@ public sealed class TimelineView : Control
     Point? hover;
     // What a press started: seeking on the ruler, drawing a roll, a selection box, or moving the
     // selection (by whole grid steps, from where the press snapped).
-    enum Drag { None, Seek, Roll, Box, Move }
+    enum Drag { None, Seek, Roll, Box, Move, Resize, Command }
     Drag drag;
+    // The roll whose end is being dragged, the command being moved.
+    ChartNote? resizing;
+    ChartCommand? movingCommand;
     GridPosition? dragStart;
     Point pressPoint;
     BranchRoute dragRow;
@@ -88,7 +91,7 @@ public sealed class TimelineView : Control
 
     double RowHeight => Math.Max(28, (Bounds.Height - RulerHeight - EventsHeight) / Rows.Count);
     double RowTop(int row) => RulerHeight + row * RowHeight;
-    double XOf(double time) => HeaderWidth + (time - viewStart) * pixelsPerSecond;
+    public double XOf(double time) => HeaderWidth + (time - viewStart) * pixelsPerSecond;
     double TimeOf(double x) => viewStart + (x - HeaderWidth) / pixelsPerSecond;
 
     int RowAt(double y)
@@ -176,7 +179,7 @@ public sealed class TimelineView : Control
         ctx.FillRectangle(HeaderBrush, new Rect(0, 0, HeaderWidth, b.Height));
         for (int row = 0; row < rows.Count; row++)
             Label(ctx, rows.Count == 1 ? "Notes" : rows[row].ToString(), new Point(10, RowTop(row) + RowHeight / 2 - 8), 12, ChartPalette.Text);
-        Label(ctx, "Tempo", new Point(10, b.Height - EventsHeight + 4), 12, ChartPalette.Muted);
+        Label(ctx, "Commands", new Point(10, b.Height - EventsHeight + 4), 12, ChartPalette.Muted);
         Label(ctx, $"1/{editor.Division}", new Point(10, 5), 11, ChartPalette.Muted);
 
         double px = XOf(editor.Playhead);
@@ -247,6 +250,19 @@ public sealed class TimelineView : Control
                         DrawNote(ctx, n.Kind, XOf(at.Time), tail, RowCenter(row), r, n.IsLong, 0.6, true);
                 }
                 return;
+            case Drag.Resize when resizing is { } roll:
+                if (Snap(p.X, dragRow) is { } newEnd && newEnd.Time > roll.Time)
+                    foreach (var row in Rows.Where(row => roll.BranchId < 0 || row == roll.Route))
+                        DrawNote(ctx, roll.Kind, XOf(roll.Time), XOf(newEnd.Time), RowCenter(row), r, true, 0.6, true);
+                return;
+            case Drag.Command when movingCommand is { } moving:
+                if (CommandTarget(moving, p.X) is { } target)
+                {
+                    double x = XOf(target.Time), top = Bounds.Height - EventsHeight;
+                    ctx.DrawLine(new Pen(CommandBrush(moving.Name), 2), new Point(x, RulerHeight), new Point(x, Bounds.Height));
+                    Label(ctx, CommandLabel(moving), new Point(x + 3, top + 5), 11, CommandBrush(moving.Name));
+                }
+                return;
             case Drag.Roll when dragStart is { } start && editor.Tool.Kind is { } rollKind:
                 var end = Snap(p.X, start.Route);
                 double endX = end is { } e ? XOf(e.Time) : XOf(start.Time);
@@ -285,6 +301,34 @@ public sealed class TimelineView : Control
         ctx.DrawLine(RowLine, new Point(0, RulerHeight), new Point(b.Width, RulerHeight));
     }
 
+    static readonly IBrush GogoText = new SolidColorBrush(Color.Parse("#FF8A3D"));
+
+    static IBrush CommandBrush(string name) => name switch
+    {
+        "#BPMCHANGE" => ChartPalette.Roll,
+        "#SCROLL" => ChartPalette.Ka,
+        "#DELAY" => ChartPalette.Kadon,
+        "#GOGOSTART" or "#GOGOEND" => GogoText,
+        _ => ChartPalette.Muted,
+    };
+
+    // A command as its row shows it: values for tempo, speed, signature and delay; short marks
+    // for the rest.
+    static string CommandLabel(ChartCommand c) => c.Name switch
+    {
+        "#BPMCHANGE" => c.Value,
+        "#SCROLL" => "×" + c.Value,
+        "#MEASURE" => c.Value,
+        "#DELAY" => "+" + c.Value + "s",
+        "#GOGOSTART" => "GO▸",
+        "#GOGOEND" => "◂GO",
+        "#BARLINEOFF" => "|off",
+        "#BARLINEON" => "|on",
+        _ => c.Value.Length > 0 ? c.Name.ToLowerInvariant() + " " + c.Value : c.Name.ToLowerInvariant(),
+    };
+
+    // The commands row: the go-go time as a band, the chart's starting BPM, and every command as a
+    // tick with its label (labels that would overlap are left out; the tick stays).
     void DrawEvents(DrawingContext ctx, ChartAnalysis analysis, double t0, double t1)
     {
         var b = Bounds;
@@ -300,29 +344,25 @@ public sealed class TimelineView : Control
         }
         if (gogoFrom is { } open) Gogo(open, chart.Duration);
 
-        double? last = null;
-        double lastX = double.NegativeInfinity;
-        foreach (var tempo in chart.Tempos.Where(t => LaneView.Shown(chart, t.BranchId, t.Route, route)).Prepend(new ChartTempo { Time = 0, Bpm = chart.Bpm }))
+        double right = double.NegativeInfinity;
+        if (analysis.Measures.FirstOrDefault() is { } first && first.Time >= t0 && first.Time <= t1)
         {
-            if (last == tempo.Bpm) continue;
-            last = tempo.Bpm;
-            double x = XOf(tempo.Time);
-            if (tempo.Time > t1 || x - lastX < 40) continue;
-            lastX = x;
-            if (x >= HeaderWidth) Label(ctx, tempo.Bpm.ToString("0.###", CultureInfo.InvariantCulture), new Point(x + 2, top + 5), 11, ChartPalette.Roll);
+            var text = Text(chart.Bpm.ToString("0.###", CultureInfo.InvariantCulture), 11, ChartPalette.Muted);
+            ctx.DrawText(text, new Point(XOf(first.Time) + 3, top + 5));
+            right = XOf(first.Time) + 3 + text.Width;
         }
-
-        // Time signatures where they change, and delays.
-        double lastLength = 1;
-        foreach (var m in analysis.Measures)
+        foreach (var c in analysis.Commands)
         {
-            if (!m.IsOn(route)) continue;
-            if (Math.Abs(m.Length - lastLength) > 1e-9 && m.Time >= t0 && m.Time <= t1)
-                Label(ctx, Signature(m.Length), new Point(XOf(m.Time) + 2, top + 5 + 0), 10, ChartPalette.Muted);
-            lastLength = m.Length;
+            if (!c.IsOn(route) || c.Time < t0 || c.Time > t1) continue;
+            double x = XOf(c.Time);
+            if (x < HeaderWidth) continue;
+            var brush = CommandBrush(c.Name);
+            ctx.DrawLine(new Pen(brush, 1.5), new Point(x, top + 1), new Point(x, top + 7));
+            var text = Text(CommandLabel(c), 11, brush);
+            if (x + 3 < right + 4) continue;
+            ctx.DrawText(text, new Point(x + 3, top + 5));
+            right = x + 3 + text.Width;
         }
-        foreach (var d in chart.Tempos.Where(t => t.ResumeTime > t.Time && LaneView.Shown(chart, t.BranchId, t.Route, route)))
-            if (d.Time >= t0 && d.Time <= t1) Label(ctx, $"+{d.ResumeTime - d.Time:0.###}s", new Point(XOf(d.Time) + 2, top + 5), 10, ChartPalette.Ka);
 
         void Gogo(double from, double to)
         {
@@ -331,16 +371,8 @@ public sealed class TimelineView : Control
         }
     }
 
-    // A measure length (in whole notes) as a time signature: 0.75 → 3/4, 0.375 → 3/8.
-    static string Signature(double length)
-    {
-        foreach (int den in new[] { 4, 8, 16, 32 })
-        {
-            double num = length * den;
-            if (Math.Abs(num - Math.Round(num)) < 1e-6) return $"{Math.Round(num)}/{den}";
-        }
-        return length.ToString("0.###", CultureInfo.InvariantCulture);
-    }
+    FormattedText Text(string text, double size, IBrush brush)
+        => new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, size, brush);
 
     void Label(DrawingContext ctx, string text, Point at, double size, IBrush brush)
         => ctx.DrawText(new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, size, brush), at);
@@ -388,8 +420,15 @@ public sealed class TimelineView : Control
         }
         if (InEvents(p.Y))
         {
+            var near = CommandNear(p.X);
             if (point.IsRightButtonPressed) EventMenu(p);
-            else if (e.ClickCount == 2 && TempoNear(p.X) is { } tempo) _ = EditTempo(tempo);
+            else if (e.ClickCount == 2 && near is { Value.Length: > 0 }) _ = editor.EditCommand(near);
+            else if (point.IsLeftButtonPressed && near != null)
+            {
+                drag = Drag.Command;
+                movingCommand = near;
+                e.Pointer.Capture(this);
+            }
             return;
         }
         int row = RowAt(p.Y);
@@ -405,6 +444,15 @@ public sealed class TimelineView : Control
         }
         if (!point.IsLeftButtonPressed) return;
 
+        if (editor.Tool.Kind == null && TailAt(p, route) is { } roll)
+        {
+            // Select, on a roll's end: drag it to make the roll longer or shorter.
+            if (!editor.SelectedNotes.Contains(roll)) editor.Select(new[] { roll });
+            drag = Drag.Resize;
+            resizing = roll;
+            e.Pointer.Capture(this);
+            return;
+        }
         if (editor.Tool.Kind is not { } kind)
         {
             // Select: a note is picked (with Shift or ⌘/Ctrl added or taken away) and dragged to
@@ -443,6 +491,12 @@ public sealed class TimelineView : Control
         var p = hover.Value;
         switch (drag)
         {
+            case Drag.None:
+                // The end of a roll can be dragged with Select.
+                int row = RowAt(p.Y);
+                bool onTail = editor.Tool.Kind == null && row >= 0 && TailAt(p, Rows[row]) != null;
+                Cursor = new Cursor(onTail ? StandardCursorType.SizeWestEast : InEvents(p.Y) && CommandNear(p.X) != null ? StandardCursorType.Hand : StandardCursorType.Cross);
+                break;
             case Drag.Seek:
                 editor.Seek(TimeOf(Math.Max(HeaderWidth, p.X)));
                 break;
@@ -475,12 +529,21 @@ public sealed class TimelineView : Control
                 case Drag.Move when moveBeats != 0:
                     editor.MoveSelection((int)Math.Round(moveBeats * editor.Division / 4), dragRow);
                     break;
+                case Drag.Resize when resizing is { } roll:
+                    if (Snap(p.X, dragRow) is { } newEnd && newEnd.Time > roll.Time && Math.Abs(newEnd.Time - roll.EndTime) > 1e-6)
+                        editor.ResizeRoll(roll, newEnd, dragRow);
+                    break;
+                case Drag.Command when movingCommand is { } moving:
+                    if (CommandTarget(moving, p.X) is { } target) editor.MoveCommand(moving, target);
+                    break;
                 case Drag.Box:
                     BoxSelect(new Rect(pressPoint, p), (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Meta | KeyModifiers.Control)) != 0);
                     break;
             }
         drag = Drag.None;
         dragStart = null;
+        resizing = null;
+        movingCommand = null;
         moveBeats = 0;
         e.Pointer.Capture(null);
         InvalidateVisual();
@@ -539,28 +602,34 @@ public sealed class TimelineView : Control
         new ContextMenu { ItemsSource = items }.Open(this);
     }
 
-    ChartTempo? TempoNear(double x)
+    // The command whose tick is nearest an x, within a few pixels.
+    ChartCommand? CommandNear(double x)
+    {
+        if (editor == null) return null;
+        return editor.Analysis.Commands.Where(c => c.IsOn(editor.Route))
+            .Select(c => (c, d: Math.Abs(XOf(c.Time) - x))).Where(c => c.d <= 8).OrderBy(c => c.d).Select(c => c.c).FirstOrDefault();
+    }
+
+    // Where a dragged command would go: the grid position under x on its route (a measure's start
+    // for #MEASURE); null where nothing would change.
+    GridPosition? CommandTarget(ChartCommand command, double x)
+    {
+        if (editor == null) return null;
+        var route = command.BranchId >= 0 ? command.Route : editor.Route;
+        if (Snap(x, route) is not { } at) return null;
+        if (command.Name == "#MEASURE") at = at with { Step = 0 };
+        return Math.Abs(at.Time - command.Time) < 1e-6 ? null : at;
+    }
+
+    // A roll's end (on the row's route) within reach of the pointer.
+    ChartNote? TailAt(Point p, BranchRoute route)
     {
         if (editor?.Analysis.Chart is not { } chart) return null;
-        return chart.Tempos.Where(t => LaneView.Shown(chart, t.BranchId, t.Route, editor.Route) && !editor.Analysis.EventOf(t).IsEmpty)
-            .Select(t => (t, d: Math.Abs(XOf(t.Time) - x))).Where(c => c.d <= 24).OrderBy(c => c.d).Select(c => c.t).FirstOrDefault();
+        return chart.Notes.Where(n => n.IsLong && (n.BranchId < 0 || n.Route == route) && Math.Abs(XOf(n.EndTime) - p.X) <= 7 && XOf(n.EndTime) - XOf(n.Time) > 10)
+            .OrderBy(n => Math.Abs(XOf(n.EndTime) - p.X)).FirstOrDefault();
     }
 
-    ChartGogo? GogoNear(double x)
-    {
-        if (editor?.Analysis.Chart is not { } chart) return null;
-        return chart.Gogos.Where(g => LaneView.Shown(chart, g.BranchId, g.Route, editor.Route) && !editor.Analysis.EventOf(g).IsEmpty)
-            .Select(g => (g, d: Math.Abs(XOf(g.Time) - x))).Where(c => c.d <= 8).OrderBy(c => c.d).Select(c => c.g).FirstOrDefault();
-    }
-
-    Task EditTempo(ChartTempo tempo)
-    {
-        bool delay = tempo.ResumeTime > tempo.Time;
-        return editor!.EditEvent(tempo, delay ? "#DELAY" : "#BPMCHANGE",
-            (delay ? tempo.ResumeTime - tempo.Time : tempo.Bpm).ToString("0.###", CultureInfo.InvariantCulture));
-    }
-
-    // The tempo row's menu: commands to write at the place, and the one near it to change or remove.
+    // The commands row's menu: commands to write at the place, and the one near it to change or remove.
     void EventMenu(Point p)
     {
         if (editor == null) return;
@@ -579,17 +648,13 @@ public sealed class TimelineView : Control
                 items.Add(Item(label, () => _ = editor.InsertEvent(position, kind)));
             }
         }
-        if (TempoNear(p.X) is { } tempo)
-        {
-            bool delay = tempo.ResumeTime > tempo.Time;
-            items.Add(new Separator());
-            items.Add(Item(delay ? $"Edit #DELAY {tempo.ResumeTime - tempo.Time:0.###}…" : $"Edit #BPMCHANGE {tempo.Bpm:0.###}…", () => _ = EditTempo(tempo)));
-            items.Add(Item(delay ? "Remove this #DELAY" : "Remove this #BPMCHANGE", () => editor.RemoveEvent(tempo)));
-        }
-        if (GogoNear(p.X) is { } gogo)
+        if (CommandNear(p.X) is { } command)
         {
             items.Add(new Separator());
-            items.Add(Item(gogo.On ? "Remove this #GOGOSTART" : "Remove this #GOGOEND", () => editor.RemoveEvent(gogo)));
+            string written = (command.Name + " " + command.Value).Trim();
+            if (command.Value.Length > 0) items.Add(Item($"Edit {written}…", () => _ = editor.EditCommand(command)));
+            items.Add(Item($"Remove {written}", () => editor.RemoveCommand(command)));
+            items.Add(Item("Show in code", () => editor.RevealCommand(command)));
         }
         if (items.Count > 0) new ContextMenu { ItemsSource = items }.Open(this);
     }

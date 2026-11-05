@@ -206,6 +206,44 @@ public class SceneTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void ARollsEndAndACommandAreDragged()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        var code = Find<TextEditor>(window);
+        var timeline = Find<TimelineView>(window);
+        editor.Division = 16;
+        editor.Tool = editor.Tools.First(t => t.Kind == null);
+        editor.Seek(8.0);
+        Dispatcher.UIThread.RunJobs();
+        double rowMiddle = 24 + (timeline.Bounds.Height - 48) / 6, commands = timeline.Bounds.Height - 12;
+        Point At(double time, double y) => timeline.TranslatePoint(new Point(timeline.XOf(time), y), window)!.Value;
+        void DragOn(Point from, Point to)
+        {
+            window.MouseMove(from);
+            window.MouseDown(from, MouseButton.Left);
+            window.MouseMove(new Point((from.X + to.X) / 2, from.Y));
+            window.MouseMove(to);
+            window.MouseUp(to, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        // The drumroll of measure 5 (sixteenths of 0.1 s at 150 BPM) made two sixteenths longer.
+        var roll = editor.Analysis.Chart!.Notes.First(n => n.IsDrumroll);
+        DragOn(At(roll.EndTime, rowMiddle), At(roll.EndTime + 0.2, rowMiddle));
+        Assert.Null(editor.Message);
+        Assert.Contains("\n5000000000000800,\n", code.Text);
+
+        // #GOGOEND (at measure 5's start) dragged four sixteenths on, into the measure's line.
+        var gogoEnd = editor.Analysis.Commands.Single(c => c.Name == "#GOGOEND");
+        DragOn(At(gogoEnd.Time, commands), At(gogoEnd.Time + 0.4, commands));
+        Assert.Null(editor.Message);
+        Assert.Contains("#GOGOSTART\n3000400030004000,\n1122112211221120,\n5000\n#GOGOEND\n000000000800,", code.Text);
+        Assert.Equal(gogoEnd.Time + 0.4, editor.Analysis.Commands.Single(c => c.Name == "#GOGOEND").Time, 3);
+        Shot(window, "timeline-commands");
+    }
+
+    [AvaloniaFact]
     public void TheSongIsDrawnUnderTheTimeline()
     {
         var (window, vm, registry) = Open();

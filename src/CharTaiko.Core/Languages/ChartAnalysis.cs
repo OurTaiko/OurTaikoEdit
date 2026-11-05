@@ -12,6 +12,13 @@ public readonly record struct SourceSpan(int Line, int Column, int Length)
 
 // Code is the language's own (TJA1001 …), if it has codes.
 // Tag is the language's own diagnostic, for its quick fixes.
+// A command line of the block: its name (with #), its argument, where it is written, the time it
+// takes effect (that of the next slot) and the route it is on (BranchId -1: every route).
+public sealed record ChartCommand(string Name, string Value, SourceSpan Source, double Time, int BranchId, BranchRoute Route)
+{
+    public bool IsOn(BranchRoute route) => BranchId < 0 || Route == route;
+}
+
 public sealed record ChartDiagnostic(SourceSpan Source, string Message, DiagnosticSeverity Severity, string? Code = null, object? Tag = null);
 
 // One playable block of the file (a TJA #START … #END).
@@ -86,8 +93,9 @@ public sealed class ChartAnalysis
     // Where a note was written, and where a long note ends.
     public Func<ChartNote, SourceSpan> SourceOf { get; init; } = _ => default;
     public Func<ChartNote, SourceSpan> TailOf { get; init; } = _ => default;
-    // Where an event of the chart (ChartTempo, ChartGogo, ChartSection …) is written.
-    public Func<object, SourceSpan> EventOf { get; init; } = _ => default;
+    // Every command of the chosen block as written (#BPMCHANGE, #SCROLL, #GOGOSTART …), with when
+    // it takes effect, for the timeline's command row.
+    public IReadOnlyList<ChartCommand> Commands { get; init; } = Array.Empty<ChartCommand>();
     // The parsed block's lines (from its #START to its #END).
     public int StartLine { get; init; }
     public int EndLine { get; init; }

@@ -118,7 +118,7 @@ public sealed class TjaLanguage : IChartLanguage
             Measures = measures, Diagnostics = diagnostics, Title = info?.Title ?? "", Audio = AudioFileOf(text),
             SourceOf = n => map.TryGetSpan(n, out var s) ? Span(s) : default,
             TailOf = n => map.TryGetTailSpan(n, out var s) ? Span(s) : default,
-            EventOf = e => map.TryGetSpan(e, out var s) ? Span(s) : default,
+            Commands = analysis.Chart == null ? Array.Empty<ChartCommand>() : Commands(doc, analysis, measures, Span),
             StartLine = lines.Line(analysis.StartSpan.Start), EndLine = lines.Line(analysis.EndSpan.Start),
         };
     }
@@ -242,13 +242,66 @@ public sealed class TjaLanguage : IChartLanguage
                         break;
                 }
             }
-            var times = SlotTimes(slots.Select(s => s.Time).ToList(), m.StartTime, m.EndTime);
+            var times = SlotTimes(analysis.Chart!, m, slots.Select(s => s.Time).ToList());
             result.Add(new MeasureView
             {
                 Index = m.Index, BranchId = m.BranchId, Route = m.Route, Time = m.StartTime, EndTime = m.EndTime, Bpm = m.Bpm, Length = m.Length,
                 Comma = comma.Length > 0 ? span(comma) : default, Tag = m,
                 Slots = slots.Select((s, i) => new ChartSlot(span(s.Span), s.Token, times[i], s.Note)).ToList(),
             });
+        }
+        return result;
+    }
+
+    // Commands that shape the block rather than say when or how notes play.
+    static readonly HashSet<string> Structural = new(StringComparer.OrdinalIgnoreCase)
+        { "#START", "#END", "#BRANCHSTART", "#BRANCHEND", "#N", "#E", "#M" };
+
+    // Every command of the block with when it takes effect: the time of the next slot written after
+    // it (the next measure's start for one after a measure's last note; the chart's end after the
+    // last). A command before a branch marker is common to every route; one in a route is that
+    // route's.
+    static List<ChartCommand> Commands(TjaDocument doc, TjaAnalysis analysis, List<MeasureView> measures, Func<TextSpan, SourceSpan> span)
+    {
+        var lines = doc.Lines;
+        // Where every slot (and empty measure's comma) is, with its time and route, in text order.
+        var places = new List<(int Offset, double Time, int BranchId, BranchRoute Route)>();
+        foreach (var m in measures)
+        {
+            foreach (var slot in m.Slots) places.Add((lines.Offset(slot.Source.Line, slot.Source.Column - 1), slot.Time, m.BranchId, m.Route));
+            if (m.Slots.Count == 0 && !m.Comma.IsEmpty) places.Add((lines.Offset(m.Comma.Line, m.Comma.Column - 1), m.Time, m.BranchId, m.Route));
+        }
+        places.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+
+        var tokens = doc.Syntax;
+        var result = new List<ChartCommand>();
+        int from = analysis.StartSpan.End, to = analysis.EndSpan.Start;
+        // Whether a branch marker came since the last slot: a command before it is common.
+        var markers = new List<int>();
+        for (int i = FirstAt(tokens, from); i < tokens.Count && tokens[i].Span.Start < to; i++)
+        {
+            if (tokens[i].Kind != TjaSyntaxKind.Command) continue;
+            string name = doc.Text.Substring(tokens[i].Span.Start, tokens[i].Span.Length).ToUpperInvariant();
+            if (Structural.Contains(name)) { markers.Add(tokens[i].Span.Start); continue; }
+            var whole = tokens[i].Span;
+            string value = "";
+            if (i + 1 < tokens.Count && tokens[i + 1].Kind == TjaSyntaxKind.Whitespace && i + 2 < tokens.Count && tokens[i + 2].Kind == TjaSyntaxKind.Argument)
+            {
+                whole = TextSpan.FromBounds(whole.Start, tokens[i + 2].Span.End);
+                value = doc.Text.Substring(tokens[i + 2].Span.Start, tokens[i + 2].Span.Length).Trim();
+            }
+            else if (i + 1 < tokens.Count && tokens[i + 1].Kind == TjaSyntaxKind.Argument)
+            {
+                whole = TextSpan.FromBounds(whole.Start, tokens[i + 1].Span.End);
+                value = doc.Text.Substring(tokens[i + 1].Span.Start, tokens[i + 1].Span.Length).Trim();
+            }
+            int at = whole.Start;
+            int next = places.FindIndex(p => p.Offset > at);
+            double time = next >= 0 ? places[next].Time : analysis.Chart!.Duration;
+            int branch = next >= 0 ? places[next].BranchId : -1;
+            var route = next >= 0 ? places[next].Route : BranchRoute.Normal;
+            if (branch >= 0 && markers.Any(mk => mk > at && (next < 0 || mk < places[next].Offset))) branch = -1;
+            result.Add(new ChartCommand(name, value, span(whole), time, branch, route));
         }
         return result;
     }
@@ -265,22 +318,31 @@ public sealed class TjaLanguage : IChartLanguage
         return lo;
     }
 
-    // Known times kept; the others interpolated by slot between the known ones (the measure's
-    // start before the first slot, its end after the last).
-    static double[] SlotTimes(List<double?> known, double start, double end)
+    // Each slot's time as the parser counts it: from the measure's start, each slot lasts its share
+    // of the measure at the BPM in force (a #BPMCHANGE takes effect at the slot it is written
+    // before; a #DELAY there adds its time first). Known note times are kept as they are.
+    static double[] SlotTimes(TaikoChart chart, OurTaiko.ChartMeasure m, List<double?> known)
     {
         int n = known.Count;
         var times = new double[n];
-        int prev = -1;
-        double prevTime = start;
-        for (int i = 0; i <= n; i++)
+        if (n == 0) return times;
+        var tempos = chart.Tempos.Where(t => t.BranchId < 0 || t.BranchId == m.BranchId && t.Route == m.Route)
+            .Where(t => t.Time >= m.StartTime - 0.0005 && t.Time <= m.EndTime + 0.0005).ToList();
+        double t = m.StartTime, bpm = m.Bpm;
+        int next = 0;
+        for (int i = 0; i < n; i++)
         {
-            if (i < n && known[i] == null) continue;
-            double t = i < n ? known[i]!.Value : end;
-            for (int k = prev + 1; k < i; k++) times[k] = prevTime + (t - prevTime) * (k - prev) / (double)(i - prev);
-            if (i < n) times[i] = t;
-            prev = i;
-            prevTime = t;
+            // Changes written before this slot sit at its time (whole milliseconds, as the parser
+            // keeps them).
+            while (next < tempos.Count && tempos[next].Time <= t + 0.0015)
+            {
+                var e = tempos[next++];
+                if (e.ResumeTime > e.Time + 1e-9) t += e.ResumeTime - e.Time;
+                bpm = e.Bpm;
+            }
+            times[i] = known[i] ?? t;
+            if (known[i] is { } exact) t = exact;
+            t += 240.0 / bpm * m.Length / n;
         }
         return times;
     }

@@ -112,8 +112,14 @@ sealed class TjaEditing : IChartEditing
         if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first.");
         if (kind is ChartEventKind.Tempo or ChartEventKind.Scroll or ChartEventKind.Measure or ChartEventKind.Delay && string.IsNullOrWhiteSpace(value))
             return EditResult.Fail("The command needs a value.");
-        if (kind == ChartEventKind.Measure && at.Step != 0) return EditResult.Fail("#MEASURE takes effect from a measure's start.");
-        string nl = Newline(analysis.Text), command = CommandOf(kind, value?.Trim());
+        return Insert(analysis, at, CommandOf(kind, value?.Trim()));
+    }
+
+    // A command line written so that it takes effect at a grid position.
+    static EditResult Insert(ChartAnalysis analysis, GridPosition at, string command)
+    {
+        if (command.StartsWith("#MEASURE", StringComparison.OrdinalIgnoreCase) && at.Step != 0) return EditResult.Fail("#MEASURE takes effect from a measure's start.");
+        string nl = Newline(analysis.Text);
         var lines = Lines(analysis.Text);
         var m = at.Measure;
         int n = m.Slots.Count;
@@ -151,10 +157,10 @@ sealed class TjaEditing : IChartEditing
         return first ? new TextEdit(at.Line, 1, 0, command + nl) : new TextEdit(at.Line, at.Column, 0, nl + command + nl);
     }
 
-    public EditResult RemoveEvent(ChartAnalysis analysis, object chartEvent)
+    public EditResult RemoveCommand(ChartAnalysis analysis, ChartCommand command)
     {
-        var span = analysis.EventOf(chartEvent);
-        if (span.IsEmpty) return EditResult.Fail("That event is not in the chart's text.");
+        var span = command.Source;
+        if (span.IsEmpty) return EditResult.Fail("That command is not in the chart's text.");
         var lines = Lines(analysis.Text);
         string line = lines[span.Line - 1];
         // A command alone on its line goes with its line.
@@ -166,16 +172,25 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(new[] { new TextEdit(span.Line, span.Column, span.Length, "") });
     }
 
-    public EditResult ChangeEvent(ChartAnalysis analysis, object chartEvent, string value)
+    public EditResult ChangeCommand(ChartAnalysis analysis, ChartCommand command, string value)
     {
-        var span = analysis.EventOf(chartEvent);
-        if (span.IsEmpty) return EditResult.Fail("That event is not in the chart's text.");
+        var span = command.Source;
+        if (span.IsEmpty) return EditResult.Fail("That command is not in the chart's text.");
         string line = Lines(analysis.Text)[span.Line - 1];
         int length = span.Length > 0 ? span.Length : line.Length - (span.Column - 1);
-        string written = line.Substring(span.Column - 1, Math.Min(length, line.Length - (span.Column - 1))).Trim();
-        int space = written.IndexOfAny(new[] { ' ', '\t' });
-        string key = space < 0 ? written : written.Substring(0, space);
-        return new EditResult(new[] { new TextEdit(span.Line, span.Column, length, key + " " + value.Trim()) });
+        return new EditResult(new[] { new TextEdit(span.Line, span.Column, length, command.Name + " " + value.Trim()) });
+    }
+
+    public EditResult MoveCommand(ChartAnalysis analysis, ChartCommand command, GridPosition to)
+    {
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail("Fix the chart's errors first.");
+        if (Math.Abs(to.Time - command.Time) < 1e-6) return new EditResult(Array.Empty<TextEdit>());
+        var insert = Insert(analysis, to, (command.Name + " " + command.Value).Trim());
+        if (!insert.Ok) return insert;
+        var remove = RemoveCommand(analysis, command);
+        if (!remove.Ok) return remove;
+        // The removed line and the place written to never overlap: commands have lines of their own.
+        return new EditResult(remove.Edits.Concat(insert.Edits).ToList());
     }
 
     static string Describe(ChartNote n) => n.IsBalloon ? "balloon" : "drumroll";

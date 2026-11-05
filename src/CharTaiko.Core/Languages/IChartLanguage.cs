@@ -95,7 +95,9 @@ public interface IChartEditing
     // speed, a/b, seconds).
     EditResult InsertEvent(ChartAnalysis analysis, GridPosition at, ChartEventKind kind, string? value);
 
-    // An event of the chart (ChartTempo, ChartGogo …) as written: removed, or given a new value.
-    EditResult RemoveEvent(ChartAnalysis analysis, object chartEvent);
-    EditResult ChangeEvent(ChartAnalysis analysis, object chartEvent, string value);
+    // A command of ChartAnalysis.Commands: removed, given a new value, or moved to take effect
+    // at another grid position (one change).
+    EditResult RemoveCommand(ChartAnalysis analysis, ChartCommand command);
+    EditResult ChangeCommand(ChartAnalysis analysis, ChartCommand command, string value);
+    EditResult MoveCommand(ChartAnalysis analysis, ChartCommand command, GridPosition to);
 }
