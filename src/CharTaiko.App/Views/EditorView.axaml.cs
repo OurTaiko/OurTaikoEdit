@@ -71,6 +71,17 @@ public partial class EditorView : UserControl
             else if (e.Key == Key.OemPeriod && command) { ShowActions(atCaret: true); e.Handled = true; }
             else if (e.Key == Key.Escape && signature != null) { signature.Close(); e.Handled = true; }
         };
+        EncodingButton.Click += (_, _) =>
+        {
+            if (vm == null) return;
+            var items = vm.Encodings.Select(name =>
+            {
+                var item = new MenuItem { Header = Loc.F("ReopenWith", name.ToUpperInvariant()) };
+                item.Click += (_, _) => _ = vm.ReopenWith(name);
+                return item;
+            }).ToList();
+            new ContextMenu { ItemsSource = items, Placement = PlacementMode.TopEdgeAlignedRight }.Open(EncodingButton);
+        };
         UndoButton.Click += (_, _) => Code.Undo();
         RedoButton.Click += (_, _) => Code.Redo();
         ProblemList.DoubleTapped += (_, _) => GoToProblem();
@@ -98,7 +109,7 @@ public partial class EditorView : UserControl
         Code.Document.UndoStack.ClearAll();
         Code.Document.UndoStack.MarkAsOriginalFile();
         applying = false;
-        vm.IsDirty = false;
+        vm.IsDirty = vm.StartsDirty;
         vm.PropertyChanged += Changed;
         vm.EditsRequested += ApplyEdits;
         vm.CaretRequested += MoveCaret;

@@ -150,7 +150,7 @@
         <TextBlock Text="{Binding FilePath}" Classes="muted" FontSize="12" TextTrimming="PathSegmentEllipsis" />
         <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="12" Foreground="#E5B53A" />
         <TextBlock Grid.Column="2" Text="{Binding Caret}" FontSize="12" />
-        <TextBlock Grid.Column="3" Text="{Binding Encoding}" Classes="muted" FontSize="12" />
+        <Button Grid.Column="3" x:Name="EncodingButton" Content="{Binding Encoding}" FontSize="12" Padding="4,0" MinHeight="0" Background="Transparent" Foreground="{StaticResource MutedBrush}" ToolTip.Tip="{l:T EncodingTip}" />
         <TextBlock Grid.Column="4" Text="{Binding Language.DisplayName}" Classes="muted" FontSize="12" />
       </Grid>
     </Border>

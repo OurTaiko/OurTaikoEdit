@@ -184,6 +184,13 @@ public static class Strings
         ["PromptDelay"] = new("Seconds to shift everything after this place:", "此处之后所有内容推迟的秒数：", "この位置より後をずらす秒数："),
         ["NewValue"] = new("New value:", "新的值：", "新しい値："),
 
+        // ---- Encoding
+        ["EncodingTip"] = new("How the file was read; it is always saved as UTF-8. Click to read it in another encoding.", "文件读取时的编码；保存一律为 UTF-8。点击可用其他编码重新读取。", "読み込んだときの文字コード。保存は常に UTF-8 です。クリックすると別の文字コードで読み直します。"),
+        ["ConvertedOnSave"] = new("Read as {0}; saving writes UTF-8.", "按 {0} 读取；保存时会写成 UTF-8。", "{0} として読み込みました。保存すると UTF-8 になります。"),
+        ["ReopenWith"] = new("Reopen with {0}", "用 {0} 重新读取", "{0} で読み直す"),
+        ["ReopenTitle"] = new("Reopen with another encoding", "用其他编码重新读取", "別の文字コードで読み直す"),
+        ["ReopenDiscards"] = new("Unsaved changes to {0} are lost. Read it again as {1}?", "{0} 未保存的更改将会丢失。要用 {1} 重新读取吗？", "{0} の未保存の変更は失われます。{1} で読み直しますか？"),
+
         // ---- Audio
         ["NoAudio"] = new("No audio", "没有音频", "音源なし"),
         ["NoAudioWave"] = new("No audio (WAVE:)", "没有音频（WAVE:）", "音源なし（WAVE:）"),

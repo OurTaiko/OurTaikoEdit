@@ -54,7 +54,7 @@ public class ProjectRegistryTests : IDisposable
     }
 
     [Fact]
-    public void ShiftJisChartsAreReadAndSavedBack()
+    public void ShiftJisChartsAreReadAndSavedAsUtf8()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         string path = Path.Combine(root, "sjis.tja");
@@ -63,6 +63,26 @@ public class ProjectRegistryTests : IDisposable
         Assert.Equal("shift_jis", chart.EncodingName);
         Assert.StartsWith("TITLE:太鼓", chart.Text);
         ChartFile.Write(path, chart with { Text = chart.Text + "// edited\n" });
+        var saved = ChartFile.Read(path);
+        Assert.Equal(("utf-8", false), (saved.EncodingName, saved.Bom));
+        Assert.Equal(chart.Text + "// edited\n", saved.Text);
+        Assert.False(File.ReadAllBytes(path) is [0xEF, 0xBB, 0xBF, ..]);
+    }
+
+    [Fact]
+    public void ChartsAreReadInTheEncodingTheyWereWrittenIn()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        string path = Path.Combine(root, "any.tja");
+        // UTF-16 is known by its BOM; a UTF-8 BOM is noted and dropped on save.
+        File.WriteAllBytes(path, new byte[] { 0xFF, 0xFE }.Concat(Encoding.Unicode.GetBytes("TITLE:太鼓")).ToArray());
+        Assert.Equal(("utf-16", "TITLE:太鼓"), (ChartFile.Read(path).EncodingName, ChartFile.Read(path).Text));
+        File.WriteAllBytes(path, new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes("TITLE:x")).ToArray());
+        var bom = ChartFile.Read(path);
+        Assert.Equal(("utf-8", true, false, "TITLE:x"), (bom.EncodingName, bom.Bom, bom.IsConverted, bom.Text));
+        // GB18030 is not told from Shift-JIS by itself: it is read as Shift-JIS until chosen.
+        File.WriteAllBytes(path, Encoding.GetEncoding(54936).GetBytes("TITLE:千本樱"));
         Assert.Equal("shift_jis", ChartFile.Read(path).EncodingName);
+        Assert.Equal("TITLE:千本樱", ChartFile.Read(path, "gb18030").Text);
     }
 }

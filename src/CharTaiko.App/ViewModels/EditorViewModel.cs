@@ -41,7 +41,7 @@ public sealed partial class EditorViewModel : ViewModelBase
 {
     readonly IDialogService dialogs;
     readonly Action back;
-    readonly ChartText file;
+    ChartText file;
     readonly DispatcherTimer analyzeTimer, playTimer;
     readonly Stopwatch playClock = new();
     double playFrom;
@@ -52,7 +52,11 @@ public sealed partial class EditorViewModel : ViewModelBase
     public IChartLanguage Language { get; }
     public string InitialText { get; }
     public string FilePath => Project.ChartPath;
-    public string Encoding => file.EncodingName.ToUpperInvariant() + (file.Bom ? " BOM" : "");
+    // How the file was read; saving always writes UTF-8, so a conversion is shown as one.
+    public string Encoding => file.IsConverted ? file.EncodingName.ToUpperInvariant() + " → UTF-8" : "UTF-8" + (file.Bom ? " BOM" : "");
+    // A file read in another encoding is changed by saving, so it starts unsaved.
+    public bool StartsDirty => file.IsConverted;
+    public IReadOnlyList<string> Encodings => ChartFile.Encodings;
 
     [ObservableProperty] ChartAnalysis analysis = ChartAnalysis.Empty;
     [ObservableProperty] int blockIndex;
@@ -135,6 +139,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         Language.MessageLanguage = Settings.ChartMessageLanguage;
         file = File.Exists(project.ChartPath) ? ChartFile.Read(project.ChartPath) : new ChartText(Language.CreateTemplate(project.Name, null));
         text = InitialText = file.Text;
+        if (file.IsConverted) message = Loc.F("ConvertedOnSave", file.EncodingName.ToUpperInvariant());
         tool = Tools[1];
         blockIndex = Math.Max(0, project.LastBlock);
         // (The DispatcherTimer constructor that takes a callback starts the timer; these wait.)
@@ -717,6 +722,7 @@ public sealed partial class EditorViewModel : ViewModelBase
             Project.LastBlock = BlockIndex;
             Project.Save();
             IsDirty = false;
+            if (file.IsConverted) { file = new ChartText(text); OnPropertyChanged(nameof(Encoding)); }
             Message = Loc.F("Saved", Path.GetFileName(Project.ChartPath));
             return true;
         }
@@ -725,6 +731,23 @@ public sealed partial class EditorViewModel : ViewModelBase
             await dialogs.MessageAsync(Loc.T("CouldNotSave"), e.Message);
             return false;
         }
+    }
+
+    // Reads the file again in another encoding (one undoable change of the whole text).
+    public async Task ReopenWith(string encoding)
+    {
+        if (!File.Exists(Project.ChartPath)) return;
+        string name = Path.GetFileName(Project.ChartPath);
+        if (IsDirty && !file.IsConverted && !await dialogs.ConfirmAsync(Loc.T("ReopenTitle"), Loc.F("ReopenDiscards", name, encoding.ToUpperInvariant()), Loc.F("ReopenWith", encoding.ToUpperInvariant()))) return;
+        ChartText read;
+        try { read = ChartFile.Read(Project.ChartPath, encoding); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { Message = e.Message; return; }
+        file = read;
+        OnPropertyChanged(nameof(Encoding));
+        if (read.Text != text) EditsRequested?.Invoke(new[] { new TextEdit(1, 1, text.Length, read.Text) });
+        EnsureFresh();
+        IsDirty = read.IsConverted;
+        Message = read.IsConverted ? Loc.F("ConvertedOnSave", read.EncodingName.ToUpperInvariant()) : null;
     }
 
     [RelayCommand]

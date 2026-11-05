@@ -140,6 +140,35 @@ public class SceneTests : IDisposable
         }
     }
 
+    [AvaloniaFact]
+    public void AChartInAnotherEncodingIsReopenedAndSavedAsUtf8()
+    {
+        var (window, vm, registry) = Open();
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        string folder = Path.Combine(root, "Gb");
+        Directory.CreateDirectory(folder);
+        string text = "TITLE:千本樱\nBPM:120\nCOURSE:Oni\nLEVEL:5\n#START\n1,\n#END\n";
+        File.WriteAllBytes(Path.Combine(folder, "song.tja"), System.Text.Encoding.GetEncoding(54936).GetBytes(text));
+        var editor = new EditorViewModel(registry.OpenFolder(folder), new DialogService(window), () => { }, vm.Settings);
+        vm.Scene = editor;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("SHIFT_JIS → UTF-8", editor.Encoding);
+        Assert.True(editor.IsDirty);
+
+        _ = editor.ReopenWith("gb18030");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(text, Find<TextEditor>(window).Text);
+        Assert.Equal("GB18030 → UTF-8", editor.Encoding);
+        Assert.Equal("千本樱", editor.Analysis.Title);
+        Shot(window, "editor-gb18030");
+
+        _ = editor.Save();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(editor.IsDirty);
+        Assert.Equal("UTF-8", editor.Encoding);
+        Assert.Equal(text, File.ReadAllText(Path.Combine(folder, "song.tja")));
+    }
+
     static void Choose(AppSettings settings, Action<AppSettings> change)
     {
         var edited = settings.Clone();
