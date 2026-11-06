@@ -18,7 +18,7 @@ dotnet test CharTaiko.slnx
 ## 目录
 
 ```
-external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.11.0）
+external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.12.0）
 src/CharTaiko.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings）
 src/CharTaiko.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
 src/CharTaiko.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLayer）／WAV，波形，OpenAL Soft 播放，游戏的 21 套打击音（HitSounds/）
