@@ -168,4 +168,23 @@ public class TimelineEditTests
         Assert.Equal(new[] { 0.0, 0.5, 0.75, 1.5 }, times);
         Assert.Equal(1.5, TjaParser.Parse(text).Notes[1].Time, 3);
     }
+
+    [Fact]
+    public void ABlankSlotIsTimedWhereANoteWrittenThereWouldBe()
+    {
+        // TJAParser v0.13.0 keeps times to a thousandth of a millisecond: 170 BPM sixteenths are
+        // 88.2352941… ms apart, 204.5 BPM ones 73.3496332… ms.
+        string first = "1" + new string('0', 7), second = new string('0', 8);
+        string Text(string a, string b) => "BPM:170\nOFFSET:-1.2345\nCOURSE:Oni\nLEVEL:5\n#START\n" + a + "\n#BPMCHANGE 204.5\n" + b + ",\n#END\n";
+        var slots = Tja.Analyze(Text(first, second), 0).Measures[0].Slots;
+        Assert.Equal(16, slots.Count);
+        Assert.Equal(1.2345 + 0.088235, slots[1].Time, 9);
+        for (int i = 1; i < 16; i++)
+        {
+            char[] a = first.ToCharArray(), b = second.ToCharArray();
+            if (i < 8) a[i] = '2'; else b[i - 8] = '2';
+            var ka = TjaParser.Parse(Text(new string(a), new string(b))).Notes[1];
+            Assert.Equal(ka.Time, slots[i].Time);
+        }
+    }
 }

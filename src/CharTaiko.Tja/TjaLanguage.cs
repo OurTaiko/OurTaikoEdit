@@ -333,15 +333,15 @@ public sealed class TjaLanguage : IChartLanguage
         int next = 0;
         for (int i = 0; i < n; i++)
         {
-            // Changes written before this slot sit at its time (whole milliseconds, as the parser
-            // keeps them).
-            while (next < tempos.Count && tempos[next].Time <= t + 0.0015)
+            // Changes written before this slot sit at its time, which the parser keeps to a
+            // thousandth of a millisecond (TjaTime.OnGrid): a microsecond covers that and this sum.
+            while (next < tempos.Count && tempos[next].Time <= t + 0.000001)
             {
                 var e = tempos[next++];
                 if (e.ResumeTime > e.Time + 1e-9) t += e.ResumeTime - e.Time;
                 bpm = e.Bpm;
             }
-            times[i] = known[i] ?? t;
+            times[i] = known[i] ?? TjaTime.OnGrid(t * 1000);
             if (known[i] is { } exact) t = exact;
             t += 240.0 / bpm * m.Length / n;
         }
