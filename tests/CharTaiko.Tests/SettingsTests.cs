@@ -32,6 +32,53 @@ public class SettingsTests : IDisposable
         }
     }
 
+    // The keys the views ({l:T Key}) and the code (Loc.T / F / Plural with a literal key) ask for.
+    [Fact]
+    public void EveryKeyAskedForIsInTheTable()
+    {
+        string root = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(root, "CharTaiko.slnx"))) root = Path.GetDirectoryName(root) ?? throw new DirectoryNotFoundException("CharTaiko.slnx");
+        var asked = new List<(string Key, string File)>();
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.*", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")) continue;
+            string pattern = Path.GetExtension(file) switch
+            {
+                ".axaml" => @"\{l:T\s+(\w+)\s*\}",
+                // The literal alone, not a prefix such as "Tip" + name.
+                ".cs" => @"Loc\.(?:T|F|Plural)\(\s*""(\w+)""\s*[,)]",
+                _ => "",
+            };
+            if (pattern.Length == 0) continue;
+            asked.AddRange(Regex.Matches(File.ReadAllText(file), pattern).Select(m => (m.Groups[1].Value, Path.GetFileName(file))));
+        }
+        Assert.True(asked.Count > 100, $"only {asked.Count} keys found");
+        Assert.Empty(asked.Where(a => !Strings.Table.ContainsKey(a.Key)).Select(a => $"{a.Key} ({a.File})"));
+    }
+
+    [Fact]
+    public void TheCsvIsReadAsWritten()
+    {
+        string csv = "﻿key,ja,en,zh\r\n"
+            + "# Section,,,\r\n"
+            + "\r\n"
+            + "A,\"あ, い\",\"say \"\"hi\"\"\",\" 前后 \"\r\n"
+            + "B,\"一\n二\",two lines,\n"
+            + "C,c,c,c";
+        var table = Strings.Read(new StringReader(csv.TrimStart('﻿')));
+        Assert.Equal(3, table.Count);
+        Assert.Equal(new Words("say \"hi\"", " 前后 ", "あ, い"), table["A"]);
+        Assert.Equal(new Words("two lines", "", "一\n二"), table["B"]);
+        Assert.Equal(new Words("c", "c", "c"), table["C"]);
+
+        var twice = Assert.Throws<FormatException>(() => Strings.Read(new StringReader("key,en,zh,ja\nA,a,a,a\n\"B\",b,\"b\nb\",b\nA,a,a,a\n")));
+        Assert.Contains("line 5", twice.Message);
+        var short_ = Assert.Throws<FormatException>(() => Strings.Read(new StringReader("key,en,zh,ja\nA,a,a\n")));
+        Assert.Contains("line 2", short_.Message);
+        Assert.Throws<FormatException>(() => Strings.Read(new StringReader("key,en,zh\nA,a,a\n")));
+        Assert.Throws<FormatException>(() => Strings.Read(new StringReader("key,en,zh,ja\nA,\"a,a,a\n")));
+    }
+
     [Fact]
     public void WordsFollowTheLanguage()
     {

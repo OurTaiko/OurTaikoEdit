@@ -1,243 +1,100 @@
+using System.Text;
+
 namespace CharTaiko.Core.Localization;
 
 public readonly record struct Words(string En, string Zh, string Ja);
 
-// Every word of the interface, in the three languages side by side so that a missing one shows.
+// Every word of the interface, read from Strings.csv (built into the assembly): one row per key,
+// with the languages side by side so that a missing one shows. Columns are found by the header
+// (key, en, zh, ja). A row whose key starts with "#" heads a section and blank lines are skipped.
 // {0}, {1} are filled by Loc.F; a key ending in "One" is English's singular for Loc.Plural.
 public static class Strings
 {
-    public static readonly IReadOnlyDictionary<string, Words> Table = new Dictionary<string, Words>
+    public const string ResourceName = "CharTaiko.Core.Localization.Strings.csv";
+
+    public static IReadOnlyDictionary<string, Words> Table { get; } = Load();
+
+    static Dictionary<string, Words> Load()
     {
-        // ---- Common
-        ["Ok"] = new("OK", "确定", "OK"),
-        ["Cancel"] = new("Cancel", "取消", "キャンセル"),
-        ["Browse"] = new("Browse…", "浏览…", "参照…"),
-        ["Save"] = new("Save", "保存", "保存"),
-        ["DontSave"] = new("Don't Save", "不保存", "保存しない"),
-        ["Cut"] = new("Cut", "剪切", "切り取り"),
-        ["Copy"] = new("Copy", "复制", "コピー"),
-        ["Paste"] = new("Paste", "粘贴", "貼り付け"),
-        ["Delete"] = new("Delete", "删除", "削除"),
-        ["SelectAll"] = new("Select all", "全选", "すべて選択"),
-        ["Settings"] = new("Settings", "设置", "設定"),
-        ["SettingsMenu"] = new("Settings…", "设置…", "設定…"),
-        ["FileMissing"] = new("{0} is missing", "找不到 {0}", "{0} が見つかりません"),
+        using var stream = typeof(Strings).Assembly.GetManifestResourceStream(ResourceName)
+            ?? throw new InvalidOperationException($"{ResourceName} is not in the assembly.");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return Read(reader);
+    }
 
-        // ---- Projects scene
-        ["Projects"] = new("Projects", "项目", "プロジェクト"),
-        ["NewProjectMenu"] = new("New Project…", "新建项目…", "新規プロジェクト…"),
-        ["OpenFolderMenu"] = new("Open Folder…", "打开文件夹…", "フォルダーを開く…"),
-        ["NoProjects"] = new("No projects yet", "还没有项目", "プロジェクトはまだありません"),
-        ["NoProjectsHint"] = new("Create a project, or open a folder that holds a .tja chart.",
-            "新建一个项目，或者打开一个含有 .tja 谱面的文件夹。",
-            "プロジェクトを作成するか、.tja 譜面の入ったフォルダーを開いてください。"),
-        ["Open"] = new("Open", "打开", "開く"),
-        ["Remove"] = new("Remove", "移除", "外す"),
-        ["CouldNotCreate"] = new("Could not create the project", "无法创建项目", "プロジェクトを作成できませんでした"),
-        ["UnknownChartType"] = new("Unknown chart type “{0}”", "未知的谱面类型“{0}”", "不明な譜面タイプ「{0}」"),
-        ["OpenProjectFolder"] = new("Open a project folder", "打开项目文件夹", "プロジェクトフォルダーを開く"),
-        ["CouldNotOpenFolder"] = new("Could not open the folder", "无法打开文件夹", "フォルダーを開けませんでした"),
-        ["CouldNotOpenProject"] = new("Could not open the project", "无法打开项目", "プロジェクトを開けませんでした"),
-        ["ProjectUnreadable"] = new("The project could not be read.", "无法读取这个项目。", "プロジェクトを読み込めませんでした。"),
-        ["RemoveTitle"] = new("Remove from the list", "从列表中移除", "リストから外す"),
-        ["RemoveMessage"] = new("Stop tracking “{0}”? The folder and its files stay on disk.",
-            "不再跟踪“{0}”？文件夹和其中的文件仍会保留在磁盘上。",
-            "「{0}」をリストから外しますか？フォルダーとファイルはディスクに残ります。"),
-        ["OpenedAt"] = new("Opened {0}", "上次打开 {0}", "最終オープン {0}"),
-        ["NeverOpened"] = new("Never opened", "从未打开", "未オープン"),
-        ["FolderMissing"] = new("The folder is missing.", "文件夹不存在。", "フォルダーが見つかりません。"),
-        ["NoBlocksYet"] = new("no difficulties yet", "还没有难度", "難易度なし"),
-        ["FolderNotEmpty"] = new("The folder {0} already exists and is not empty.", "文件夹 {0} 已存在，且不为空。", "フォルダー {0} は既に存在し、空ではありません。"),
-        ["NoChartFile"] = new("The folder has no chart file CharTaiko can open.", "这个文件夹里没有 CharTaiko 能打开的谱面文件。", "このフォルダーには CharTaiko で開ける譜面ファイルがありません。"),
+    // The table in a CSV (RFC 4180: fields with commas, quotes or line breaks are quoted, "" is a quote).
+    public static Dictionary<string, Words> Read(TextReader reader)
+    {
+        var rows = Csv.Read(reader).ToList();
+        if (rows.Count == 0) throw new FormatException("Strings.csv is empty.");
+        var (headerLine, header) = rows[0];
+        int Column(string name)
+        {
+            int i = Array.IndexOf(header, name);
+            return i >= 0 ? i : throw new FormatException($"Strings.csv line {headerLine}: no “{name}” column.");
+        }
+        int key = Column("key"), en = Column("en"), zh = Column("zh"), ja = Column("ja");
 
-        // ---- New project dialog
-        ["NewProject"] = new("New Project", "新建项目", "新規プロジェクト"),
-        ["NewProjectIntro"] = new("A project is a folder holding the chart, its audio and chartaiko.json.",
-            "一个项目就是一个文件夹，里面放着谱面、音频和 chartaiko.json。",
-            "プロジェクトは、譜面と音源と chartaiko.json を入れるフォルダーです。"),
-        ["Name"] = new("Name", "名称", "名前"),
-        ["SongName"] = new("Song name", "曲名", "曲名"),
-        ["Location"] = new("Location", "位置", "場所"),
-        ["ChartType"] = new("Chart type", "谱面类型", "譜面タイプ"),
-        ["AudioOptional"] = new("Audio (optional, copied into the project)", "音频（可选，会复制到项目里）", "音源（任意、プロジェクトにコピーされます）"),
-        ["Create"] = new("Create", "创建", "作成"),
-        ["NeedName"] = new("Give the project a name.", "请填写项目名称。", "プロジェクト名を入力してください。"),
-        ["NeedLocation"] = new("Choose where to create it.", "请选择创建的位置。", "作成する場所を選んでください。"),
-        ["AudioMissing"] = new("The audio file does not exist.", "音频文件不存在。", "音源ファイルが存在しません。"),
-        ["Creates"] = new("Creates {0}", "将创建 {0}", "{0} を作成します"),
-        ["WhereToCreate"] = new("Where to create the project", "选择项目的创建位置", "プロジェクトの作成場所"),
-        ["ChooseAudio"] = new("Choose the song's audio", "选择歌曲音频", "曲の音源を選ぶ"),
-        ["AudioFilter"] = new("Audio", "音频", "音源"),
+        var table = new Dictionary<string, Words>();
+        foreach (var (line, fields) in rows.Skip(1))
+        {
+            if (fields.All(f => f.Length == 0)) continue;
+            if (fields.Length != header.Length)
+                throw new FormatException($"Strings.csv line {line}: {fields.Length} fields, the header has {header.Length}.");
+            string name = fields[key];
+            if (name.StartsWith('#')) continue;
+            if (name.Length == 0) throw new FormatException($"Strings.csv line {line}: no key.");
+            if (!table.TryAdd(name, new Words(fields[en], fields[zh], fields[ja])))
+                throw new FormatException($"Strings.csv line {line}: “{name}” is there twice.");
+        }
+        return table;
+    }
+}
 
-        // ---- Save prompt
-        ["SaveQuestion"] = new("Save {0}?", "保存 {0}？", "{0} を保存しますか？"),
-        ["SaveLost"] = new("Your changes are lost if you don't save them.", "如果不保存，所做的更改将会丢失。", "保存しないと変更は失われます。"),
-        ["CouldNotSave"] = new("Could not save", "无法保存", "保存できませんでした"),
-        ["Saved"] = new("Saved {0}", "已保存 {0}", "{0} を保存しました"),
-
-        // ---- Editor toolbar
-        ["BackToProjects"] = new("← Projects", "← 项目", "← プロジェクト"),
-        ["UnsavedChanges"] = new("Unsaved changes", "有未保存的更改", "未保存の変更があります"),
-        ["SaveTip"] = new("Save (⌘S / Ctrl+S)", "保存（⌘S / Ctrl+S）", "保存（⌘S / Ctrl+S）"),
-        ["Undo"] = new("Undo", "撤销", "元に戻す"),
-        ["UndoTip"] = new("Undo (covers timeline edits too)", "撤销（也包括时间轴上的编辑）", "元に戻す（タイムラインの編集も含む）"),
-        ["Redo"] = new("Redo", "重做", "やり直し"),
-        ["Format"] = new("Format", "格式化", "整形"),
-        ["FormatTip"] = new("Format the document (Shift+Alt+F); every difficulty's hash stays the same",
-            "格式化文档（Shift+Alt+F）；每个难度的哈希值保持不变",
-            "ドキュメントを整形（Shift+Alt+F）。各難易度のハッシュは変わりません"),
-        ["RewindTip"] = new("Back to the start", "回到开头", "先頭に戻る"),
-        ["Play"] = new("▶ Play", "▶ 播放", "▶ 再生"),
-        ["Pause"] = new("❚❚ Pause", "❚❚ 暂停", "❚❚ 一時停止"),
-        ["PlayTip"] = new("Play / pause (Space in the previews, F5)", "播放／暂停（在预览区按空格，或按 F5）", "再生／一時停止（プレビュー上で Space、または F5）"),
-        ["VolumeTip"] = new("Song volume", "歌曲音量", "曲の音量"),
-        ["Hits"] = new("Hits", "击打音", "打音"),
-        ["HitsTip"] = new("Don and ka sounds as notes pass the judge", "音符经过判定点时播放咚、咔的声音", "音符が判定枠を通るときにドン・カッの音を鳴らす"),
-        ["Route"] = new("Route", "路线", "ルート"),
-        ["Grid"] = new("Grid 1/", "网格 1/", "グリッド 1/"),
-
-        // ---- Routes
-        ["RouteNormal"] = new("Normal", "普通", "普通"),
-        ["RouteExpert"] = new("Expert", "玄人", "玄人"),
-        ["RouteMaster"] = new("Master", "达人", "達人"),
-
-        // ---- Note tools
-        ["ToolSelect"] = new("Select", "选择", "選択"),
-        ["ToolSelectTip"] = new("Select: click a note to find it in the code", "选择：点击音符可在代码中找到它", "選択：音符をクリックするとコード上の位置へ移動"),
-        ["NoteDon"] = new("Don", "咚", "ドン"),
-        ["NoteKa"] = new("Ka", "咔", "カッ"),
-        ["NoteBigDon"] = new("DON", "大咚", "大ドン"),
-        ["NoteBigKa"] = new("KA", "大咔", "大カッ"),
-        ["NoteRoll"] = new("Roll", "连打", "連打"),
-        ["NoteBigRoll"] = new("ROLL", "大连打", "大連打"),
-        ["NoteBalloon"] = new("Balloon", "气球", "ふうせん"),
-        ["NoteKusudama"] = new("Kusudama", "彩球", "くすだま"),
-        ["NoteKadon"] = new("Kadon", "咔咚", "カドン"),
-        ["NoteMine"] = new("Mine", "地雷", "地雷"),
-        ["NoteAdLib"] = new("Ad-lib", "Ad-lib", "アドリブ"),
-        ["TipDon"] = new("Don", "咚", "ドン"),
-        ["TipKa"] = new("Ka", "咔", "カッ"),
-        ["TipBigDon"] = new("Big don", "大咚", "大ドン"),
-        ["TipBigKa"] = new("Big ka", "大咔", "大カッ"),
-        ["TipRoll"] = new("Drumroll", "连打", "連打"),
-        ["TipBigRoll"] = new("Big drumroll", "大连打", "大連打"),
-        ["TipBalloon"] = new("Balloon", "气球", "ふうせん"),
-        ["TipKusudama"] = new("Kusudama", "彩球", "くすだま"),
-        ["TipKadon"] = new("Kadon: don and ka together", "咔咚：咚和咔同时打", "カドン：ドンとカッを同時に"),
-        ["TipMine"] = new("Mine: a note not to hit", "地雷：不能打的音符", "地雷：叩いてはいけない音符"),
-        ["TipAdLib"] = new("Ad-lib: a hidden bonus note", "Ad-lib：隐藏的加分音符", "アドリブ：隠しボーナス音符"),
-        ["TipDrag"] = new("{0}: drag from start to end", "{0}：从起点拖到终点", "{0}：始点から終点までドラッグ"),
-        ["DescribeRoll"] = new("drumroll", "连打", "連打"),
-        ["DescribeBalloon"] = new("balloon", "气球", "ふうせん"),
-
-        // ---- Problems
-        ["Problems"] = new("Problems", "问题", "問題"),
-        ["NoProblems"] = new("No problems", "没有问题", "問題なし"),
-        ["ProblemsCount"] = new("{0}, {1}", "{0}，{1}", "{0}、{1}"),
-        ["Errors"] = new("{0} errors", "{0} 个错误", "エラー {0} 件"),
-        ["ErrorsOne"] = new("{0} error", "", ""),
-        ["Warnings"] = new("{0} warnings", "{0} 个警告", "警告 {0} 件"),
-        ["WarningsOne"] = new("{0} warning", "", ""),
-        ["MessagesTip"] = new("Language of the chart's messages, hovers and completions", "谱面检查、悬停说明与补全的语言", "譜面のメッセージ・ホバー・補完の言語"),
-        ["ShowHide"] = new("Show / hide", "显示／隐藏", "表示／非表示"),
-        ["LineN"] = new("Ln {0}", "第 {0} 行", "{0} 行"),
-        ["Caret"] = new("Ln {0}, Col {1}", "第 {0} 行，第 {1} 列", "{0} 行、{1} 列"),
-        ["SameAsInterface"] = new("Same as the interface", "与界面相同", "表示言語と同じ"),
-
-        // ---- Code editor menus
-        ["FixPrefix"] = new("Fix: {0}", "修复：{0}", "修正：{0}"),
-        ["NoActions"] = new("No fixes or refactorings here", "这里没有可用的修复或重构", "ここで使える修正・リファクタリングはありません"),
-        ["FormatDocument"] = new("Format Document", "格式化文档", "ドキュメントを整形"),
-        ["AlreadyFormatted"] = new("Already formatted", "已经是格式化好的", "整形済みです"),
-
-        // ---- Editing messages
-        ["FixErrorsFirst"] = new("Fix the errors in the code first.", "请先修正代码中的错误。", "先にコードのエラーを修正してください。"),
-        ["FixErrorsTimeline"] = new("Fix the errors in the code first; the timeline edits what the parser reads.",
-            "请先修正代码中的错误；时间轴编辑的是解析器读到的内容。",
-            "先にコードのエラーを修正してください。タイムラインはパーサーが読み取った内容を編集します。"),
-        ["MoveOut"] = new("That would move a note out of the chart.", "这样会把音符移到谱面之外。", "音符が譜面の外に出てしまいます。"),
-        ["RollEndOffGrid"] = new("A roll's end is not on the grid; move it in the code.", "连打的终点不在网格上；请在代码中移动它。", "連打の終点がグリッド上にありません。コードで移動してください。"),
-        ["OnlyLongToLong"] = new("Only rolls and balloons change into rolls and balloons.", "只有连打和气球可以改成连打或气球。", "連打・ふうせんは連打・ふうせんにのみ変更できます。"),
-        ["OnlyShortToShort"] = new("Only short notes change into short notes.", "只有短音符可以改成短音符。", "短い音符は短い音符にのみ変更できます。"),
-        ["CopiedNotes"] = new("Copied {0} notes", "已复制 {0} 个音符", "音符を {0} 個コピーしました"),
-        ["CopiedNotesOne"] = new("Copied {0} note", "", ""),
-        ["NothingCopied"] = new("Nothing copied", "还没有复制任何内容", "コピーされたものはありません"),
-        ["PastePastEnd"] = new("The copied notes run past the chart's end.", "复制的音符超出了谱面的末尾。", "コピーした音符が譜面の終わりを超えます。"),
-        ["NoteNotInText"] = new("That note is not in the chart's text.", "这个音符不在谱面文本中。", "その音符は譜面のテキストにありません。"),
-        ["OutsideMeasure"] = new("That is outside the measure.", "超出了小节的范围。", "小節の範囲外です。"),
-        ["InsideRoll"] = new("That is inside a {0}; remove it first.", "这个位置在{0}之内；请先删除它。", "そこは{0}の中です。先に削除してください。"),
-        ["NoteInsidePlacedRoll"] = new("A note would land inside a roll that is placed with it.", "有音符会落在一同放置的连打之内。", "一緒に置く連打の中に音符が入ってしまいます。"),
-        ["RollNeedsEnd"] = new("A roll needs an end.", "连打需要一个终点。", "連打には終点が必要です。"),
-        ["RollEndAfterStart"] = new("A roll must end after it starts.", "连打的终点必须在起点之后。", "連打の終点は始点より後にしてください。"),
-        ["RollAcrossBranch"] = new("Rolls across a branch boundary are written in the code.", "跨越分歧边界的连打请在代码中编写。", "分岐の境界をまたぐ連打はコードで書いてください。"),
-        ["EndInsideRoll"] = new("The end is inside a {0}; remove it first.", "终点在{0}之内；请先删除它。", "終点が{0}の中にあります。先に削除してください。"),
-        ["CommandNeedsValue"] = new("The command needs a value.", "这个指令需要一个值。", "この命令には値が必要です。"),
-        ["MeasureAtStart"] = new("#MEASURE takes effect from a measure's start.", "#MEASURE 只能从小节的开头生效。", "#MEASURE は小節の先頭から有効になります。"),
-        ["MeasureNoComma"] = new("That measure has no comma.", "这个小节没有逗号。", "その小節にはカンマがありません。"),
-        ["MeasureNoCommaBefore"] = new("That measure has no comma to write before.", "这个小节没有可以写在其前面的逗号。", "その小節には、前に書き込むためのカンマがありません。"),
-        ["TooManySlots"] = new("That needs {0} slots in one measure; use a coarser grid.", "这需要在一个小节里写 {0} 个位置；请换用更粗的网格。", "1 小節に {0} 個の枠が必要になります。粗いグリッドを使ってください。"),
-        ["CommandNotInText"] = new("That command is not in the chart's text.", "这个指令不在谱面文本中。", "その命令は譜面のテキストにありません。"),
-        ["NoChartYet"] = new("No chart yet: add COURSE: and a #START … #END block.", "还没有谱面：请添加 COURSE: 以及 #START … #END 段落。", "まだ譜面がありません。COURSE: と #START … #END を追加してください。"),
-        ["PromptTempo"] = new("The tempo from here (BPM):", "从这里开始的速度（BPM）：", "ここからのテンポ（BPM）："),
-        ["PromptScroll"] = new("The scroll speed from here (1 is normal; 1+2i moves vertically):", "从这里开始的滚动速度（1 为正常；1+2i 会纵向移动）：", "ここからのスクロール速度（1 が標準、1+2i で縦にも動きます）："),
-        ["PromptMeasure"] = new("The time signature from this measure (a/b):", "从这一小节开始的拍号（a/b）：", "この小節からの拍子（a/b）："),
-        ["PromptDelay"] = new("Seconds to shift everything after this place:", "此处之后所有内容推迟的秒数：", "この位置より後をずらす秒数："),
-        ["NewValue"] = new("New value:", "新的值：", "新しい値："),
-
-        // ---- Encoding
-        ["EncodingTip"] = new("How the file was read; it is always saved as UTF-8. Click to read it in another encoding.", "文件读取时的编码；保存一律为 UTF-8。点击可用其他编码重新读取。", "読み込んだときの文字コード。保存は常に UTF-8 です。クリックすると別の文字コードで読み直します。"),
-        ["ConvertedOnSave"] = new("Read as {0}; saving writes UTF-8.", "按 {0} 读取；保存时会写成 UTF-8。", "{0} として読み込みました。保存すると UTF-8 になります。"),
-        ["ReopenWith"] = new("Reopen with {0}", "用 {0} 重新读取", "{0} で読み直す"),
-        ["ReopenTitle"] = new("Reopen with another encoding", "用其他编码重新读取", "別の文字コードで読み直す"),
-        ["ReopenDiscards"] = new("Unsaved changes to {0} are lost. Read it again as {1}?", "{0} 未保存的更改将会丢失。要用 {1} 重新读取吗？", "{0} の未保存の変更は失われます。{1} で読み直しますか？"),
-
-        // ---- Audio
-        ["NoAudio"] = new("No audio", "没有音频", "音源なし"),
-        ["NoAudioWave"] = new("No audio (WAVE:)", "没有音频（WAVE:）", "音源なし（WAVE:）"),
-        ["AudioLoading"] = new("Loading {0}…", "正在加载 {0}…", "{0} を読み込み中…"),
-        ["NoAudioDevice"] = new(" (no audio device)", "（没有音频设备）", "（オーディオデバイスなし）"),
-
-        // ---- Timeline and lane
-        ["Notes"] = new("Notes", "音符", "音符"),
-        ["Commands"] = new("Commands", "指令", "命令"),
-        ["ChangeTo"] = new("Change to", "改为", "変更"),
-        ["SwapDonKa"] = new("Swap don and ka", "咚咔互换", "ドンとカッを入れ替え"),
-        ["PasteHere"] = new("Paste here", "粘贴到这里", "ここに貼り付け"),
-        ["InsertHere"] = new("Insert {0} here", "在这里插入 {0}", "ここに {0} を挿入"),
-        ["InsertHereValue"] = new("Insert {0} here…", "在这里插入 {0}…", "ここに {0} を挿入…"),
-        ["InsertAtMeasure"] = new("Insert {0} at this measure…", "在这一小节插入 {0}…", "この小節に {0} を挿入…"),
-        ["EditCommand"] = new("Edit {0}…", "编辑 {0}…", "{0} を編集…"),
-        ["RemoveCommand"] = new("Remove {0}", "删除 {0}", "{0} を削除"),
-        ["ShowInCode"] = new("Show in code", "在代码中显示", "コードで表示"),
-        ["LaneEmpty"] = new("The chart appears here once its difficulty parses.", "当前难度解析成功后，谱面会显示在这里。", "難易度を解析できると、ここに譜面が表示されます。"),
-        ["LaneMeasure"] = new("Measure {0}", "第 {0} 小节", "{0} 小節目"),
-        ["LaneRoute"] = new("Route {0}", "路线 {0}", "ルート {0}"),
-        ["NoteCount"] = new("{0} notes", "{0} 个音符", "音符 {0} 個"),
-        ["NoteCountOne"] = new("{0} note", "", ""),
-
-        // ---- Settings
-        ["SectionGeneral"] = new("General", "常规", "一般"),
-        ["InterfaceLanguage"] = new("Interface language", "界面语言", "表示言語"),
-        ["FollowSystem"] = new("Same as the system", "跟随系统", "システムに合わせる"),
-        ["MessageLanguage"] = new("Language of the chart help", "谱面提示的语言", "譜面ヘルプの言語"),
-        ["MessageLanguageHint"] = new("Problems, hovers, completions, fixes and the difficulty summary, all from TJAParser.",
-            "问题、悬停说明、补全、修复与难度摘要，都来自 TJAParser。",
-            "問題・ホバー・補完・修正・難易度の概要。いずれも TJAParser によるものです。"),
-        ["ProjectsFolder"] = new("Folder for new projects", "新项目的默认位置", "新規プロジェクトの保存先"),
-        ["SectionEditor"] = new("Code editor", "代码编辑器", "コードエディター"),
-        ["FontSize"] = new("Font size", "字号", "フォントサイズ"),
-        ["ShowHints"] = new("Show hints at the ends of lines", "在行尾显示提示", "行末にヒントを表示"),
-        ["WordWrap"] = new("Wrap long lines", "长行自动换行", "長い行を折り返す"),
-        ["SectionTimeline"] = new("Timeline", "时间轴", "タイムライン"),
-        ["DefaultGrid"] = new("Grid when a project opens", "打开项目时的网格", "プロジェクトを開いたときのグリッド"),
-        ["SectionPlayback"] = new("Playback", "播放", "再生"),
-        ["HitVolume"] = new("Hit sound volume", "击打音音量", "打音の音量"),
-        ["HitSoundSet"] = new("Hit sounds", "击打音色", "打音の種類"),
-        ["PlayHits"] = new("Play hit sounds", "播放击打音", "打音を鳴らす"),
-        ["Latency"] = new("Audio latency (ms)", "音频延迟（毫秒）", "オーディオ遅延（ミリ秒）"),
-        ["LatencyHint"] = new("Raise it when notes reach the judge before you hear them; the playhead then waits for the sound.",
-            "如果音符先到判定点、声音后到，就调大这个值；播放头会等声音一起走。",
-            "音が聞こえる前に音符が判定枠に届くなら、値を上げてください。再生位置が音に合わせて遅れます。"),
-        ["SettingsFile"] = new("Saved in {0}", "保存在 {0}", "保存先：{0}"),
-    };
+static class Csv
+{
+    // Records with the line each starts on. Fields are kept as written (no trimming).
+    public static IEnumerable<(int Line, string[] Fields)> Read(TextReader reader)
+    {
+        var fields = new List<string>();
+        var field = new StringBuilder();
+        int line = 1, start = 1;
+        bool quoted = false, any = false;
+        while (true)
+        {
+            int c = reader.Read();
+            if (quoted)
+            {
+                if (c < 0) throw new FormatException($"Strings.csv line {start}: a quote is not closed.");
+                if (c == '"')
+                {
+                    if (reader.Peek() == '"') { reader.Read(); field.Append('"'); }
+                    else quoted = false;
+                }
+                else
+                {
+                    if (c == '\n') line++;
+                    field.Append((char)c);
+                }
+                continue;
+            }
+            if (c == '"' && field.Length == 0) { quoted = any = true; continue; }
+            if (c == ',') { fields.Add(field.ToString()); field.Clear(); any = true; continue; }
+            if (c == '\r' && reader.Peek() == '\n') continue;
+            if (c == '\n' || c < 0)
+            {
+                if (any || field.Length > 0)
+                {
+                    fields.Add(field.ToString());
+                    yield return (start, fields.ToArray());
+                }
+                fields.Clear(); field.Clear(); any = false;
+                if (c < 0) yield break;
+                start = ++line;
+                continue;
+            }
+            field.Append((char)c);
+            any = true;
+        }
+    }
 }
