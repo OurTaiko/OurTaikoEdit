@@ -261,7 +261,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (Analysis.RouteAt(line) is { BranchId: >= 0 } at && Analysis.Chart is { } chart && at.BranchId < chart.Branches.Count
             && chart.Branches[at.BranchId].ResolveRoute(Route) != at.Route)
             Route = at.Route;
-        if (Analysis.SlotAt(line, column) is { } slot) Playhead = slot.Time;
+        if (Analysis.TimeAt(line, column) is { } time) Playhead = time;
     }
 
     // ---- Selection on the timeline. Kept as places (measure number and fraction), since every

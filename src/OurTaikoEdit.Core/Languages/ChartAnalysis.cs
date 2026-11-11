@@ -117,6 +117,26 @@ public sealed class ChartAnalysis
         static bool Before(SourceSpan a, SourceSpan b) => a.Line < b.Line || a.Line == b.Line && a.Column < b.Column;
     }
 
+    // The time written at or before a place in the text, within the parsed block: that of the slot
+    // there, or the start of a measure with nothing written in it, at its comma.
+    public double? TimeAt(int line, int column)
+    {
+        SourceSpan best = default;
+        double? time = null;
+        foreach (var measure in Measures)
+        {
+            if (measure.Slots.Count == 0 && !measure.Comma.IsEmpty) See(measure.Comma, measure.Time);
+            foreach (var slot in measure.Slots) See(slot.Source, slot.Time);
+        }
+        return time;
+
+        void See(SourceSpan s, double at)
+        {
+            if (s.Line > line || s.Line == line && s.Column > column) return;
+            if (time == null || best.Line < s.Line || best.Line == s.Line && best.Column < s.Column) (best, time) = (s, at);
+        }
+    }
+
     // The branch and route a line of the parsed block is written in (BranchId -1: the part every
     // route plays): that of the notes or command on the line, or for a line with neither, of what
     // is written before and after it when the two agree. Null between routes (a branch's own

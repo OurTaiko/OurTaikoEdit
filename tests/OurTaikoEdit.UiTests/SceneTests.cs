@@ -237,10 +237,10 @@ public class SceneTests : IDisposable
             Assert.Equal(block, editor.BlockIndex);
             Assert.InRange(caret.Line, editor.Analysis.StartLine, editor.Analysis.EndLine);
             Assert.Equal(at, editor.Playhead, 3);
-            var view = code.TextArea.TextView;
-            int top = view.GetDocumentLineByVisualTop(code.VerticalOffset).LineNumber;
+            // (Compared as offsets: looking the top line up by the offset can land a line early.)
+            double caretTop = code.TextArea.TextView.GetVisualPosition(new TextViewPosition(caret.Line, 1), AvaloniaEdit.Rendering.VisualYPosition.LineTop).Y;
             bool atBottom = code.VerticalOffset + code.ViewportHeight >= code.ExtentHeight - 1;
-            Assert.True(top == caret.Line || (atBottom && top < caret.Line), $"top line {top}, caret line {caret.Line}");
+            Assert.True(Math.Abs(caretTop - code.VerticalOffset) < 1 || (atBottom && code.VerticalOffset < caretTop), $"scrolled to {code.VerticalOffset}, caret line {caret.Line} at {caretTop}");
         }
 
         // The chosen difficulty clicked again: its #START at the top, the caret at the start of the
@@ -557,5 +557,54 @@ public class SceneTests : IDisposable
         Assert.Equal(BranchRoute.Expert, editor.Route);
         Put(LineOf("6000000000000008,"), 1);
         Assert.Equal(BranchRoute.Expert, editor.Route);
+    }
+
+    [AvaloniaFact]
+    public void ARouteOfEmptyMeasuresIsFollowedAtItsCommas()
+    {
+        var (window, vm, registry) = Open();
+        // The expert route has nothing written in it: two measures that are only their commas.
+        string folder = Path.Combine(root, "EmptyRoute");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "song.tja"),
+            "TITLE:Empty route\nBPM:120\nCOURSE:Oni\nLEVEL:5\n#START\n1000100010001000,\n#BRANCHSTART p,60,85\n#N\n1000200010002000,\n1000000010000000,\n"
+            + "#E\n,\n,\n#M\n1111222211112222,\n2222111122221111,\n#BRANCHEND\n6000000000000008,\n#END\n");
+        var editor = new EditorViewModel(registry.OpenFolder(folder), new DialogService(window), () => { }, vm.Settings);
+        vm.Scene = editor;
+        Dispatcher.UIThread.RunJobs();
+        var code = Find<TextEditor>(window);
+        var caret = code.TextArea.Caret;
+        SourceSpan Box()
+        {
+            var renderer = code.TextArea.TextView.BackgroundRenderers.Single(r => r.GetType().Name == "PlayheadRenderer");
+            return (SourceSpan)renderer.GetType().GetProperty("Span")!.GetValue(renderer)!;
+        }
+        // Lines 12 and 13 are the expert route's measures; each is two seconds long, from 2 s.
+        var empty = editor.Analysis.Measures.Where(m => m.BranchId == 0 && m.Route == BranchRoute.Expert).ToList();
+        Assert.Equal(new[] { (12, 2.0), (13, 4.0) }, empty.Select(m => (m.Comma.Line, m.Time)));
+
+        // The playhead taken into the branch on the expert route: the caret and the box go to
+        // the comma of the measure playing, not back to the last note before the branch.
+        editor.Route = BranchRoute.Expert;
+        editor.Seek(4.7);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((13, 1), (caret.Line, caret.Column));
+        Assert.Equal((13, 1), (Box().Line, Box().Column));
+        Assert.Equal(4.7, editor.Playhead, 3);
+        editor.Seek(2.5);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((12, 1), (caret.Line, caret.Column));
+        Shot(window, "editor-empty-route");
+
+        // The caret put on an empty measure from another route: that route, at that measure.
+        editor.Route = BranchRoute.Normal;
+        editor.Seek(0);
+        Dispatcher.UIThread.RunJobs();
+        caret.Position = new TextViewPosition(13, 1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(BranchRoute.Expert, editor.Route);
+        Assert.Equal(4.0, editor.Playhead, 3);
+        Assert.Equal((13, 1), (Box().Line, Box().Column));
+        Assert.Equal((13, 1), (caret.Line, caret.Column));
     }
 }

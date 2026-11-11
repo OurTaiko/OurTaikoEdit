@@ -161,6 +161,21 @@ public class TimelineEditTests
     }
 
     [Fact]
+    public void AMeasureWithNothingWrittenIsAPlaceAtItsComma()
+    {
+        // The body starts on line 5; a measure is two seconds long.
+        var a = Tja.Analyze(Chart("10,\n#BRANCHSTART p,1,2\n#N\n1,\n#E\n,\n#BRANCHEND\n1,"), 0);
+        Assert.Null(a.TimeAt(4, 1));
+        Assert.Equal(1.0, a.TimeAt(5, 2));
+        Assert.Equal(2.0, a.TimeAt(8, 1));
+        // The expert route's measure is only its comma: its own start, not the note before it.
+        Assert.Equal(2.0, a.TimeAt(10, 1));
+        Assert.Equal(2.0, a.TimeAt(11, 1));
+        Assert.Equal(4.0, a.TimeAt(12, 1));
+        Assert.Equal((0, BranchRoute.Expert), a.RouteAt(10));
+    }
+
+    [Fact]
     public void ACommandMovesInOneChange()
     {
         string text = Chart("1000,\n#SCROLL 2\n2000,\n3000,");

@@ -184,8 +184,7 @@ public partial class EditorView : UserControl
             hints.Hints = vm.Hints;
             UpdateFolds();
         }
-        var slot = SlotAtPlayhead(vm);
-        var span = slot?.Source ?? default;
+        var span = SpanAtPlayhead(vm);
         bool moved = span != playhead.Span;
         playhead.Span = span;
         Code.TextArea.TextView.InvalidateLayer(AvaloniaEdit.Rendering.KnownLayer.Selection);
@@ -204,7 +203,7 @@ public partial class EditorView : UserControl
     {
         if (vm == null) return;
         Refresh();
-        var span = SlotAtPlayhead(vm)?.Source ?? default;
+        var span = SpanAtPlayhead(vm);
         if (!span.IsEmpty) FollowPlayhead(span.Line, span.Column);
         else if (vm.Analysis.StartLine > 0) FollowPlayhead(Math.Min(vm.Analysis.StartLine + 1, Code.Document.LineCount), 1);
         else return;
@@ -249,19 +248,22 @@ public partial class EditorView : UserControl
         finally { playheadDriving = false; }
     }
 
-    // The last slot at or before the playhead on the route being shown. (The measures are in the
-    // order they are written: a route's come after those of the routes written before it, which
-    // play at the same times.)
-    static ChartSlot? SlotAtPlayhead(EditorViewModel vm)
+    // Where the playhead is in the code: the last slot at or before it on the route being shown,
+    // or the comma of a measure with nothing written in it. (The measures are in the order they
+    // are written: a route's come after those of the routes written before it, which play at the
+    // same times.)
+    static SourceSpan SpanAtPlayhead(EditorViewModel vm)
     {
-        if (vm.Analysis.Chart is not { } chart) return null;
-        ChartSlot? best = null;
+        if (vm.Analysis.Chart is not { } chart) return default;
+        SourceSpan best = default;
+        double at = double.NegativeInfinity;
         foreach (var m in vm.Analysis.Measures)
         {
             if (m.Time > vm.Playhead) continue;
             if (m.BranchId >= 0 && !Controls.LaneView.Shown(chart, m.BranchId, m.Route, vm.Route)) continue;
+            if (m.Slots.Count == 0 && !m.Comma.IsEmpty && m.Time >= at) (best, at) = (m.Comma, m.Time);
             foreach (var s in m.Slots)
-                if (s.Time <= vm.Playhead + 1e-6 && (best == null || s.Time >= best.Time)) best = s;
+                if (s.Time <= vm.Playhead + 1e-6 && s.Time >= at) (best, at) = (s.Source, s.Time);
         }
         return best;
     }
