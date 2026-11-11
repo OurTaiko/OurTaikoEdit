@@ -1,5 +1,6 @@
 using Avalonia.Media;
 using OurTaiko;
+using OurTaikoEdit.App.Theme;
 
 namespace OurTaikoEdit.App.Controls;
 
@@ -13,14 +14,15 @@ static class ChartPalette
     public static readonly IBrush Kadon = new SolidColorBrush(Color.Parse("#A05CFF"));
     public static readonly IBrush Mine = new SolidColorBrush(Color.Parse("#3C3C44"));
     public static readonly IBrush AdLib = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255));
-    public static readonly IBrush Background = new SolidColorBrush(Color.Parse("#16171A"));
-    public static readonly IBrush Lane = new SolidColorBrush(Color.Parse("#2A2C31"));
+    public static readonly IBrush Background = Ui.Sunken;
+    public static readonly IBrush Lane = Ui.Raised;
     public static readonly IBrush GogoLane = new SolidColorBrush(Color.Parse("#4A2B22"));
-    public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#E8EAED"));
-    public static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#9AA0A6"));
-    public static readonly IBrush Playhead = new SolidColorBrush(Color.Parse("#FF5252"));
+    public static readonly IBrush Text = Ui.Text;
+    public static readonly IBrush Muted = Ui.Muted;
+    public static readonly IBrush Playhead = Ui.Accent;
     public static readonly IPen NoteRim = new Pen(Brushes.White, 2);
     public static readonly IPen NoteOutline = new Pen(new SolidColorBrush(Color.Parse("#111111")), 1.5);
+    public static readonly IPen GlyphOutline = new Pen(Brushes.White, 1.5);
     public static readonly IPen Bar = new Pen(new SolidColorBrush(Color.FromArgb(170, 255, 255, 255)), 1.5);
     public static readonly IPen BranchBar = new Pen(new SolidColorBrush(Color.Parse("#F5C21B")), 2);
     public static readonly IPen MineCross = new Pen(new SolidColorBrush(Color.Parse("#FF4F2E")), 2.5);
@@ -41,7 +43,7 @@ static class ChartPalette
     public static bool IsBig(NoteKind kind) => kind is NoteKind.BigDon or NoteKind.BigKa or NoteKind.BigRoll or NoteKind.Kusudama or NoteKind.Kadon;
 
     // A note's circle (with its markings) at a centre and radius.
-    public static void DrawHead(DrawingContext ctx, NoteKind kind, Avalonia.Point c, double r, double opacity = 1)
+    public static void DrawHead(DrawingContext ctx, NoteKind kind, Avalonia.Point c, double r, double opacity = 1, double rim = 2)
     {
         using var _ = opacity < 1 ? ctx.PushOpacity(opacity) : default;
         if (kind == NoteKind.AdLib)
@@ -50,7 +52,7 @@ static class ChartPalette
             return;
         }
         ctx.DrawEllipse(null, NoteOutline, c, r + 1.5, r + 1.5);
-        ctx.DrawEllipse(Fill(kind), NoteRim, c, r, r);
+        ctx.DrawEllipse(Fill(kind), rim == 2 ? NoteRim : new Pen(Brushes.White, rim), c, r, r);
         if (kind == NoteKind.Mine)
         {
             double d = r * 0.45;

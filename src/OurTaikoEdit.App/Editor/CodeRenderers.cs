@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Media;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Rendering;
+using OurTaikoEdit.App.Theme;
 using OurTaikoEdit.Core.Languages;
 
 namespace OurTaikoEdit.App.Editor;
@@ -22,9 +23,9 @@ static class Spans
 // Wavy underlines under the analysis's diagnostics.
 sealed class DiagnosticRenderer : IBackgroundRenderer
 {
-    static readonly IPen ErrorPen = new Pen(new SolidColorBrush(Color.Parse("#FF5A5A")), 1.2);
-    static readonly IPen WarningPen = new Pen(new SolidColorBrush(Color.Parse("#E5B53A")), 1.2);
-    static readonly IPen InfoPen = new Pen(new SolidColorBrush(Color.Parse("#6CA8E8")), 1);
+    static readonly IPen ErrorPen = new Pen(Ui.Error, 1.2);
+    static readonly IPen WarningPen = new Pen(Ui.Warning, 1.2);
+    static readonly IPen InfoPen = new Pen(Ui.Info, 1);
 
     public IReadOnlyList<ChartDiagnostic> Diagnostics { get; set; } = Array.Empty<ChartDiagnostic>();
     public KnownLayer Layer => KnownLayer.Selection;
@@ -60,8 +61,8 @@ sealed class DiagnosticRenderer : IBackgroundRenderer
 // The slot at the playhead, boxed.
 sealed class PlayheadRenderer : IBackgroundRenderer
 {
-    static readonly IBrush Fill = new SolidColorBrush(Color.FromArgb(70, 255, 82, 82));
-    static readonly IPen Rim = new Pen(new SolidColorBrush(Color.FromArgb(200, 255, 82, 82)), 1);
+    static readonly IBrush Fill = Ui.Solid(Ui.AccentColor, 0.28);
+    static readonly IPen Rim = new Pen(Ui.Solid(Ui.AccentColor, 0.85), 1);
 
     public SourceSpan Span { get; set; }
     public KnownLayer Layer => KnownLayer.Background;
@@ -77,7 +78,7 @@ sealed class PlayheadRenderer : IBackgroundRenderer
 // The language's hints (measure numbers, times, tempo changes), drawn after the end of their line.
 sealed class HintRenderer : IBackgroundRenderer
 {
-    static readonly IBrush Brush = new SolidColorBrush(Color.FromArgb(150, 154, 160, 166));
+    static readonly IBrush Brush = Ui.Solid(Ui.FaintColor, 0.85);
     readonly Typeface typeface;
 
     public HintRenderer(FontFamily font) => typeface = new Typeface(font);

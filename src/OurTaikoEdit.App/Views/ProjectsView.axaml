@@ -1,51 +1,125 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:OurTaikoEdit.App.ViewModels"
+             xmlns:core="using:OurTaikoEdit.Core.Languages"
+             xmlns:c="using:OurTaikoEdit.App.Controls"
+             xmlns:t="using:OurTaikoEdit.App.Theme"
              xmlns:l="using:OurTaikoEdit.App.Localization"
              x:Class="OurTaikoEdit.App.Views.ProjectsView"
              x:DataType="vm:ProjectsViewModel">
-  <Grid RowDefinitions="Auto,*" Margin="32,24">
-    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,20">
-      <StackPanel Spacing="4">
-        <TextBlock Text="OurTaikoEdit" FontSize="28" FontWeight="Bold" />
-        <TextBlock Classes="muted" Text="{l:T Projects}" />
-      </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <Button Classes="accent" Content="{l:T NewProjectMenu}" Command="{Binding NewProjectCommand}" />
-        <Button Content="{l:T OpenFolderMenu}" Command="{Binding OpenFolderCommand}" />
-        <Button Content="{l:T SettingsMenu}" Command="{Binding SettingsCommand}" />
-      </StackPanel>
+  <UserControl.Styles>
+    <!-- A project's chart type, on a tile. -->
+    <Style Selector="Border.badge">
+      <Setter Property="Width" Value="42" />
+      <Setter Property="Height" Value="42" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    </Style>
+    <Style Selector="Border.badge > TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.badge.problem">
+      <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+    </Style>
+    <Style Selector="Border.badge.problem > TextBlock">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Foreground" Value="{StaticResource FaintBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+    <!-- The app's bar -->
+    <Border Classes="bar" Height="48" Padding="20,0,12,0">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <c:Logo Size="22" VerticalAlignment="Center" />
+          <TextBlock Text="OurTaikoEdit" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+        <Button Grid.Column="2" Classes="ghost" Command="{Binding SettingsCommand}" VerticalAlignment="Center">
+          <StackPanel>
+            <c:Icon Data="{StaticResource IconSettings}" />
+            <TextBlock Text="{l:T Settings}" />
+          </StackPanel>
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" RowDefinitions="Auto,*" MaxWidth="920" Margin="32,28,32,0">
+      <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,18">
+        <TextBlock Text="{l:T Projects}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Command="{Binding OpenFolderCommand}">
+            <StackPanel Classes="content">
+              <c:Icon Data="{StaticResource IconFolder}" />
+              <TextBlock Text="{l:T OpenFolderMenu}" />
+            </StackPanel>
+          </Button>
+          <Button Classes="accent" Command="{Binding NewProjectCommand}">
+            <StackPanel>
+              <c:Icon Data="{StaticResource IconPlus}" />
+              <TextBlock Text="{l:T NewProjectMenu}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+
+      <!-- Nothing tracked yet -->
+      <Border Grid.Row="1" IsVisible="{Binding IsEmpty}" VerticalAlignment="Top" Padding="32,44"
+              CornerRadius="12" BorderThickness="1" BorderBrush="{StaticResource LineBrush}" Background="{StaticResource PanelBrush}">
+        <StackPanel Spacing="10" HorizontalAlignment="Center">
+          <c:Logo Size="44" HorizontalAlignment="Center" Margin="0,0,0,8" />
+          <TextBlock HorizontalAlignment="Center" FontSize="17" FontWeight="SemiBold" Text="{l:T NoProjects}" />
+          <TextBlock Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"
+                     Text="{l:T NoProjectsHint}" />
+        </StackPanel>
+      </Border>
+
+      <ListBox Grid.Row="1" x:Name="List" Classes="cards" ItemsSource="{Binding Projects}" SelectedItem="{Binding Selected}"
+               IsVisible="{Binding !IsEmpty}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ProjectItemViewModel">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14" Background="Transparent">
+              <Border Classes="badge" Classes.problem="{Binding HasProblem}">
+                <TextBlock Text="{Binding ChartType}" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  <ItemsControl ItemsSource="{Binding Blocks}" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="core:ChartBlock">
+                        <Border Classes="chip" Background="{Binding Course, Converter={x:Static t:UiConverters.Difficulty}}">
+                          <TextBlock Text="{Binding Name}" Foreground="{x:Static t:Ui.OnDifficulty}" />
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                <TextBlock Classes="muted" Text="{Binding Detail}" IsVisible="{Binding HasDetail}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="error" Text="{Binding Problem}" IsVisible="{Binding HasProblem}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="caption" Text="{Binding FolderShort}" TextTrimming="PathSegmentEllipsis" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Classes="caption" Text="{Binding LastOpened}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <Button Content="{l:T Open}"
+                        Command="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" />
+                <Button Classes="ghost icon" ToolTip.Tip="{l:T RemoveTitle}"
+                        Command="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
+                  <c:Icon Data="{StaticResource IconClose}" />
+                </Button>
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
     </Grid>
-
-    <StackPanel Grid.Row="1" IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
-      <TextBlock HorizontalAlignment="Center" FontSize="18" Text="{l:T NoProjects}" />
-      <TextBlock Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"
-                 Text="{l:T NoProjectsHint}" />
-    </StackPanel>
-
-    <ListBox Grid.Row="1" x:Name="List" ItemsSource="{Binding Projects}" SelectedItem="{Binding Selected}"
-             Background="Transparent" IsVisible="{Binding !IsEmpty}">
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="vm:ProjectItemViewModel">
-          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16" Margin="4,8" Background="Transparent">
-            <Border Width="44" Height="44" CornerRadius="22" Background="#FF6A4D" VerticalAlignment="Center">
-              <TextBlock Text="{Binding ChartType}" FontSize="11" FontWeight="Bold" Foreground="White"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-              <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding Summary}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Text="{Binding Problem}" Foreground="#FF6A4D" IsVisible="{Binding HasProblem}" />
-              <TextBlock Classes="muted" FontSize="12" Text="{Binding Folder}" TextTrimming="PathSegmentEllipsis" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-              <TextBlock Classes="muted" FontSize="12" Text="{Binding LastOpened}" VerticalAlignment="Center" Margin="0,0,8,0" />
-              <Button Content="{l:T Open}" Command="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" />
-              <Button Content="{l:T Remove}" Command="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}" />
-            </StackPanel>
-          </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
   </Grid>
 </UserControl>

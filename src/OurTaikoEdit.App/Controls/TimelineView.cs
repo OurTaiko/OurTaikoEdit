@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using OurTaikoEdit.App.Theme;
 using OurTaikoEdit.App.ViewModels;
 using OurTaikoEdit.Core.Localization;
 using OurTaikoEdit.Core.Languages;
@@ -36,24 +37,25 @@ public sealed class TimelineView : Control
     BranchRoute dragRow;
     double moveBeats;
     bool seeking => drag == Drag.Seek;
-    readonly Typeface typeface = new(FontFamily.Default);
-    static readonly IBrush HeaderBrush = new SolidColorBrush(Color.Parse("#1D1F23"));
-    static readonly IBrush[] RowBrushes = { new SolidColorBrush(Color.Parse("#202227")), new SolidColorBrush(Color.Parse("#23252B")) };
+    readonly Typeface typeface = new(Ui.Font);
+    readonly Typeface strong = new(Ui.Font, FontStyle.Normal, FontWeight.SemiBold);
+    static readonly IBrush HeaderBrush = Ui.Panel;
+    static readonly IBrush[] RowBrushes = { Ui.Sunken, new SolidColorBrush(Color.Parse("#1A1514")) };
     static readonly IBrush[] RouteTints =
     {
-        new SolidColorBrush(Color.FromArgb(26, 180, 180, 180)),
-        new SolidColorBrush(Color.FromArgb(30, 67, 185, 223)),
-        new SolidColorBrush(Color.FromArgb(30, 255, 79, 154)),
+        new SolidColorBrush(Color.FromArgb(22, 243, 233, 220)),
+        new SolidColorBrush(Color.FromArgb(34, 79, 180, 230)),
+        new SolidColorBrush(Color.FromArgb(34, 240, 108, 192)),
     };
-    static readonly IPen MeasurePen = new Pen(new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), 1.2);
-    static readonly IPen BeatPen = new Pen(new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)), 1);
-    static readonly IPen StepPen = new Pen(new SolidColorBrush(Color.FromArgb(32, 255, 255, 255)), 1);
-    static readonly IPen RowLine = new Pen(new SolidColorBrush(Color.Parse("#2E3036")), 1);
+    static readonly IPen MeasurePen = new Pen(Ui.Solid(Ui.TextColor, 0.62), 1.2);
+    static readonly IPen BeatPen = new Pen(Ui.Solid(Ui.TextColor, 0.24), 1);
+    static readonly IPen StepPen = new Pen(Ui.Solid(Ui.TextColor, 0.09), 1);
+    static readonly IPen RowLine = new Pen(Ui.Line, 1);
     static readonly IBrush GogoBrush = new SolidColorBrush(Color.FromArgb(110, 255, 120, 40));
     static readonly IPen PlayheadPen = new Pen(ChartPalette.Playhead, 1.5);
-    static readonly IBrush BranchBrush = new SolidColorBrush(Color.Parse("#C58AF9"));
-    static readonly IPen BranchPen = new Pen(new SolidColorBrush(Color.FromArgb(210, 197, 138, 249)), 1.5);
-    static readonly IPen JudgePen = new Pen(new SolidColorBrush(Color.FromArgb(210, 197, 138, 249)), 1.5) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    static readonly IBrush BranchBrush = Ui.Branch;
+    static readonly IPen BranchPen = new Pen(Ui.Solid(Ui.BranchColor, 0.85), 1.5);
+    static readonly IPen JudgePen = new Pen(Ui.Solid(Ui.BranchColor, 0.85), 1.5) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
 
     public TimelineView()
     {
@@ -189,12 +191,41 @@ public sealed class TimelineView : Control
         // Row headers over everything that scrolled under them.
         ctx.FillRectangle(HeaderBrush, new Rect(0, 0, HeaderWidth, b.Height));
         for (int row = 0; row < rows.Count; row++)
-            Label(ctx, rows.Count == 1 ? Loc.T("Notes") : Localization.Names.Route(rows[row]), new Point(10, RowTop(row) + RowHeight / 2 - 8), 12, ChartPalette.Text);
-        Label(ctx, Loc.T("Commands"), new Point(10, b.Height - EventsHeight + 4), 12, ChartPalette.Muted);
-        Label(ctx, $"1/{editor.Division}", new Point(10, 5), 11, ChartPalette.Muted);
+        {
+            // A route's row carries the route's colour, as the lane tints it.
+            double y = RowTop(row) + RowHeight / 2, x = 12;
+            if (rows.Count > 1)
+            {
+                ctx.DrawEllipse(Ui.Routes[(int)rows[row]], null, new Point(x + 3, y), 3, 3);
+                x += 12;
+            }
+            var name = Text(rows.Count == 1 ? Loc.T("Notes") : Localization.Names.Route(rows[row]), 12, ChartPalette.Text);
+            ctx.DrawText(name, new Point(x, y - name.Height / 2));
+            if (row > 0) ctx.DrawLine(RowLine, new Point(0, RowTop(row)), new Point(HeaderWidth, RowTop(row)));
+        }
+        var commands = Text(Loc.T("Commands"), 11.5, ChartPalette.Muted);
+        ctx.DrawText(commands, new Point(12, b.Height - EventsHeight + (EventsHeight - commands.Height) / 2));
+        ctx.DrawLine(RowLine, new Point(0, RulerHeight), new Point(HeaderWidth, RulerHeight));
+        ctx.DrawLine(RowLine, new Point(0, b.Height - EventsHeight), new Point(b.Width, b.Height - EventsHeight));
+        ctx.DrawLine(RowLine, new Point(HeaderWidth - 0.5, 0), new Point(HeaderWidth - 0.5, b.Height));
 
+        // The playhead, with a grip in the ruler.
         double px = XOf(editor.Playhead);
-        if (px >= HeaderWidth) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, b.Height));
+        if (px >= HeaderWidth)
+        {
+            ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, b.Height));
+            var grip = new StreamGeometry();
+            using (var g = grip.Open())
+            {
+                g.BeginFigure(new Point(px - 4.5, 0), true);
+                g.LineTo(new Point(px + 4.5, 0));
+                g.LineTo(new Point(px + 4.5, 5));
+                g.LineTo(new Point(px, 10));
+                g.LineTo(new Point(px - 4.5, 5));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(ChartPalette.Playhead, null, grip);
+        }
     }
 
     // Where each branch starts, a line down the rows, and where its condition is judged, a dashed
@@ -216,8 +247,8 @@ public sealed class TimelineView : Control
         }
     }
 
-    static readonly IBrush FlagText = new SolidColorBrush(Color.Parse("#1A1B1E"));
-    static readonly IBrush JudgeFlagFill = new SolidColorBrush(Color.FromArgb(220, 26, 27, 30));
+    static readonly IBrush FlagText = Ui.Sunken;
+    static readonly IBrush JudgeFlagFill = Ui.Solid(Ui.SunkenColor, 0.88);
     const double FlagHeight = 16;
     // The flags as drawn, for the pointer: a branch's start, or where it is judged.
     readonly List<(Rect Rect, ChartBranchMark Branch, bool Judge)> flags = new();
@@ -257,7 +288,7 @@ public sealed class TimelineView : Control
         return null;
     }
 
-    static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.FromArgb(70, 92, 200, 232)), 2);
+    static readonly IPen WavePen = new Pen(Ui.Solid(Ui.KaColor, 0.26), 2);
 
     // The song's loudness behind the rows, mirrored about their middle, two pixels a line.
     void DrawWaveform(DrawingContext ctx)
@@ -357,7 +388,7 @@ public sealed class TimelineView : Control
         {
             double x = XOf(s);
             ctx.DrawLine(StepPen, new Point(x, RulerHeight - 6), new Point(x, RulerHeight));
-            Label(ctx, $"{(int)Math.Floor(s / 60)}:{Math.Abs(s % 60):00}", new Point(x + 2, 12), 9, ChartPalette.Muted);
+            Label(ctx, $"{(int)Math.Floor(s / 60)}:{Math.Abs(s % 60):00}", new Point(x + 3, 12), 9.5, Ui.Faint);
         }
         double lastX = double.NegativeInfinity;
         foreach (var m in analysis.Measures)
@@ -367,7 +398,7 @@ public sealed class TimelineView : Control
             double x = XOf(m.Time);
             if (x - lastX < 22) continue;
             lastX = x;
-            Label(ctx, (m.Index + 1).ToString(CultureInfo.InvariantCulture), new Point(x + 3, 0), 11, ChartPalette.Text);
+            ctx.DrawText(new FormattedText((m.Index + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, strong, 11, ChartPalette.Text), new Point(x + 7, 0));
         }
         ctx.DrawLine(RowLine, new Point(0, RulerHeight), new Point(b.Width, RulerHeight));
     }

@@ -6,7 +6,6 @@
         Icon="/Assets/app.ico"
         Title="{Binding Title}"
         Width="1440" Height="900" MinWidth="960" MinHeight="600"
-        WindowStartupLocation="CenterScreen"
-        Background="#18191B">
+        WindowStartupLocation="CenterScreen">
   <ContentControl Content="{Binding Scene}" />
 </Window>

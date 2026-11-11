@@ -79,7 +79,83 @@ public class SceneTests : IDisposable
         Assert.Equal(3, projects.Projects.Count);
         Assert.Contains(projects.Projects, p => p.HasProblem);
         Assert.Contains(projects.Projects, p => p.Summary.Contains("Oni ★9 · Hard ★6"));
+        // A card: the difficulties as chips, and the chart's title where it says more than the name.
+        var sample = projects.Projects.Single(p => p.Name == "Sample");
+        Assert.Equal(new[] { "Oni ★9", "Hard ★6" }, sample.Blocks.Select(b => b.Name));
+        Assert.Equal("OurTaikoEdit Sample", sample.Detail);
+        Assert.False(projects.Projects.Single(p => p.Name == "Brand New Song").HasDetail);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(Texts(window), t => t == "Hard ★6");
         Shot(window, "projects");
+    }
+
+    [AvaloniaFact]
+    public void TheProjectsSceneSaysWhenNothingIsTrackedAndANewProjectShowsItsFolder()
+    {
+        var (window, vm, _) = Open();
+        Assert.True(Assert.IsType<ProjectsViewModel>(vm.Scene).IsEmpty);
+        Assert.Contains(Texts(window), t => t == "No projects yet");
+        Shot(window, "projects-empty");
+
+        // The folder a new project would make is named once there is a name for it.
+        var dialog = new NewProjectDialog(new DialogService(window), Path.Combine(root, "Charts"));
+        dialog.Show();
+        Dispatcher.UIThread.RunJobs();
+        var folder = dialog.FindControl<TextBlock>("FolderText")!;
+        Assert.False(folder.IsVisible);
+        dialog.FindControl<TextBox>("NameBox")!.Text = "Song";
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(folder.IsVisible);
+        Assert.Contains(Path.Combine(root, "Charts", "Song"), folder.Text);
+        Shot(dialog, "new-project");
+        dialog.Close();
+
+        // The question asked before unsaved changes are left behind.
+        _ = new DialogService(window).AskSaveAsync("Sample");
+        Dispatcher.UIThread.RunJobs();
+        var ask = window.OwnedWindows.Last();
+        Assert.Equal(new[] { "Save", "Don't Save", "Cancel" }, ask.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string));
+        Shot(ask, "dialog-save");
+        ask.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheEditorListsProblemsAndItsBarsFitANarrowWindow()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        var code = Find<TextEditor>(window);
+        var problems = window.GetVisualDescendants().OfType<ListBox>().First(l => l.Name == "ProblemList");
+        Assert.False(problems.IsVisible);
+        // The route box is the lane's, for a chart that branches.
+        var route = window.GetVisualDescendants().OfType<ComboBox>().First(c => ReferenceEquals(c.ItemsSource, editor.Routes));
+        Assert.True(route.IsEffectivelyVisible);
+
+        code.Document.Insert(code.Document.GetLineByNumber(14).Offset, "#BPMCHANGE abc\n12x4,\n#NOPE\n");
+        code.TextArea.Caret.Line = 16;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(problems.IsVisible);
+        Assert.Equal(3, editor.Diagnostics.Count);
+        Shot(window, "editor-problems");
+
+        // At the window's smallest, what the bars hold on their right stays inside it.
+        window.Width = 960;
+        window.Height = 600;
+        Dispatcher.UIThread.RunJobs();
+        var grid = window.GetVisualDescendants().OfType<ComboBox>().First(c => ReferenceEquals(c.ItemsSource, editor.Divisions));
+        foreach (Control control in new Control[] { grid, route, window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "EncodingButton") })
+        {
+            var right = control.TranslatePoint(new Point(control.Bounds.Width, 0), window)!.Value;
+            Assert.InRange(right.X, 0, 960);
+        }
+        Shot(window, "editor-narrow");
+
+        // A chart with one route has no route to choose.
+        var plain = new EditorViewModel(registry.CreateProject(root, "Plain", ChartLanguages.Find("tja")!, null), new DialogService(window), () => { }, vm.Settings);
+        vm.Scene = plain;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(plain.Analysis.HasBranches);
+        Assert.False(window.GetVisualDescendants().OfType<ComboBox>().First(c => ReferenceEquals(c.ItemsSource, plain.Routes)).IsEffectivelyVisible);
     }
 
     EditorViewModel OpenEditor(MainWindow window, MainWindowViewModel vm, ProjectRegistry registry)
@@ -114,7 +190,7 @@ public class SceneTests : IDisposable
             Assert.True(editor.Problems == "没有问题" || editor.Problems.Contains("个"), editor.Problems);
             Shot(window, "editor-zh");
 
-            var dialog = new SettingsDialog(vm.Settings) { Width = 560 };
+            var dialog = new SettingsDialog(vm.Settings);
             dialog.Show();
             Dispatcher.UIThread.RunJobs();
             Shot(dialog, "settings-zh");

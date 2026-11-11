@@ -10,6 +10,7 @@ public static class TestApp
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<OurTaikoEdit.App.App>()
             .UseSkia()
+            .WithInterFont()
             .With(OurTaikoEdit.App.Localization.Fonts.Options("zh"))
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }

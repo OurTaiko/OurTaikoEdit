@@ -101,6 +101,20 @@ public sealed class ProjectItemViewModel
     public string LastOpened { get; init; } = "";
     public string? Problem { get; init; }
     public bool HasProblem => Problem != null;
+    // What the card shows beside the name: the chart's title where it says more than the name
+    // (or what is wrong with the chart file), and its difficulties.
+    public string Detail { get; init; } = "";
+    public bool HasDetail => Detail.Length > 0;
+    public IReadOnlyList<ChartBlock> Blocks { get; init; } = Array.Empty<ChartBlock>();
+    // The folder with the home folder as ~.
+    public string FolderShort
+    {
+        get
+        {
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return home.Length > 1 && Folder.StartsWith(home + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? "~" + Folder[home.Length..] : Folder;
+        }
+    }
 
     public static ProjectItemViewModel Load(TrackedProject tracked)
     {
@@ -112,18 +126,22 @@ public sealed class ProjectItemViewModel
                 return new() { Folder = tracked.Folder, Name = fallbackName, LastOpened = opened, Problem = Loc.T("FolderMissing") };
             var project = ChartProject.Load(tracked.Folder);
             var language = ChartLanguages.Find(project.ChartType);
-            string summary;
-            if (language == null) summary = Loc.F("UnknownChartType", project.ChartType);
-            else if (!File.Exists(project.ChartPath)) summary = Loc.F("FileMissing", project.Chart);
+            string summary, detail;
+            IReadOnlyList<ChartBlock> difficulties = Array.Empty<ChartBlock>();
+            if (language == null) summary = detail = Loc.F("UnknownChartType", project.ChartType);
+            else if (!File.Exists(project.ChartPath)) summary = detail = Loc.F("FileMissing", project.Chart);
             else
             {
                 var analysis = language.Analyze(ChartFile.Read(project.ChartPath).Text, -1);
                 string blocks = analysis.Blocks.Count == 0 ? Loc.T("NoBlocksYet") : string.Join(" · ", analysis.Blocks.Select(b => b.Name));
                 summary = $"{analysis.Title} — {blocks}";
+                difficulties = analysis.Blocks;
+                detail = analysis.Blocks.Count == 0 ? Loc.T("NoBlocksYet") : analysis.Title == project.Name ? "" : analysis.Title;
             }
             return new()
             {
                 Folder = tracked.Folder, Name = project.Name, Project = project, LastOpened = opened, Summary = summary,
+                Detail = detail, Blocks = difficulties,
                 ChartType = language?.DisplayName ?? project.ChartType.ToUpperInvariant(),
             };
         }

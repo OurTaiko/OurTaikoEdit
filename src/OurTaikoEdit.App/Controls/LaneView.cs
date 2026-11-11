@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using OurTaikoEdit.App.Theme;
 using OurTaikoEdit.App.ViewModels;
 using OurTaikoEdit.Core.Localization;
 using OurTaiko;
@@ -28,8 +29,9 @@ public sealed class LaneView : Control
     EditorViewModel? editor;
     ScrollClockTimeline? clocks;
     TaikoChart? clocksOf;
-    readonly Typeface typeface = new(FontFamily.Default);
-    readonly Typeface bold = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+    readonly Typeface typeface = new(Ui.Font);
+    readonly Typeface bold = new(Ui.Font, FontStyle.Normal, FontWeight.Bold);
+    readonly Typeface mono = new(Ui.CodeFont, FontStyle.Normal, FontWeight.SemiBold);
     // Where notes were drawn in the last frame, for clicks.
     readonly List<(ChartNote Note, Point Center, double Radius)> drawn = new();
 
@@ -80,7 +82,7 @@ public sealed class LaneView : Control
         drawn.Clear();
         if (editor?.Analysis.Chart is not { } chart)
         {
-            Label(ctx, Loc.T("LaneEmpty"), new Point(16, 16), 13, ChartPalette.Muted);
+            Label(ctx, Loc.T("LaneEmpty"), new Point(14, 12), 13, ChartPalette.Muted);
             return;
         }
         if (!ReferenceEquals(chart, clocksOf)) { clocks = new ScrollClockTimeline(chart); clocksOf = chart; }
@@ -158,12 +160,27 @@ public sealed class LaneView : Control
         var measure = editor.Analysis.Measures.LastOrDefault(m => m.Time <= now && (m.BranchId < 0 || Shown(chart, m.BranchId, m.Route, route)));
         var tempo = chart.Tempos.LastOrDefault(t => t.Time <= now && Shown(chart, t.BranchId, t.Route, route));
         double bpm = tempo?.Bpm ?? chart.Bpm;
-        string info = $"{Time(now)}   BPM {bpm.ToString("0.###", CultureInfo.InvariantCulture)}   {Loc.F("LaneMeasure", (measure?.Index ?? 0) + 1)}";
-        if (chart.Branches.Count > 0) info += "   " + Loc.F("LaneRoute", Localization.Names.Route(route));
-        Label(ctx, info, new Point(12, 8), 13, ChartPalette.Text);
+        // The readout: the time in the code's digits, then the tempo and the measure. (The route is
+        // in the corner's box.)
+        var clock = new FormattedText(Time(now), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, 15, ChartPalette.Text);
+        ctx.DrawText(clock, new Point(14, 10));
+        double readout = 14 + clock.Width + 18, baseline = 10 + clock.Baseline;
+        foreach (var (label, value) in new[] { ("BPM", bpm.ToString("0.###", CultureInfo.InvariantCulture)), (Loc.F("LaneMeasure", (measure?.Index ?? 0) + 1), "") })
+        {
+            var l = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, 12, ChartPalette.Muted);
+            ctx.DrawText(l, new Point(readout, baseline - l.Baseline));
+            readout += l.Width + 5;
+            if (value.Length > 0)
+            {
+                var v = new FormattedText(value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, bold, 13, ChartPalette.Text);
+                ctx.DrawText(v, new Point(readout, baseline - v.Baseline));
+                readout += v.Width;
+            }
+            readout += 13;
+        }
         string summary = editor.Summary.Length > 0 ? editor.Summary
             : Loc.Plural("NoteCount", chart.Notes.Count(n => !n.IsLong && n.Kind != NoteKind.AdLib && n.Kind != NoteKind.Mine));
-        Label(ctx, $"{chart.Course} ★{chart.Level} · {summary}", new Point(12, b.Height - 22), 12, ChartPalette.Muted);
+        Label(ctx, $"{chart.Course} ★{chart.Level} · {summary}", new Point(14, b.Height - 24), 11.5, Ui.Faint);
     }
 
     // A note's head from the game's sheet, 192 units square about its centre. A balloon's face

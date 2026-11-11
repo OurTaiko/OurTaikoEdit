@@ -25,7 +25,10 @@ public partial class NewProjectDialog : Window
     }
 
     void ShowFolder()
-        => FolderText.Text = string.IsNullOrWhiteSpace(NameBox.Text) ? "" : Loc.F("Creates", Path.Combine(LocationBox.Text ?? "", NameBox.Text.Trim()));
+    {
+        FolderText.Text = string.IsNullOrWhiteSpace(NameBox.Text) ? "" : Loc.F("Creates", Path.Combine(LocationBox.Text ?? "", NameBox.Text.Trim()));
+        FolderText.IsVisible = FolderText.Text.Length > 0;
+    }
 
     async void BrowseLocation(object? sender, RoutedEventArgs e)
     {

@@ -11,7 +11,6 @@ Paste,Paste,粘贴,貼り付け
 Delete,Delete,删除,削除
 SelectAll,Select all,全选,すべて選択
 Settings,Settings,设置,設定
-SettingsMenu,Settings…,设置…,設定…
 FileMissing,{0} is missing,找不到 {0},{0} が見つかりません
 
 # Projects scene,,,
@@ -61,7 +60,6 @@ CouldNotSave,Could not save,无法保存,保存できませんでした
 Saved,Saved {0},已保存 {0},{0} を保存しました
 
 # Editor toolbar,,,
-BackToProjects,← Projects,← 项目,← プロジェクト
 UnsavedChanges,Unsaved changes,有未保存的更改,未保存の変更があります
 SaveTip,Save (⌘S / Ctrl+S),保存（⌘S / Ctrl+S）,保存（⌘S / Ctrl+S）
 Undo,Undo,撤销,元に戻す
@@ -73,8 +71,6 @@ FindTip,Find in the code (⌘F / Ctrl+F),在代码中查找（⌘F / Ctrl+F）,�
 Format,Format,格式化,整形
 FormatTip,Format the document (Shift+Alt+F); every difficulty's hash stays the same,格式化文档（Shift+Alt+F）；每个难度的哈希值保持不变,ドキュメントを整形（Shift+Alt+F）。各難易度のハッシュは変わりません
 RewindTip,Back to the start,回到开头,先頭に戻る
-Play,▶ Play,▶ 播放,▶ 再生
-Pause,❚❚ Pause,❚❚ 暂停,❚❚ 一時停止
 PlayTip,"Play / pause (Space in the previews, F5)",播放／暂停（在预览区按空格，或按 F5）,再生／一時停止（プレビュー上で Space、または F5）
 VolumeTip,Song volume,歌曲音量,曲の音量
 Hits,Hits,击打音,打音
@@ -125,7 +121,6 @@ ErrorsOne,{0} error,,
 Warnings,{0} warnings,{0} 个警告,警告 {0} 件
 WarningsOne,{0} warning,,
 MessagesTip,"Language of the chart's messages, hovers and completions",谱面检查、悬停说明与补全的语言,譜面のメッセージ・ホバー・補完の言語
-ShowHide,Show / hide,显示／隐藏,表示／非表示
 LineN,Ln {0},第 {0} 行,{0} 行
 Caret,"Ln {0}, Col {1}",第 {0} 行，第 {1} 列,{0} 行、{1} 列
 SameAsInterface,Same as the interface,与界面相同,表示言語と同じ
@@ -199,7 +194,6 @@ JudgeMark,Judged,判定,判定
 RemoveBranch,Remove the branch (keep {0}),删除分歧（保留{0}路线）,分岐を削除（{0}を残す）
 LaneEmpty,The chart appears here once its difficulty parses.,当前难度解析成功后，谱面会显示在这里。,難易度を解析できると、ここに譜面が表示されます。
 LaneMeasure,Measure {0},第 {0} 小节,{0} 小節目
-LaneRoute,Route {0},路线 {0},ルート {0}
 NoteCount,{0} notes,{0} 个音符,音符 {0} 個
 NoteCountOne,{0} note,,
 

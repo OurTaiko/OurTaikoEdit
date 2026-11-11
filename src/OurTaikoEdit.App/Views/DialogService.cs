@@ -41,21 +41,13 @@ public sealed class DialogService(Window owner) : IDialogService
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
         string? result = null;
-        var ok = new Button { Content = Loc.T("Ok"), IsDefault = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
-        ok.Classes.Add("accent");
+        var ok = Button(Loc.T("Ok"), accent: true);
+        ok.IsDefault = true;
         ok.Click += (_, _) => { result = box.Text; window.Close(); };
-        var cancel = new Button { Content = Loc.T("Cancel"), IsCancel = true, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+        var cancel = Button(Loc.T("Cancel"), accent: false);
+        cancel.IsCancel = true;
         cancel.Click += (_, _) => window.Close();
-        window.Content = new StackPanel
-        {
-            Margin = new Avalonia.Thickness(20), Spacing = 12,
-            Children =
-            {
-                new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                box,
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { ok, cancel } },
-            },
-        };
+        window.Content = Layout(new Control[] { new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, box }, ok, cancel);
         window.Opened += (_, _) => { box.Focus(); box.SelectAll(); };
         await window.ShowDialog(owner);
         return result;
@@ -79,27 +71,44 @@ public sealed class DialogService(Window owner) : IDialogService
             Title = title, Width = 420, SizeToContent = SizeToContent.Height, CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
         };
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        var row = new List<Button>();
         T result = buttons[^1].Value;
         for (int i = 0; i < buttons.Length; i++)
         {
             var (label, value) = buttons[i];
-            var button = new Button { Content = label, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center, IsDefault = i == 0, IsCancel = i == buttons.Length - 1 };
-            if (i == 0) button.Classes.Add("accent");
+            var button = Button(label, accent: i == 0);
+            button.IsDefault = i == 0;
+            button.IsCancel = i == buttons.Length - 1;
             button.Click += (_, _) => { result = value; window.Close(); };
-            row.Children.Add(button);
+            row.Add(button);
         }
-        window.Content = new StackPanel
-        {
-            Margin = new Avalonia.Thickness(20), Spacing = 16,
-            Children =
-            {
-                new TextBlock { Text = title, FontSize = 16, FontWeight = Avalonia.Media.FontWeight.SemiBold },
-                new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                row,
-            },
-        };
+        var heading = new TextBlock { Text = title, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        heading.Classes.Add("h1");
+        var body = new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        body.Classes.Add("muted");
+        window.Content = Layout(new Control[] { heading, body }, row.ToArray());
         await window.ShowDialog(owner);
         return result;
+    }
+
+    static Button Button(string label, bool accent)
+    {
+        var button = new Button { Content = label };
+        button.Classes.Add("wide");
+        if (accent) button.Classes.Add("accent");
+        return button;
+    }
+
+    // The dialogs' layout: what is said, over a footer with the buttons at its right.
+    static Control Layout(Control[] body, params Button[] buttons)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        row.Children.AddRange(buttons);
+        var footer = new Border { Child = row };
+        footer.Classes.Add("footer");
+        DockPanel.SetDock(footer, Dock.Bottom);
+        var content = new StackPanel { Margin = new Avalonia.Thickness(20, 18, 20, 20), Spacing = 10 };
+        content.Children.AddRange(body);
+        return new DockPanel { Children = { footer, content } };
     }
 }

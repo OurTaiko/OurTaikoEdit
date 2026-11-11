@@ -7,10 +7,12 @@ using Avalonia.Controls.Documents;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using AvaloniaEdit.CodeCompletion;
+using AvaloniaEdit.Editing;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
 using OurTaikoEdit.App.Editor;
+using OurTaikoEdit.App.Theme;
 using OurTaikoEdit.App.ViewModels;
 using OurTaikoEdit.Core.Languages;
 using OurTaikoEdit.Core.Localization;
@@ -55,7 +57,7 @@ public partial class EditorView : UserControl
         };
         Code.Options.ConvertTabsToSpaces = false;
         Code.Options.HighlightCurrentLine = true;
-        Code.TextArea.TextView.Margin = new Avalonia.Thickness(8, 0, 0, 0);
+        Dress();
         Code.TextChanged += (_, _) => vm?.OnTextChanged(Code.Text);
         Code.TextArea.Caret.PositionChanged += (_, _) =>
         {
@@ -103,6 +105,36 @@ public partial class EditorView : UserControl
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ProblemList.DoubleTapped += (_, _) => GoToProblem();
         ProblemList.SelectionChanged += (_, _) => GoToProblem();
+    }
+
+    // The code editor in the interface's colours: quiet line numbers with room around them, the
+    // caret's line barely lit, the selection in ka cyan (the playhead's slot is don red).
+    void Dress()
+    {
+        var area = Code.TextArea;
+        var view = area.TextView;
+        view.Margin = new Avalonia.Thickness(10, 0, 0, 0);
+        view.CurrentLineBackground = Ui.Solid(Ui.TextColor, 0.045);
+        view.CurrentLineBorder = new Pen(Brushes.Transparent, 0);
+        view.LinkTextForegroundBrush = Ui.Ka;
+        Code.LineNumbersForeground = Ui.Faint;
+        area.SelectionBrush = Ui.Selection;
+        area.SelectionForeground = null;
+        area.SelectionBorder = null;
+        area.SelectionCornerRadius = 2;
+        area.Caret.CaretBrush = Ui.Text;
+        foreach (var margin in area.LeftMargins)
+        {
+            if (margin is LineNumberMargin numbers) numbers.Margin = new Avalonia.Thickness(14, 0, 8, 0);
+            else if (margin is Avalonia.Controls.Shapes.Line rule) rule.Stroke = Brushes.Transparent;
+            else if (margin is FoldingMargin folds)
+            {
+                folds.SetValue(FoldingMargin.FoldingMarkerBrushProperty, Ui.Faint);
+                folds.SetValue(FoldingMargin.FoldingMarkerBackgroundBrushProperty, Ui.Base);
+                folds.SetValue(FoldingMargin.SelectedFoldingMarkerBrushProperty, Ui.Text);
+                folds.SetValue(FoldingMargin.SelectedFoldingMarkerBackgroundBrushProperty, Ui.Raised);
+            }
+        }
     }
 
     // Find, undo and redo from anywhere in the scene. The code editor has its own keys for them
@@ -366,17 +398,17 @@ public partial class EditorView : UserControl
             if (start < at || start + length > sig.Label.Length) continue;
             text.Inlines!.Add(new Run(sig.Label.Substring(at, start - at)));
             var run = new Run(sig.Label.Substring(start, length));
-            if (i == sig.Active) { run.FontWeight = FontWeight.Bold; run.Foreground = new SolidColorBrush(Color.Parse("#FF8A65")); }
+            if (i == sig.Active) { run.FontWeight = FontWeight.Bold; run.Foreground = Ui.Accent; }
             text.Inlines.Add(run);
             at = start + length;
         }
         text.Inlines!.Add(new Run(sig.Label.Substring(at)));
-        if (!string.IsNullOrEmpty(sig.Summary)) text.Inlines.Add(new Run("\n" + sig.Summary) { Foreground = Brushes.Gray });
+        if (!string.IsNullOrEmpty(sig.Summary)) text.Inlines.Add(new Run("\n" + sig.Summary) { Foreground = Ui.Muted });
         // (InsightWindow is a Popup here: its content is its Child.)
         signature.Child = new Border
         {
-            Child = text, Padding = new Avalonia.Thickness(8, 5), CornerRadius = new Avalonia.CornerRadius(4),
-            Background = new SolidColorBrush(Color.Parse("#2A2C31")), BorderBrush = new SolidColorBrush(Color.Parse("#44474E")), BorderThickness = new Avalonia.Thickness(1),
+            Child = text, Padding = new Avalonia.Thickness(8, 5), CornerRadius = new Avalonia.CornerRadius(6),
+            Background = Ui.Raised, BorderBrush = Ui.LineStrong, BorderThickness = new Avalonia.Thickness(1),
         };
     }
 

@@ -2,67 +2,89 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="using:OurTaikoEdit.App.Localization"
         x:Class="OurTaikoEdit.App.Views.SettingsDialog"
-        Title="{l:T Settings}" Width="560" SizeToContent="Height" CanResize="False"
+        Title="{l:T Settings}" Width="580" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner">
   <Window.Styles>
-    <Style Selector="TextBlock.section">
-      <Setter Property="FontSize" Value="15" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,8,0,0" />
-    </Style>
     <Style Selector="Grid.form > TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- A section: its name over a rule, then its rows. -->
+    <Style Selector="StackPanel.group">
+      <Setter Property="Spacing" Value="10" />
+    </Style>
+    <Style Selector="StackPanel.group > Border">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Margin" Value="0,-4,0,2" />
+      <Setter Property="Background" Value="{StaticResource LineBrush}" />
+    </Style>
   </Window.Styles>
-  <StackPanel Margin="20" Spacing="10">
-    <TextBlock Classes="h1" Text="{l:T Settings}" />
-
-    <TextBlock Classes="section" Text="{l:T SectionGeneral}" />
-    <Grid Classes="form" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-      <TextBlock Text="{l:T InterfaceLanguage}" />
-      <ComboBox Grid.Column="1" x:Name="LanguageBox" HorizontalAlignment="Stretch" />
-      <TextBlock Grid.Row="1" Text="{l:T MessageLanguage}" TextWrapping="Wrap" />
-      <ComboBox Grid.Row="1" Grid.Column="1" x:Name="MessageBox" HorizontalAlignment="Stretch" />
-      <TextBlock Grid.Row="2" Grid.Column="1" Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{l:T MessageLanguageHint}" />
-      <TextBlock Grid.Row="3" Text="{l:T ProjectsFolder}" />
-      <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-        <TextBox x:Name="FolderBox" />
-        <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseFolder" />
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Classes="footer">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <TextBlock x:Name="FileText" Classes="caption" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="accent wide" Content="{l:T Ok}" IsDefault="True" Click="Accept" />
+          <Button Classes="wide" Content="{l:T Cancel}" IsCancel="True" Click="Cancel" />
+        </StackPanel>
       </Grid>
-    </Grid>
+    </Border>
 
-    <TextBlock Classes="section" Text="{l:T SectionEditor}" />
-    <Grid Classes="form" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-      <TextBlock Text="{l:T FontSize}" />
-      <NumericUpDown Grid.Column="1" x:Name="FontSizeBox" Minimum="8" Maximum="40" Increment="1" FormatString="0" Width="120" HorizontalAlignment="Left" />
-      <CheckBox Grid.Row="1" Grid.Column="1" x:Name="HintsBox" Content="{l:T ShowHints}" />
-      <CheckBox Grid.Row="2" Grid.Column="1" x:Name="WrapBox" Content="{l:T WordWrap}" />
-    </Grid>
+    <StackPanel Margin="20,18,20,22" Spacing="20">
+      <TextBlock Classes="h1" Text="{l:T Settings}" />
 
-    <TextBlock Classes="section" Text="{l:T SectionTimeline}" />
-    <Grid Classes="form" ColumnDefinitions="200,*" ColumnSpacing="12">
-      <TextBlock Text="{l:T DefaultGrid}" TextWrapping="Wrap" />
-      <ComboBox Grid.Column="1" x:Name="DivisionBox" Width="120" />
-    </Grid>
+      <StackPanel Classes="group">
+        <TextBlock Classes="section" Text="{l:T SectionGeneral}" />
+        <Border />
+        <Grid Classes="form" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+          <TextBlock Text="{l:T InterfaceLanguage}" />
+          <ComboBox Grid.Column="1" x:Name="LanguageBox" HorizontalAlignment="Stretch" />
+          <TextBlock Grid.Row="1" Text="{l:T MessageLanguage}" TextWrapping="Wrap" />
+          <ComboBox Grid.Row="1" Grid.Column="1" x:Name="MessageBox" HorizontalAlignment="Stretch" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" TextWrapping="Wrap" Text="{l:T MessageLanguageHint}" />
+          <TextBlock Grid.Row="3" Text="{l:T ProjectsFolder}" />
+          <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox x:Name="FolderBox" />
+            <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseFolder" VerticalAlignment="Stretch" />
+          </Grid>
+        </Grid>
+      </StackPanel>
 
-    <TextBlock Classes="section" Text="{l:T SectionPlayback}" />
-    <Grid Classes="form" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-      <TextBlock Text="{l:T VolumeTip}" />
-      <Slider Grid.Column="1" x:Name="VolumeBox" Minimum="0" Maximum="1" />
-      <CheckBox Grid.Row="1" Grid.Column="1" x:Name="HitsBox" Content="{l:T PlayHits}" />
-      <TextBlock Grid.Row="2" Text="{l:T HitVolume}" />
-      <Slider Grid.Row="2" Grid.Column="1" x:Name="HitVolumeBox" Minimum="0" Maximum="1" />
-      <TextBlock Grid.Row="3" Text="{l:T HitSoundSet}" />
-      <ComboBox Grid.Row="3" Grid.Column="1" x:Name="HitSetBox" MinWidth="160" />
-      <TextBlock Grid.Row="4" Text="{l:T Latency}" />
-      <NumericUpDown Grid.Row="4" Grid.Column="1" x:Name="LatencyBox" Minimum="0" Maximum="500" Increment="5" FormatString="0" Width="120" HorizontalAlignment="Left" />
-      <TextBlock Grid.Row="5" Grid.Column="1" Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{l:T LatencyHint}" />
-    </Grid>
+      <StackPanel Classes="group">
+        <TextBlock Classes="section" Text="{l:T SectionEditor}" />
+        <Border />
+        <Grid Classes="form" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="2">
+          <TextBlock Text="{l:T FontSize}" />
+          <NumericUpDown Grid.Column="1" x:Name="FontSizeBox" Minimum="8" Maximum="40" Increment="1" FormatString="0" Width="130" HorizontalAlignment="Left" Margin="0,0,0,4" />
+          <CheckBox Grid.Row="1" Grid.Column="1" x:Name="HintsBox" Content="{l:T ShowHints}" />
+          <CheckBox Grid.Row="2" Grid.Column="1" x:Name="WrapBox" Content="{l:T WordWrap}" />
+        </Grid>
+      </StackPanel>
 
-    <TextBlock x:Name="FileText" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0" />
-    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-      <Button Classes="accent" Content="{l:T Ok}" IsDefault="True" MinWidth="80" HorizontalContentAlignment="Center" Click="Accept" />
-      <Button Content="{l:T Cancel}" IsCancel="True" MinWidth="80" HorizontalContentAlignment="Center" Click="Cancel" />
+      <StackPanel Classes="group">
+        <TextBlock Classes="section" Text="{l:T SectionTimeline}" />
+        <Border />
+        <Grid Classes="form" ColumnDefinitions="200,*" ColumnSpacing="12">
+          <TextBlock Text="{l:T DefaultGrid}" TextWrapping="Wrap" />
+          <ComboBox Grid.Column="1" x:Name="DivisionBox" Width="130" />
+        </Grid>
+      </StackPanel>
+
+      <StackPanel Classes="group">
+        <TextBlock Classes="section" Text="{l:T SectionPlayback}" />
+        <Border />
+        <Grid Classes="form" ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+          <TextBlock Text="{l:T VolumeTip}" />
+          <Slider Grid.Column="1" x:Name="VolumeBox" Minimum="0" Maximum="1" />
+          <CheckBox Grid.Row="1" Grid.Column="1" x:Name="HitsBox" Content="{l:T PlayHits}" />
+          <TextBlock Grid.Row="2" Text="{l:T HitVolume}" />
+          <Slider Grid.Row="2" Grid.Column="1" x:Name="HitVolumeBox" Minimum="0" Maximum="1" />
+          <TextBlock Grid.Row="3" Text="{l:T HitSoundSet}" />
+          <ComboBox Grid.Row="3" Grid.Column="1" x:Name="HitSetBox" MinWidth="180" />
+          <TextBlock Grid.Row="4" Text="{l:T Latency}" />
+          <NumericUpDown Grid.Row="4" Grid.Column="1" x:Name="LatencyBox" Minimum="0" Maximum="500" Increment="5" FormatString="0" Width="130" HorizontalAlignment="Left" />
+          <TextBlock Grid.Row="5" Grid.Column="1" Classes="caption" TextWrapping="Wrap" Text="{l:T LatencyHint}" />
+        </Grid>
+      </StackPanel>
     </StackPanel>
-  </StackPanel>
+  </DockPanel>
 </Window>

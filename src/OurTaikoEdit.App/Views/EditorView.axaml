@@ -4,6 +4,7 @@
              xmlns:core="using:OurTaikoEdit.Core.Languages"
              xmlns:ot="using:OurTaiko"
              xmlns:controls="using:OurTaikoEdit.App.Controls"
+             xmlns:t="using:OurTaikoEdit.App.Theme"
              xmlns:ae="using:AvaloniaEdit"
              xmlns:l="using:OurTaikoEdit.App.Localization"
              xmlns:loc="using:OurTaikoEdit.Core.Localization"
@@ -16,143 +17,213 @@
     <KeyBinding Gesture="Shift+Alt+F" Command="{Binding FormatDocumentCommand}" />
   </UserControl.KeyBindings>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <!-- Toolbar -->
-    <Border Classes="panel" BorderThickness="0,0,0,1" Padding="8,6">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <Button Classes="toolbar" Content="{l:T BackToProjects}" Command="{Binding BackCommand}" />
-          <TextBlock Text="{Binding Project.Name}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" Margin="8,0,0,0" />
-          <TextBlock Text="●" Foreground="{StaticResource AccentBrush}" IsVisible="{Binding IsDirty}" VerticalAlignment="Center" ToolTip.Tip="{l:T UnsavedChanges}" />
-          <Button Classes="toolbar" Content="{l:T Save}" Command="{Binding SaveCommand}" Margin="12,0,0,0" ToolTip.Tip="{l:T SaveTip}" />
-          <Button Classes="toolbar" x:Name="UndoButton" Content="{l:T Undo}" ToolTip.Tip="{l:T UndoTip}" />
-          <Button Classes="toolbar" x:Name="RedoButton" Content="{l:T Redo}" ToolTip.Tip="{l:T RedoTip}" />
-          <Button Classes="toolbar" x:Name="FindButton" Content="{l:T Find}" ToolTip.Tip="{l:T FindTip}" />
-          <Button Classes="toolbar" Content="{l:T Format}" Command="{Binding FormatDocumentCommand}" ToolTip.Tip="{l:T FormatTip}" />
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- The bar: where you are and the document's actions; playback in the middle; sound and settings. -->
+    <Border Classes="bar" Height="44" Padding="8,0">
+      <Grid ColumnDefinitions="*,Auto,*">
+        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" Command="{Binding BackCommand}">
+            <StackPanel>
+              <controls:Icon Data="{StaticResource IconBack}" />
+              <TextBlock Text="{l:T Projects}" />
+            </StackPanel>
+          </Button>
+          <TextBlock Classes="faint" Text="/" VerticalAlignment="Center" Margin="2,0,8,0" />
+          <TextBlock Text="{Binding Project.Name}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+          <Panel Width="18" VerticalAlignment="Center">
+            <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" IsVisible="{Binding IsDirty}" ToolTip.Tip="{l:T UnsavedChanges}" />
+          </Panel>
+          <Border Classes="vsep" />
+          <Button Classes="ghost" Command="{Binding SaveCommand}" ToolTip.Tip="{l:T SaveTip}">
+            <StackPanel>
+              <controls:Icon Data="{StaticResource IconSave}" />
+              <TextBlock Text="{l:T Save}" />
+            </StackPanel>
+          </Button>
+          <Button Classes="ghost icon" x:Name="UndoButton" ToolTip.Tip="{l:T UndoTip}">
+            <controls:Icon Data="{StaticResource IconUndo}" />
+          </Button>
+          <Button Classes="ghost icon" x:Name="RedoButton" ToolTip.Tip="{l:T RedoTip}">
+            <controls:Icon Data="{StaticResource IconRedo}" />
+          </Button>
+          <Border Classes="vsep" />
+          <Button Classes="ghost icon" x:Name="FindButton" ToolTip.Tip="{l:T FindTip}">
+            <controls:Icon Data="{StaticResource IconSearch}" />
+          </Button>
+          <Button Classes="ghost icon" Command="{Binding FormatDocumentCommand}" ToolTip.Tip="{l:T FormatTip}">
+            <controls:Icon Data="{StaticResource IconFormat}" />
+          </Button>
         </StackPanel>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <Button Classes="toolbar" Content="⏮" Command="{Binding RewindCommand}" ToolTip.Tip="{l:T RewindTip}" />
-          <Button Classes="toolbar" MinWidth="64" Command="{Binding TogglePlayCommand}" ToolTip.Tip="{l:T PlayTip}">
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="ghost icon" Command="{Binding RewindCommand}" ToolTip.Tip="{l:T RewindTip}">
+            <controls:Icon Data="{StaticResource IconSolidRewind}" Filled="True" />
+          </Button>
+          <Button Classes="accent play" Command="{Binding TogglePlayCommand}" ToolTip.Tip="{l:T PlayTip}">
             <Panel>
-              <TextBlock Text="{l:T Play}" IsVisible="{Binding !IsPlaying}" />
-              <TextBlock Text="{l:T Pause}" IsVisible="{Binding IsPlaying}" />
+              <controls:Icon Data="{StaticResource IconSolidPlay}" Filled="True" IsVisible="{Binding !IsPlaying}" />
+              <controls:Icon Data="{StaticResource IconSolidPause}" Filled="True" IsVisible="{Binding IsPlaying}" />
             </Panel>
           </Button>
-          <TextBlock Text="{Binding AudioStatus}" VerticalAlignment="Center" Classes="muted" FontSize="12" MaxWidth="220" TextTrimming="CharacterEllipsis" Margin="6,0,0,0" />
-          <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" Width="80" VerticalAlignment="Center" ToolTip.Tip="{l:T VolumeTip}" />
-          <CheckBox Content="{l:T Hits}" IsChecked="{Binding HitSounds}" VerticalAlignment="Center" ToolTip.Tip="{l:T HitsTip}" />
-          <TextBlock Text="{l:T Route}" VerticalAlignment="Center" Margin="12,0,0,0" Classes="muted" />
-          <ComboBox ItemsSource="{Binding Routes}" SelectedItem="{Binding Route}" MinWidth="96">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="ot:BranchRoute">
-                <TextBlock>
-                  <TextBlock.Text>
-                    <MultiBinding Converter="{x:Static l:Names.RouteName}">
-                      <Binding />
-                      <Binding Source="{x:Static loc:Loc.Instance}" Path="Language" />
-                    </MultiBinding>
-                  </TextBlock.Text>
-                </TextBlock>
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <TextBlock Text="{l:T Grid}" VerticalAlignment="Center" Margin="8,0,0,0" Classes="muted" />
-          <ComboBox ItemsSource="{Binding Divisions}" SelectedItem="{Binding Division}" MinWidth="70" />
-          <Button Classes="toolbar" Content="{l:T SettingsMenu}" Command="{Binding OpenSettingsCommand}" Margin="8,0,0,0" />
+          <!-- As wide as the rewind button, so the play button sits in the middle. -->
+          <Panel Width="28" />
         </StackPanel>
-      </Grid>
-    </Border>
 
-    <!-- Blocks and note tools -->
-    <Border Grid.Row="1" Classes="panel" BorderThickness="0,0,0,1" Padding="8,4">
-      <Grid ColumnDefinitions="*,Auto">
-        <ListBox x:Name="BlockList" ItemsSource="{Binding Blocks}" SelectedIndex="{Binding BlockIndex}" Background="Transparent">
-          <ListBox.ItemsPanel>
-            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
-          </ListBox.ItemsPanel>
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="core:ChartBlock">
-              <TextBlock Text="{Binding Name}" Margin="4,0" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-        <ListBox Grid.Column="1" ItemsSource="{Binding Tools}" SelectedItem="{Binding Tool}" Background="Transparent">
-          <ListBox.ItemsPanel>
-            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
-          </ListBox.ItemsPanel>
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:ToolItem">
-              <StackPanel Orientation="Horizontal" Spacing="4" ToolTip.Tip="{Binding Tip}">
-                <TextBlock Text="{Binding Key}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
-              </StackPanel>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+        <!-- (The audio's status gives way first when the window is narrow.) -->
+        <Grid Grid.Column="2" ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding AudioStatus}" Classes="caption" VerticalAlignment="Center" HorizontalAlignment="Right"
+                   TextTrimming="CharacterEllipsis" Margin="12,0,14,0" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <controls:Icon Data="{StaticResource IconVolume}" TextElement.Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" ToolTip.Tip="{l:T VolumeTip}" />
+          <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" Width="84" VerticalAlignment="Center" Margin="4,0,6,0" ToolTip.Tip="{l:T VolumeTip}" />
+          <ToggleButton Classes="ghost" IsChecked="{Binding HitSounds}" ToolTip.Tip="{l:T HitsTip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <controls:Icon Data="{StaticResource IconDrum}" />
+              <TextBlock Text="{l:T Hits}" />
+            </StackPanel>
+          </ToggleButton>
+          <Border Classes="vsep" />
+          <Button Classes="ghost icon" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="{l:T Settings}">
+            <controls:Icon Data="{StaticResource IconSettings}" />
+          </Button>
+        </StackPanel>
+        </Grid>
       </Grid>
     </Border>
 
     <!-- Code on the left; lane over timeline on the right -->
-    <Grid Grid.Row="2" ColumnDefinitions="5*,5,6*">
-      <Grid RowDefinitions="*,Auto,Auto">
-        <ae:TextEditor x:Name="Code" ShowLineNumbers="True" FontFamily="{StaticResource CodeFont}" FontSize="14"
-                       Background="#1A1B1E" Foreground="#D4D4D4" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+    <Grid Grid.Row="1" ColumnDefinitions="5*,5,6*">
+      <Grid RowDefinitions="Auto,*,Auto,Auto">
+        <!-- The chart's difficulties, as the code's tabs -->
+        <Border Classes="bar" Height="34">
+          <ListBox x:Name="BlockList" Classes="tabs" ItemsSource="{Binding Blocks}" SelectedIndex="{Binding BlockIndex}">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="core:ChartBlock">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="{Binding Course, Converter={x:Static t:UiConverters.Difficulty}}" />
+                  <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+
+        <ae:TextEditor Grid.Row="1" x:Name="Code" ShowLineNumbers="True" FontFamily="{StaticResource CodeFont}" FontSize="14"
+                       Background="{StaticResource BaseBrush}" Foreground="#E4D9CC" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                        WordWrap="False" />
-        <Border Grid.Row="1" Classes="panel" BorderThickness="0,1,0,0" Padding="8,3">
+
+        <!-- Problems: the count is the handle that opens the list -->
+        <Border Grid.Row="2" Classes="panel" BorderThickness="0,1,0,0" Height="28" Padding="6,0,6,0">
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Text="{l:T Problems}" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding Problems}" Classes="muted" Margin="10,0" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-              <ComboBox ItemsSource="{Binding MessageLanguages}" SelectedItem="{Binding MessageLanguage}" MinHeight="22" Padding="6,0" FontSize="11"
-                        ToolTip.Tip="{l:T MessagesTip}">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="x:String">
-                    <TextBlock>
-                      <TextBlock.Text>
-                        <MultiBinding Converter="{x:Static l:Names.MessageLanguageName}">
-                          <Binding />
-                          <Binding Source="{x:Static loc:Loc.Instance}" Path="Language" />
-                        </MultiBinding>
-                      </TextBlock.Text>
-                    </TextBlock>
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <Button Classes="toolbar" Content="{l:T ShowHide}" Command="{Binding ToggleProblemsCommand}" Padding="6,1" MinHeight="22" FontSize="11" />
-            </StackPanel>
+            <Button Classes="status" Command="{Binding ToggleProblemsCommand}" Margin="0,3">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{l:T Problems}" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Problems}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <ComboBox Grid.Column="2" Classes="compact quiet" ItemsSource="{Binding MessageLanguages}" SelectedItem="{Binding MessageLanguage}"
+                      Height="22" MinHeight="22" FontSize="11.5" ToolTip.Tip="{l:T MessagesTip}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock>
+                    <TextBlock.Text>
+                      <MultiBinding Converter="{x:Static l:Names.MessageLanguageName}">
+                        <Binding />
+                        <Binding Source="{x:Static loc:Loc.Instance}" Path="Language" />
+                      </MultiBinding>
+                    </TextBlock.Text>
+                  </TextBlock>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
           </Grid>
         </Border>
-        <ListBox Grid.Row="2" x:Name="ProblemList" ItemsSource="{Binding Diagnostics}" Height="140" IsVisible="{Binding ProblemListVisible}"
-                 Background="#1D1F23" FontSize="12">
+        <ListBox Grid.Row="3" x:Name="ProblemList" Classes="rows" ItemsSource="{Binding Diagnostics}" Height="140" IsVisible="{Binding ProblemListVisible}"
+                 Background="{StaticResource SunkenBrush}" FontSize="12" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:DiagnosticItem">
-              <Grid ColumnDefinitions="18,56,*">
-                <TextBlock Text="{Binding Icon}" Foreground="#E5B53A" IsVisible="{Binding IsWarning}" />
-                <TextBlock Text="{Binding Icon}" Foreground="#6CA8E8" IsVisible="{Binding IsInformation}" />
-                <TextBlock Text="{Binding Icon}" Foreground="#FF5A5A" IsVisible="{Binding IsError}" />
-                <TextBlock Grid.Column="1" Text="{Binding Where}" Classes="muted" />
+              <Grid ColumnDefinitions="18,64,*">
+                <TextBlock Text="{Binding Icon}" Foreground="{StaticResource WarningBrush}" IsVisible="{Binding IsWarning}" />
+                <TextBlock Text="{Binding Icon}" Foreground="{StaticResource InfoBrush}" IsVisible="{Binding IsInformation}" />
+                <TextBlock Text="{Binding Icon}" Foreground="{StaticResource ErrorBrush}" IsVisible="{Binding IsError}" />
+                <TextBlock Grid.Column="1" Text="{Binding Where}" Classes="faint" />
                 <TextBlock Grid.Column="2" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
               </Grid>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
       </Grid>
-      <GridSplitter Grid.Column="1" Background="#2E3036" ResizeDirection="Columns" />
+
+      <GridSplitter Grid.Column="1" Classes="columns" ResizeDirection="Columns" />
+
       <Grid Grid.Column="2" RowDefinitions="2*,5,3*">
-        <controls:LaneView />
-        <GridSplitter Grid.Row="1" Background="#2E3036" ResizeDirection="Rows" />
-        <controls:TimelineView Grid.Row="2" />
+        <!-- The lane, with the route it shows in its corner -->
+        <Panel>
+          <controls:LaneView />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,7,10,0"
+                      IsVisible="{Binding Analysis.HasBranches}">
+            <TextBlock Classes="label" Text="{l:T Route}" VerticalAlignment="Center" />
+            <ComboBox Classes="compact" ItemsSource="{Binding Routes}" SelectedItem="{Binding Route}" MinWidth="96">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="ot:BranchRoute">
+                  <TextBlock>
+                    <TextBlock.Text>
+                      <MultiBinding Converter="{x:Static l:Names.RouteName}">
+                        <Binding />
+                        <Binding Source="{x:Static loc:Loc.Instance}" Path="Language" />
+                      </MultiBinding>
+                    </TextBlock.Text>
+                  </TextBlock>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+        </Panel>
+
+        <GridSplitter Grid.Row="1" Classes="rows" ResizeDirection="Rows" />
+
+        <!-- The timeline under its tools -->
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
+          <Border Classes="bar" Height="38" Padding="8,0,10,0">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <StackPanel Orientation="Horizontal" Spacing="10" ClipToBounds="True">
+              <ListBox Classes="palette" ItemsSource="{Binding Tools}" SelectedItem="{Binding Tool}" VerticalAlignment="Center">
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ToolItem">
+                    <StackPanel Orientation="Horizontal" Spacing="1" ToolTip.Tip="{Binding Tip}" Background="Transparent">
+                      <controls:NoteGlyph Kind="{Binding Kind}" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Key}" FontSize="10" Foreground="{StaticResource FaintBrush}" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="{Binding Tool.Label}" Classes="label" VerticalAlignment="Center" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Classes="label" Text="{l:T Grid}" VerticalAlignment="Center" />
+                <ComboBox Classes="compact" ItemsSource="{Binding Divisions}" SelectedItem="{Binding Division}" MinWidth="64" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          <controls:TimelineView Grid.Row="1" />
+        </Grid>
       </Grid>
     </Grid>
 
     <!-- Status bar -->
-    <Border Grid.Row="3" Classes="panel" BorderThickness="0,1,0,0" Padding="10,3">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="18">
-        <TextBlock Text="{Binding FilePath}" Classes="muted" FontSize="12" TextTrimming="PathSegmentEllipsis" />
-        <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="12" Foreground="#E5B53A" />
-        <TextBlock Grid.Column="2" Text="{Binding Caret}" FontSize="12" />
-        <Button Grid.Column="3" x:Name="EncodingButton" Content="{Binding Encoding}" FontSize="12" Padding="4,0" MinHeight="0" Background="Transparent" Foreground="{StaticResource MutedBrush}" ToolTip.Tip="{l:T EncodingTip}" />
-        <TextBlock Grid.Column="4" Text="{Binding Language.DisplayName}" Classes="muted" FontSize="12" />
+    <Border Grid.Row="2" Classes="panel" BorderThickness="0,1,0,0" Height="24" Padding="12,0,8,0">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="14">
+        <TextBlock Text="{Binding FilePath}" Classes="caption" VerticalAlignment="Center" TextTrimming="PathSegmentEllipsis" />
+        <TextBlock Grid.Column="1" Text="{Binding Message}" FontSize="11.5" Foreground="{StaticResource WarningBrush}" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="2" Text="{Binding Caret}" FontSize="11.5" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+        <Button Grid.Column="3" x:Name="EncodingButton" Classes="status" Content="{Binding Encoding}" Margin="0,3" ToolTip.Tip="{l:T EncodingTip}" />
+        <TextBlock Grid.Column="4" Text="{Binding Language.DisplayName}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
       </Grid>
     </Border>
   </Grid>
