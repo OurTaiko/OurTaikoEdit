@@ -486,6 +486,15 @@ public sealed partial class EditorViewModel : ViewModelBase
     }
 
     // The same command in the current analysis (a dialog may have let the text change).
+    // A branch taken out of the chart, one of its routes kept as what every route plays there.
+    // One change to the text: one undo step brings the branch back.
+    public void RemoveBranch(ChartBranchMark branch, BranchRoute keep = BranchRoute.Normal)
+    {
+        EnsureFresh();
+        var current = Analysis.Branches.FirstOrDefault(b => b == branch) ?? Analysis.Branches.FirstOrDefault(b => b.Start.Source == branch.Start.Source);
+        if (current != null) Apply(Language.Editing.RemoveBranch(Analysis, current, keep));
+    }
+
     // The command as the text has it now (a branch's start is one too, for its condition).
     ChartCommand? FindCommand(ChartCommand command)
     {

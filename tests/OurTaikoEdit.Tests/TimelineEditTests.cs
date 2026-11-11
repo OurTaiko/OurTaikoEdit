@@ -199,6 +199,60 @@ public class TimelineEditTests
     }
 
     [Fact]
+    public void RemovingABranchKeepsOneRouteAsTheCommonPart()
+    {
+        string text = Chart("1,\n#BRANCHSTART p,60,85\n#N\n1000,\n2000,\n#E\n1010,\n#SCROLL 2\n2020,\n\n#M\n1111,\n2222,\n#BRANCHEND\n#SCROLL 1\n3,");
+        var a = Tja.Analyze(text, 0);
+        string kept = Apply(text, Tja.Editing.RemoveBranch(a, a.Branches[0], BranchRoute.Normal));
+        Assert.Equal(Chart("1,\n1000,\n2000,\n#SCROLL 1\n3,"), kept);
+        var b = Tja.Analyze(kept, 0);
+        Assert.False(b.HasErrors);
+        Assert.Empty(b.Branches);
+        // What the normal route played, when it played it.
+        Assert.Equal(a.Chart!.Notes.Where(n => n.BranchId < 0 || n.Route == BranchRoute.Normal).Select(n => (n.Kind, n.Time)),
+            b.Chart!.Notes.Select(n => (n.Kind, n.Time)));
+
+        // Another route kept: its own commands stay with it.
+        Assert.Equal(Chart("1,\n1010,\n#SCROLL 2\n2020,\n\n#SCROLL 1\n3,"), Apply(text, Tja.Editing.RemoveBranch(a, a.Branches[0], BranchRoute.Expert)));
+        Assert.Equal(Chart("1,\n1111,\n2222,\n#SCROLL 1\n3,"), Apply(text, Tja.Editing.RemoveBranch(a, a.Branches[0], BranchRoute.Master)));
+    }
+
+    [Fact]
+    public void OnlyTheBranchAskedForIsRemoved()
+    {
+        // The first has no #BRANCHEND (the next #BRANCHSTART ends it) and no master route; the
+        // second is ended by #END. Line endings stay as they are.
+        string text = Chart("1,\n#BRANCHSTART p,1,2\n#E\n2,\n#N\n1,\n#BRANCHSTART r,1,2\n#N\n3,\n#M\n4,").Replace("\n", "\r\n");
+        var a = Tja.Analyze(text, 0);
+        Assert.Equal(2, a.Branches.Count);
+        Assert.Equal(Chart("1,\n1,\n#BRANCHSTART r,1,2\n#N\n3,\n#M\n4,").Replace("\n", "\r\n"), Apply(text, Tja.Editing.RemoveBranch(a, a.Branches[0], BranchRoute.Normal)));
+        Assert.Equal(Chart("1,\n#BRANCHSTART p,1,2\n#E\n2,\n#N\n1,\n3,").Replace("\n", "\r\n"), Apply(text, Tja.Editing.RemoveBranch(a, a.Branches[1], BranchRoute.Normal)));
+        // A route that is not written cannot be the one kept.
+        var missing = Tja.Editing.RemoveBranch(a, a.Branches[0], BranchRoute.Master);
+        Assert.False(missing.Ok);
+        Assert.Empty(missing.Edits);
+    }
+
+    [Fact]
+    public void RemovingABranchKeepsTheBalloonCounts()
+    {
+        string head = "BPM:120\nCOURSE:Oni\nLEVEL:5\n";
+        string body = "#START\n7008,\n#BRANCHSTART p,1,2\n#N\n7008,\n#E\n1,\n#M\n7008,\n#BRANCHEND\n1,\n#BRANCHSTART p,1,2\n#N\n7008,\n#E\n7008,\n#M\n7008,\n#BRANCHEND\n#END\n";
+        string text = head + "BALLOON:10,11,12\nBALLOONEXP:20,21\nBALLOONMAS:30,31,32\n" + body;
+        var a = Tja.Analyze(text, 0);
+        Assert.False(a.HasErrors);
+        string kept = Apply(text, Tja.Editing.RemoveBranch(a, a.Branches[0], BranchRoute.Normal));
+        // The normal route's balloon is now every route's: it takes a place in each list, with
+        // its own count, where the removed routes' balloons (none in expert, one in master) were.
+        Assert.StartsWith(head + "BALLOON:10,11,12\nBALLOONEXP:20,11,21\nBALLOONMAS:30,11,32\n#START\n7008,\n7008,\n1,\n#BRANCHSTART", kept);
+        var b = Tja.Analyze(kept, 0);
+        Assert.False(b.HasErrors);
+        var later = b.Chart!.Notes.Where(n => n.BranchId >= 0).ToDictionary(n => n.Route, n => n.BalloonHits);
+        Assert.Equal((12, 21, 32), (later[BranchRoute.Normal], later[BranchRoute.Expert], later[BranchRoute.Master]));
+        Assert.Equal(11, b.Chart.Notes.Where(n => n.BranchId < 0).ElementAt(1).BalloonHits);
+    }
+
+    [Fact]
     public void ACommandMovesInOneChange()
     {
         string text = Chart("1000,\n#SCROLL 2\n2000,\n3000,");

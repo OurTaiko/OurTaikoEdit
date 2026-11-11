@@ -161,6 +161,7 @@ MeasureNoComma,That measure has no comma.,这个小节没有逗号。,その小�
 MeasureNoCommaBefore,That measure has no comma to write before.,这个小节没有可以写在其前面的逗号。,その小節には、前に書き込むためのカンマがありません。
 TooManySlots,That needs {0} slots in one measure; use a coarser grid.,这需要在一个小节里写 {0} 个位置；请换用更粗的网格。,1 小節に {0} 個の枠が必要になります。粗いグリッドを使ってください。
 CommandNotInText,That command is not in the chart's text.,这个指令不在谱面文本中。,その命令は譜面のテキストにありません。
+BranchRouteNotWritten,This branch has no {0} route to keep.,这个分歧没有写{0}路线，无法保留。,この分岐には残す{0}ルートが書かれていません。
 NoChartYet,No chart yet: add COURSE: and a #START … #END block.,还没有谱面：请添加 COURSE: 以及 #START … #END 段落。,まだ譜面がありません。COURSE: と #START … #END を追加してください。
 PromptTempo,The tempo from here (BPM):,从这里开始的速度（BPM）：,ここからのテンポ（BPM）：
 PromptScroll,The scroll speed from here (1 is normal; 1+2i moves vertically):,从这里开始的滚动速度（1 为正常；1+2i 会纵向移动）：,ここからのスクロール速度（1 が標準、1+2i で縦にも動きます）：
@@ -195,6 +196,7 @@ RemoveCommand,Remove {0},删除 {0},{0} を削除
 ShowInCode,Show in code,在代码中显示,コードで表示
 BranchMark,Branch {0},分歧 {0},分岐 {0}
 JudgeMark,Judged,判定,判定
+RemoveBranch,Remove the branch (keep {0}),删除分歧（保留{0}路线）,分岐を削除（{0}を残す）
 LaneEmpty,The chart appears here once its difficulty parses.,当前难度解析成功后，谱面会显示在这里。,難易度を解析できると、ここに譜面が表示されます。
 LaneMeasure,Measure {0},第 {0} 小节,{0} 小節目
 LaneRoute,Route {0},路线 {0},ルート {0}

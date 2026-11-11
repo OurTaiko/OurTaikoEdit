@@ -100,4 +100,8 @@ public interface IChartEditing
     EditResult RemoveCommand(ChartAnalysis analysis, ChartCommand command);
     EditResult ChangeCommand(ChartAnalysis analysis, ChartCommand command, string value);
     EditResult MoveCommand(ChartAnalysis analysis, ChartCommand command, GridPosition to);
+
+    // A branch of ChartAnalysis.Branches taken out, as one change: what one of its routes plays
+    // stays, as the part every route plays; the other routes and the branch's own commands go.
+    EditResult RemoveBranch(ChartAnalysis analysis, ChartBranchMark branch, BranchRoute keep);
 }

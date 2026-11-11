@@ -194,6 +194,70 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(remove.Edits.Concat(insert.Edits).ToList());
     }
 
+    // A branch taken out: the line of its #BRANCHSTART, the lines of its route markers, every
+    // route but the one kept (from its marker to the next marker or the branch's end) and its
+    // #BRANCHEND go; the kept route's lines stay where they are, now played by every route. The
+    // balloon lists follow. (Commands have lines of their own, so whole lines are removed.)
+    public EditResult RemoveBranch(ChartAnalysis analysis, ChartBranchMark branch, BranchRoute keep)
+    {
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsTimeline"));
+        if (branch.Start.Source.IsEmpty) return EditResult.Fail(Loc.T("CommandNotInText"));
+        var doc = new TjaDocument(analysis.Text);
+        var index = new LineIndex(analysis.Text);
+        var tokens = doc.Syntax;
+        int startLine = branch.Start.Source.Line, startOffset = index.Offset(startLine, branch.Start.Source.Column);
+
+        // The branch's markers in the order written, and the line of what ends it: its
+        // #BRANCHEND (which goes too), or the next #BRANCHSTART or #END (which stay).
+        var markers = new List<(BranchRoute Route, int Line)>();
+        int endLine = 0;
+        bool ownEnd = false;
+        foreach (var token in tokens)
+        {
+            if (token.Kind != TjaSyntaxKind.Command || token.Span.Start <= startOffset) continue;
+            string name = analysis.Text.Substring(token.Span.Start, token.Span.Length).ToUpperInvariant();
+            int line = index.Position(token.Span.Start).Line;
+            if (name is "#N" or "#E" or "#M") markers.Add((name == "#N" ? BranchRoute.Normal : name == "#E" ? BranchRoute.Expert : BranchRoute.Master, line));
+            else if (name is "#BRANCHEND" or "#BRANCHSTART" or "#END")
+            {
+                endLine = line;
+                ownEnd = name == "#BRANCHEND";
+                break;
+            }
+        }
+        if (endLine == 0) return EditResult.Fail(Loc.T("CommandNotInText"));
+        if (!markers.Any(m => m.Route == keep)) return EditResult.Fail(Loc.F("BranchRouteNotWritten", Loc.T(keep switch
+        {
+            BranchRoute.Expert => "RouteExpert", BranchRoute.Master => "RouteMaster", _ => "RouteNormal",
+        })));
+
+        // Whole lines, first to last, joined where they touch.
+        var ranges = new List<(int First, int Last)>();
+        void Remove(int first, int last)
+        {
+            if (ranges.Count > 0 && ranges[^1].Last + 1 >= first) ranges[^1] = (ranges[^1].First, Math.Max(ranges[^1].Last, last));
+            else ranges.Add((first, last));
+        }
+        Remove(startLine, startLine);
+        for (int i = 0; i < markers.Count; i++)
+        {
+            int next = i + 1 < markers.Count ? markers[i + 1].Line : endLine;
+            Remove(markers[i].Line, markers[i].Route == keep ? markers[i].Line : next - 1);
+        }
+        if (ownEnd) Remove(endLine, endLine);
+
+        var edits = new List<TextEdit>();
+        foreach (var (first, last) in ranges)
+        {
+            // Up to the start of the line after (the last of these lines is never the text's last:
+            // the block's #END follows).
+            int from = index.Offset(first, 1), to = last < index.LineCount ? index.Offset(last + 1, 1) : analysis.Text.Length;
+            edits.Add(new TextEdit(first, 1, to - from, ""));
+        }
+        edits.AddRange(Balloons.EditsWithout(analysis, branch.Id, keep));
+        return new EditResult(edits);
+    }
+
     static string Describe(ChartNote n) => Loc.T(n.IsBalloon ? "DescribeBalloon" : "DescribeRoll");
 
     static BranchRoute RouteOf(GridPosition at) => at.Measure.BranchId >= 0 ? at.Measure.Route : at.Route;
@@ -362,16 +426,61 @@ sealed class TjaEditing : IChartEditing
                     if (slot == null) lastExplicit = values.Count - 1;
                 }
                 values = values.Take(Math.Max(lastExplicit + 1, 0)).ToList();
-                if (values.SequenceEqual(old)) continue;
-                string list = string.Join(",", values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
-                if (header.InCourse) edits.Add(ReplaceValue(text, header.Line, list));
-                else if (courseLine > 0)
+                Write(text, header, r, values, courseLine, edits);
+            }
+            return edits;
+        }
+
+        // A route's list written as its header, when it changed.
+        static void Write(string text, Header header, int r, List<int> values, int courseLine, List<TextEdit> edits)
+        {
+            if (values.SequenceEqual(header.Values!)) return;
+            string list = string.Join(",", values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
+            if (header.InCourse) edits.Add(ReplaceValue(text, header.Line, list));
+            else if (courseLine > 0)
+            {
+                // The shared list stays for the other courses; this course gets its own.
+                string key = r == 0 ? "BALLOON" : r == 1 ? "BALLOONEXP" : "BALLOONMAS";
+                string line = Lines(text)[courseLine - 1];
+                edits.Add(new TextEdit(courseLine, line.Length + 1, 0, Newline(text) + key + ":" + list));
+            }
+        }
+
+        // The lists once a branch is gone and one of its routes is what every route plays there:
+        // in each route's list the removed route's balloons give their places to the kept
+        // route's, which bring the counts they had in the kept route's own list.
+        public static IEnumerable<TextEdit> EditsWithout(ChartAnalysis analysis, int branchId, BranchRoute keep)
+        {
+            var text = Text(analysis);
+            if (text == null) return Array.Empty<TextEdit>();
+            var (headers, courseLine) = HeadersFor(text, analysis.StartLine);
+            // Each route's balloons in the order written, as its list is read now.
+            var order = new List<ChartSlot>[3];
+            for (int r = 0; r < 3; r++)
+                order[r] = analysis.Measures.Where(m => m.IsOn((BranchRoute)r)).SelectMany(m => m.Slots).Where(s => s.Note?.IsBalloon == true).ToList();
+            var edits = new List<TextEdit>();
+            for (int r = 0; r < 3; r++)
+            {
+                var header = headers[r];
+                if (header == null || header.Values == null) continue; // every balloon reads 5 either way
+                var values = new List<int>();
+                int lastExplicit = -1;
+                foreach (var m in analysis.Measures)
                 {
-                    // The shared list stays for the other courses; this course gets its own.
-                    string key = r == 0 ? "BALLOON" : r == 1 ? "BALLOONEXP" : "BALLOONMAS";
-                    string line = Lines(text)[courseLine - 1];
-                    edits.Add(new TextEdit(courseLine, line.Length + 1, 0, Newline(text) + key + ":" + list));
+                    bool inBranch = m.BranchId == branchId;
+                    if (inBranch ? m.Route != keep : !m.IsOn((BranchRoute)r)) continue;
+                    // A balloon of the kept route was counted by that route's list.
+                    int from = inBranch ? (int)keep : r;
+                    foreach (var slot in m.Slots)
+                    {
+                        if (slot.Note?.IsBalloon != true) continue;
+                        int k = order[from].FindIndex(s => ReferenceEquals(s, slot));
+                        var list = headers[from]?.Values;
+                        if (k >= 0 && list != null && k < list.Count) { values.Add(list[k]); lastExplicit = values.Count - 1; }
+                        else values.Add(DefaultBalloon);
+                    }
                 }
+                Write(text, header, r, values.Take(lastExplicit + 1).ToList(), courseLine, edits);
             }
             return edits;
         }

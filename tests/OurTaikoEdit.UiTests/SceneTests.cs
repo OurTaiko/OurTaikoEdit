@@ -668,4 +668,66 @@ public class SceneTests : IDisposable
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(before, code.Text);
     }
+
+    [AvaloniaFact]
+    public void ABranchIsRemovedFromItsFlagAndUndoBringsItBack()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        var code = Find<TextEditor>(window);
+        var timeline = Find<TimelineView>(window);
+        var branch = Assert.Single(editor.Analysis.Branches);
+        editor.Seek(branch.DecisionTime - 0.4);
+        Dispatcher.UIThread.RunJobs();
+        string before = code.Text;
+        var normal = editor.Analysis.Chart!.Notes.Where(n => n.BranchId < 0 || n.Route == BranchRoute.Normal).Select(n => (n.Kind, Math.Round(n.Time, 3))).ToList();
+
+        // The flag's menu, and its last entry.
+        var flag = timeline.TranslatePoint(new Point(timeline.XOf(branch.Time) + 8, 24 + 3 + 8), window)!.Value;
+        // (The menu opens in a popup of its own: it is caught as it opens.)
+        ContextMenu? menu = null;
+        using (ContextMenu.OpenedEvent.AddClassHandler<ContextMenu>((opened, _) => menu = opened))
+        {
+            window.MouseMove(flag);
+            window.MouseDown(flag, MouseButton.Right);
+            window.MouseUp(flag, MouseButton.Right);
+            Dispatcher.UIThread.RunJobs();
+        }
+        Assert.NotNull(menu);
+        var entries = menu!.Items.OfType<MenuItem>().Select(m => m.Header as string).ToList();
+        Assert.Equal(new[] { "Edit #BRANCHSTART p,60,85…", "Show in code", "Remove the branch (keep Normal)" }, entries);
+        menu.Items.OfType<MenuItem>().Last().RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        menu.Close();
+        Dispatcher.UIThread.RunJobs();
+
+        // The normal route's measure is what every route plays; the other routes are gone.
+        Assert.Null(editor.Message);
+        Assert.Contains("1110222011102220,\n1000200010002000,\n#SCROLL 1\n", code.Text);
+        Assert.DoesNotContain("#BRANCH", code.Text);
+        Assert.DoesNotContain("1111222211112222", code.Text);
+        Assert.Empty(editor.Analysis.Branches);
+        Assert.False(editor.Analysis.HasBranches);
+        Assert.Equal(normal, editor.Analysis.Chart!.Notes.Select(n => (n.Kind, Math.Round(n.Time, 3))));
+        Shot(window, "timeline-branch-removed");
+
+        // One step back, and one forward again. (The chart is read again a moment after the text
+        // changes, or at once when the caret moves.)
+        void Read(int line)
+        {
+            Dispatcher.UIThread.RunJobs();
+            code.TextArea.Caret.Position = new TextViewPosition(line, 1);
+            Dispatcher.UIThread.RunJobs();
+        }
+        code.Undo();
+        Read(13);
+        Assert.Equal(before, code.Text);
+        Assert.Equal("p,60,85", Assert.Single(editor.Analysis.Branches).Start.Value);
+        code.Redo();
+        Read(14);
+        Assert.Empty(editor.Analysis.Branches);
+        code.Undo();
+        Read(13);
+        Assert.Equal(before, code.Text);
+        Assert.Single(editor.Analysis.Branches);
+    }
 }

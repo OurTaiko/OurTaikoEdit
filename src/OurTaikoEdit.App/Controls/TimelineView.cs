@@ -682,8 +682,8 @@ public sealed class TimelineView : Control
         new ContextMenu { ItemsSource = items }.Open(this);
     }
 
-    // A branch's flag: its condition changed, or its start shown in the code. (Moving or removing
-    // a branch is done in the code: it is the whole of its routes.)
+    // A branch's flag: its condition changed, its start shown in the code, or the branch taken
+    // out with its normal route kept (undo brings it back).
     void BranchMenu(ChartBranchMark branch)
     {
         if (editor == null) return;
@@ -694,6 +694,8 @@ public sealed class TimelineView : Control
             {
                 Item(Loc.F("EditCommand", (start.Name + " " + start.Value).Trim()), () => _ = editor.EditCommand(start)),
                 Item(Loc.T("ShowInCode"), () => editor.RevealCommand(start)),
+                new Separator(),
+                Item(Loc.F("RemoveBranch", Localization.Names.Route(BranchRoute.Normal)), () => editor.RemoveBranch(branch)),
             },
         }.Open(this);
     }
