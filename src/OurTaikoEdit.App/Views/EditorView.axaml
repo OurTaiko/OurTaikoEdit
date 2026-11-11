@@ -26,7 +26,8 @@
           <TextBlock Text="●" Foreground="{StaticResource AccentBrush}" IsVisible="{Binding IsDirty}" VerticalAlignment="Center" ToolTip.Tip="{l:T UnsavedChanges}" />
           <Button Classes="toolbar" Content="{l:T Save}" Command="{Binding SaveCommand}" Margin="12,0,0,0" ToolTip.Tip="{l:T SaveTip}" />
           <Button Classes="toolbar" x:Name="UndoButton" Content="{l:T Undo}" ToolTip.Tip="{l:T UndoTip}" />
-          <Button Classes="toolbar" x:Name="RedoButton" Content="{l:T Redo}" />
+          <Button Classes="toolbar" x:Name="RedoButton" Content="{l:T Redo}" ToolTip.Tip="{l:T RedoTip}" />
+          <Button Classes="toolbar" x:Name="FindButton" Content="{l:T Find}" ToolTip.Tip="{l:T FindTip}" />
           <Button Classes="toolbar" Content="{l:T Format}" Command="{Binding FormatDocumentCommand}" ToolTip.Tip="{l:T FormatTip}" />
         </StackPanel>
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">

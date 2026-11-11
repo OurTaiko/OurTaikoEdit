@@ -90,6 +90,7 @@ public partial class EditorView : UserControl
         };
         UndoButton.Click += (_, _) => Code.Undo();
         RedoButton.Click += (_, _) => Code.Redo();
+        FindButton.Click += (_, _) => Find();
         // The chosen difficulty clicked again: back to the start of its chart. (Seen on the way down,
         // before the list box acts on the press; choosing the same item again changes nothing.)
         BlockList.AddHandler(PointerPressedEvent, (_, e) =>
@@ -103,6 +104,27 @@ public partial class EditorView : UserControl
         ProblemList.DoubleTapped += (_, _) => GoToProblem();
         ProblemList.SelectionChanged += (_, _) => GoToProblem();
     }
+
+    // Find, undo and redo from anywhere in the scene. The code editor has its own keys for them
+    // while it has the focus, so only what it left alone arrives here: the keys pressed on the
+    // timeline, the lane or the toolbar, and ⇧⌘Z, which the code editor does not know as redo.
+    // Undo and redo that come up from a text box (the search box) are not the document's.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Handled || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0 || e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (e.Key == Key.F && !shift) Find();
+        else if (e.Source is TextBox) return;
+        else if (e.Key == Key.Z && !shift) Code.Undo();
+        else if (e.Key == Key.Z || (e.Key == Key.Y && !shift)) Code.Redo();
+        else return;
+        e.Handled = true;
+    }
+
+    // The code editor's search panel, as its own ⌘/Ctrl+F opens it: with the selection as the
+    // text to find when there is one on a single line, and the search box focused.
+    public void Find() => ApplicationCommands.Find.Execute(null, Code.TextArea);
 
     protected override void OnDataContextChanged(EventArgs e)
     {

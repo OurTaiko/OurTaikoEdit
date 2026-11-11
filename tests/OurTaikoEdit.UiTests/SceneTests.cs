@@ -423,4 +423,73 @@ public class SceneTests : IDisposable
     // The timeline's x for a time, as it lays it out (header 78 px, 180 px a second from -0.5 s
     // after a seek to 0 centres nothing: the playhead is already in view).
     static double TimeX(TimelineView timeline, EditorViewModel editor, double time) => 78 + (time + 0.5) * 180;
+
+    [AvaloniaFact]
+    public void FindUndoAndRedoWorkFromTheWholeScene()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        var code = Find<TextEditor>(window);
+        var timeline = Find<TimelineView>(window);
+        // The code editor's own keys use the platform's command key; the scene takes either.
+        var command = OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control;
+        void Press(Control focus, PhysicalKey key, RawInputModifiers modifiers)
+        {
+            focus.Focus();
+            Dispatcher.UIThread.RunJobs();
+            window.KeyPressQwerty(key, modifiers);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        // Find from the timeline opens the code's search panel with the search box focused.
+        var panel = code.SearchPanel;
+        Assert.False(panel.IsOpened);
+        Press(timeline, PhysicalKey.F, command);
+        Assert.True(panel.IsOpened);
+        var box = panel.GetVisualDescendants().OfType<TextBox>().First();
+        Assert.True(box.IsFocused);
+        window.KeyTextInput("#GOGO");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("#GOGO", panel.SearchPattern);
+        Shot(window, "editor-find");
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(panel.IsOpened);
+
+        // From the code, and from the toolbar: the selection is what to look for.
+        Press(code.TextArea, PhysicalKey.F, command);
+        Assert.True(panel.IsOpened);
+        panel.Close();
+        code.Select(code.Text.IndexOf("#SCROLL", StringComparison.Ordinal), 7);
+        var find = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "FindButton");
+        find.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(panel.IsOpened);
+        Assert.Equal("#SCROLL", panel.SearchPattern);
+
+        // Undo with the focus on the timeline. A key the search box leaves alone is still not
+        // the document's: redo there changes nothing.
+        string original = code.Text;
+        code.Document.Insert(0, "// a comment\n");
+        Dispatcher.UIThread.RunJobs();
+        string edited = code.Text;
+        Press(timeline, PhysicalKey.Z, command);
+        Assert.Equal(original, code.Text);
+        Press(box, PhysicalKey.Z, command | RawInputModifiers.Shift);
+        Assert.True(box.IsFocused);
+        Assert.Equal(original, code.Text);
+        panel.Close();
+
+        // Redo and undo from the timeline, then in the code.
+        Press(timeline, PhysicalKey.Z, command | RawInputModifiers.Shift);
+        Assert.Equal(edited, code.Text);
+        Press(timeline, PhysicalKey.Z, command);
+        Assert.Equal(original, code.Text);
+        Press(timeline, PhysicalKey.Y, command);
+        Assert.Equal(edited, code.Text);
+        Press(code.TextArea, PhysicalKey.Z, command);
+        Assert.Equal(original, code.Text);
+        Press(code.TextArea, PhysicalKey.Z, command | RawInputModifiers.Shift);
+        Assert.Equal(edited, code.Text);
+    }
 }

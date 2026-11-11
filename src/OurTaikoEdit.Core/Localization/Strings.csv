@@ -65,8 +65,11 @@ BackToProjects,← Projects,← 项目,← プロジェクト
 UnsavedChanges,Unsaved changes,有未保存的更改,未保存の変更があります
 SaveTip,Save (⌘S / Ctrl+S),保存（⌘S / Ctrl+S）,保存（⌘S / Ctrl+S）
 Undo,Undo,撤销,元に戻す
-UndoTip,Undo (covers timeline edits too),撤销（也包括时间轴上的编辑）,元に戻す（タイムラインの編集も含む）
+UndoTip,Undo (⌘Z / Ctrl+Z); covers timeline edits too,撤销（⌘Z / Ctrl+Z）；也包括时间轴上的编辑,元に戻す（⌘Z / Ctrl+Z）。タイムラインの編集も含む
 Redo,Redo,重做,やり直し
+RedoTip,Redo (⇧⌘Z / Ctrl+Y),重做（⇧⌘Z / Ctrl+Y）,やり直し（⇧⌘Z / Ctrl+Y）
+Find,Find,查找,検索
+FindTip,Find in the code (⌘F / Ctrl+F),在代码中查找（⌘F / Ctrl+F）,コード内を検索（⌘F / Ctrl+F）
 Format,Format,格式化,整形
 FormatTip,Format the document (Shift+Alt+F); every difficulty's hash stays the same,格式化文档（Shift+Alt+F）；每个难度的哈希值保持不变,ドキュメントを整形（Shift+Alt+F）。各難易度のハッシュは変わりません
 RewindTip,Back to the start,回到开头,先頭に戻る
