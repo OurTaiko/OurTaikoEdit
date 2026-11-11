@@ -120,6 +120,7 @@ public sealed class TjaLanguage : IChartLanguage
             SourceOf = n => map.TryGetSpan(n, out var s) ? Span(s) : default,
             TailOf = n => map.TryGetTailSpan(n, out var s) ? Span(s) : default,
             Commands = analysis.Chart == null ? Array.Empty<ChartCommand>() : Commands(doc, analysis, measures, Span),
+            Branches = analysis.Chart == null ? Array.Empty<ChartBranchMark>() : Branches(doc, analysis, Span),
             StartLine = lines.Line(analysis.StartSpan.Start), EndLine = lines.Line(analysis.EndSpan.Start),
         };
     }
@@ -284,18 +285,7 @@ public sealed class TjaLanguage : IChartLanguage
             if (tokens[i].Kind != TjaSyntaxKind.Command) continue;
             string name = doc.Text.Substring(tokens[i].Span.Start, tokens[i].Span.Length).ToUpperInvariant();
             if (Structural.Contains(name)) { markers.Add(tokens[i].Span.Start); continue; }
-            var whole = tokens[i].Span;
-            string value = "";
-            if (i + 1 < tokens.Count && tokens[i + 1].Kind == TjaSyntaxKind.Whitespace && i + 2 < tokens.Count && tokens[i + 2].Kind == TjaSyntaxKind.Argument)
-            {
-                whole = TextSpan.FromBounds(whole.Start, tokens[i + 2].Span.End);
-                value = doc.Text.Substring(tokens[i + 2].Span.Start, tokens[i + 2].Span.Length).Trim();
-            }
-            else if (i + 1 < tokens.Count && tokens[i + 1].Kind == TjaSyntaxKind.Argument)
-            {
-                whole = TextSpan.FromBounds(whole.Start, tokens[i + 1].Span.End);
-                value = doc.Text.Substring(tokens[i + 1].Span.Start, tokens[i + 1].Span.Length).Trim();
-            }
+            var (whole, value) = Written(doc, i);
             int at = whole.Start;
             int next = places.FindIndex(p => p.Offset > at);
             double time = next >= 0 ? places[next].Time : analysis.Chart!.Duration;
@@ -308,6 +298,36 @@ public sealed class TjaLanguage : IChartLanguage
     }
 
     // The first token at or after an offset.
+    // The command token at an index with its argument: the span of both, and the argument.
+    static (TextSpan Whole, string Value) Written(TjaDocument doc, int i)
+    {
+        var tokens = doc.Syntax;
+        var whole = tokens[i].Span;
+        int argument = i + 1 < tokens.Count && tokens[i + 1].Kind == TjaSyntaxKind.Argument ? i + 1
+            : i + 2 < tokens.Count && tokens[i + 1].Kind == TjaSyntaxKind.Whitespace && tokens[i + 2].Kind == TjaSyntaxKind.Argument ? i + 2 : -1;
+        if (argument < 0) return (whole, "");
+        return (TextSpan.FromBounds(whole.Start, tokens[argument].Span.End), doc.Text.Substring(tokens[argument].Span.Start, tokens[argument].Span.Length).Trim());
+    }
+
+    // The block's branches, each with its #BRANCHSTART as written: the chart's branches are in
+    // the order of the commands that start them.
+    static List<ChartBranchMark> Branches(TjaDocument doc, TjaAnalysis analysis, Func<TextSpan, SourceSpan> span)
+    {
+        var tokens = doc.Syntax;
+        var branches = analysis.Chart!.Branches;
+        var result = new List<ChartBranchMark>();
+        int to = analysis.EndSpan.Start;
+        for (int i = FirstAt(tokens, analysis.StartSpan.End); i < tokens.Count && tokens[i].Span.Start < to && result.Count < branches.Count; i++)
+        {
+            if (tokens[i].Kind != TjaSyntaxKind.Command) continue;
+            if (!doc.Text.AsSpan(tokens[i].Span.Start, tokens[i].Span.Length).Equals("#BRANCHSTART", StringComparison.OrdinalIgnoreCase)) continue;
+            var branch = branches[result.Count];
+            var (whole, value) = Written(doc, i);
+            result.Add(new ChartBranchMark(branch.Id, new ChartCommand("#BRANCHSTART", value, span(whole), branch.Time, -1, BranchRoute.Normal), branch.Time, branch.EndTime, branch.DecisionTime));
+        }
+        return result;
+    }
+
     static int FirstAt(IReadOnlyList<TjaSyntaxToken> tokens, int offset)
     {
         int lo = 0, hi = tokens.Count;

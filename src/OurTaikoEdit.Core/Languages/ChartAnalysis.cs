@@ -24,6 +24,10 @@ public sealed record ChartDiagnostic(SourceSpan Source, string Message, Diagnost
 // One playable block of the file (a TJA #START … #END).
 public sealed record ChartBlock(int Index, string Name, string Course, string Side, int Level, int StartLine, bool IsBranching);
 
+// A branch of the parsed block: the command that starts it as written (the condition is its
+// value), when its routes start and end, and when the condition is judged, at or before the start.
+public sealed record ChartBranchMark(int Id, ChartCommand Start, double Time, double EndTime, double DecisionTime);
+
 // One character position of a measure.
 public sealed record ChartSlot(SourceSpan Source, string Token, double Time, ChartNote? Note);
 
@@ -96,6 +100,8 @@ public sealed class ChartAnalysis
     // Every command of the chosen block as written (#BPMCHANGE, #SCROLL, #GOGOSTART …), with when
     // it takes effect, for the timeline's command row.
     public IReadOnlyList<ChartCommand> Commands { get; init; } = Array.Empty<ChartCommand>();
+    // The chosen block's branches, in the order they are written; not among Commands.
+    public IReadOnlyList<ChartBranchMark> Branches { get; init; } = Array.Empty<ChartBranchMark>();
     // The parsed block's lines (from its #START to its #END).
     public int StartLine { get; init; }
     public int EndLine { get; init; }

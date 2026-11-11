@@ -607,4 +607,65 @@ public class SceneTests : IDisposable
         Assert.Equal((13, 1), (Box().Line, Box().Column));
         Assert.Equal((13, 1), (caret.Line, caret.Column));
     }
+
+    // Answers every prompt with one line.
+    sealed class Answers(string answer) : IDialogService
+    {
+        public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
+        public Task<string?> PickFileAsync(string title, string filterName, params string[] patterns) => Task.FromResult<string?>(null);
+        public Task<NewProjectRequest?> NewProjectAsync(string location) => Task.FromResult<NewProjectRequest?>(null);
+        public Task MessageAsync(string title, string message) => Task.CompletedTask;
+        public Task<bool> ConfirmAsync(string title, string message, string confirm) => Task.FromResult(true);
+        public Task<string?> PromptAsync(string title, string message, string value) => Task.FromResult<string?>(answer);
+        public Task<SaveChoice> AskSaveAsync(string name) => Task.FromResult(SaveChoice.Discard);
+        public Task<bool> SettingsAsync(AppSettings settings) => Task.FromResult(false);
+    }
+
+    [AvaloniaFact]
+    public void TheTimelineFlagsWhereABranchStartsAndWhereItIsJudged()
+    {
+        var (window, vm, registry) = Open();
+        var editor = new EditorViewModel(SampleProject(registry), new Answers("p,50,80"), () => { }, vm.Settings);
+        vm.Scene = editor;
+        Dispatcher.UIThread.RunJobs();
+        var code = Find<TextEditor>(window);
+        var timeline = Find<TimelineView>(window);
+        var branch = Assert.Single(editor.Analysis.Branches);
+        Assert.Equal("p,60,85", branch.Start.Value);
+        // Judged at the bar line before it.
+        Assert.Equal(editor.Analysis.Measures.Last(m => m.BranchId < 0 && m.Time < branch.Time).Time, branch.DecisionTime, 3);
+        editor.Seek(branch.DecisionTime - 0.4);
+        Dispatcher.UIThread.RunJobs();
+        Shot(window, "timeline-branch");
+
+        // The flags are at the top of the rows, under the ruler: the start's, and a level lower
+        // the one where the branch is judged. Either shows the #BRANCHSTART in the code.
+        Point Flag(double time, int level) => timeline.TranslatePoint(new Point(timeline.XOf(time) + 8, 24 + 3 + level * 18 + 8), window)!.Value;
+        void Click(Point at, int count = 1)
+        {
+            window.MouseMove(at);
+            for (int i = 0; i < count; i++)
+            {
+                window.MouseDown(at, MouseButton.Left);
+                window.MouseUp(at, MouseButton.Left);
+            }
+            Dispatcher.UIThread.RunJobs();
+        }
+        int line = Array.IndexOf(code.Text.Split('\n'), "#BRANCHSTART p,60,85") + 1;
+        string before = code.Text;
+        Click(Flag(branch.DecisionTime, 1));
+        Assert.Equal(line, code.TextArea.Caret.Line);
+        code.TextArea.Caret.Position = new TextViewPosition(1, 1);
+        Click(Flag(branch.Time, 0));
+        Assert.Equal(line, code.TextArea.Caret.Line);
+        Assert.Equal(before, code.Text);
+
+        // Twice: its condition is asked for and written.
+        Click(Flag(branch.Time, 0), 2);
+        Assert.Contains("\n#BRANCHSTART p,50,80\n", code.Text);
+        Assert.Equal("p,50,80", Assert.Single(editor.Analysis.Branches).Start.Value);
+        code.Undo();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(before, code.Text);
+    }
 }

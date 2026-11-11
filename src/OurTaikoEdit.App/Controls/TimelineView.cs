@@ -12,7 +12,8 @@ using OurTaiko;
 namespace OurTaikoEdit.App.Controls;
 
 // The timing timeline: time runs left to right; one row of notes, or one per route when the
-// chart branches; a ruler (click or drag to seek) and a row of tempo and go-go marks. The grid
+// chart branches; a ruler (click or drag to seek) and a row of tempo and go-go marks, with where
+// each branch starts and where its condition is judged. The grid
 // splits each measure by the chosen division. With a note tool, a click places a note on the
 // grid (rolls and balloons: drag to the end); a right click removes the note under the pointer.
 // Wheel scrolls, Ctrl/⌘ + wheel zooms.
@@ -50,6 +51,9 @@ public sealed class TimelineView : Control
     static readonly IPen RowLine = new Pen(new SolidColorBrush(Color.Parse("#2E3036")), 1);
     static readonly IBrush GogoBrush = new SolidColorBrush(Color.FromArgb(110, 255, 120, 40));
     static readonly IPen PlayheadPen = new Pen(ChartPalette.Playhead, 1.5);
+    static readonly IBrush BranchBrush = new SolidColorBrush(Color.Parse("#C58AF9"));
+    static readonly IPen BranchPen = new Pen(new SolidColorBrush(Color.FromArgb(210, 197, 138, 249)), 1.5);
+    static readonly IPen JudgePen = new Pen(new SolidColorBrush(Color.FromArgb(210, 197, 138, 249)), 1.5) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
 
     public TimelineView()
     {
@@ -141,7 +145,7 @@ public sealed class TimelineView : Control
         for (int row = 0; row < rows.Count; row++)
         {
             var route = rows[row];
-            double top = RowTop(row), h = RowHeight, cy = top + h / 2;
+            double top = RowTop(row), h = RowHeight;
             foreach (var m in analysis.Measures)
             {
                 if (!m.IsOn(route) || m.EndTime < t0 || m.Time > t1) continue;
@@ -160,7 +164,12 @@ public sealed class TimelineView : Control
                 }
             }
             ctx.DrawLine(RowLine, new Point(0, top + h), new Point(b.Width, top + h));
-            if (chart == null) continue;
+        }
+        DrawBranchLines(ctx, analysis, t0, t1);
+        for (int row = 0; row < rows.Count && chart != null; row++)
+        {
+            var route = rows[row];
+            double h = RowHeight, cy = RowTop(row) + h / 2;
             double r = Math.Min(h * 0.28, 11);
             for (int i = chart.Notes.Count - 1; i >= 0; i--)
             {
@@ -172,6 +181,7 @@ public sealed class TimelineView : Control
             }
         }
 
+        DrawBranchFlags(ctx, analysis, t0, t1);
         DrawGhost(ctx);
         DrawRuler(ctx, analysis, t0, t1);
         DrawEvents(ctx, analysis, t0, t1);
@@ -185,6 +195,66 @@ public sealed class TimelineView : Control
 
         double px = XOf(editor.Playhead);
         if (px >= HeaderWidth) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, b.Height));
+    }
+
+    // Where each branch starts, a line down the rows, and where its condition is judged, a dashed
+    // one (when that is earlier). Under the notes.
+    void DrawBranchLines(DrawingContext ctx, ChartAnalysis analysis, double t0, double t1)
+    {
+        double top = RulerHeight, bottom = RowTop(Rows.Count);
+        foreach (var branch in analysis.Branches)
+        {
+            if (branch.DecisionTime < branch.Time - 1e-6) Line(branch.DecisionTime, JudgePen);
+            Line(branch.Time, BranchPen);
+        }
+
+        void Line(double time, IPen pen)
+        {
+            double x = XOf(time);
+            if (time < t0 || time > t1 || x < HeaderWidth) return;
+            ctx.DrawLine(pen, new Point(x, top), new Point(x, bottom));
+        }
+    }
+
+    static readonly IBrush FlagText = new SolidColorBrush(Color.Parse("#1A1B1E"));
+    static readonly IBrush JudgeFlagFill = new SolidColorBrush(Color.FromArgb(220, 26, 27, 30));
+    const double FlagHeight = 16;
+    // The flags as drawn, for the pointer: a branch's start, or where it is judged.
+    readonly List<(Rect Rect, ChartBranchMark Branch, bool Judge)> flags = new();
+
+    // A flag at the top of each of those lines: the branch's condition as written at its start,
+    // and "judged" a level lower, so the two never cover each other. A flag that would cover the
+    // one before it on its level is left out; its line stays.
+    void DrawBranchFlags(DrawingContext ctx, ChartAnalysis analysis, double t0, double t1)
+    {
+        flags.Clear();
+        double top = RulerHeight + 3;
+        double startRight = double.NegativeInfinity, judgeRight = double.NegativeInfinity;
+        foreach (var branch in analysis.Branches)
+        {
+            Flag(branch, judge: false, Loc.F("BranchMark", branch.Start.Value).Trim(), top, ref startRight);
+            Flag(branch, judge: true, Loc.T("JudgeMark"), top + FlagHeight + 2, ref judgeRight);
+        }
+
+        void Flag(ChartBranchMark branch, bool judge, string label, double y, ref double right)
+        {
+            double time = judge ? branch.DecisionTime : branch.Time, x = XOf(time);
+            if (time < t0 || time > t1 || x < HeaderWidth || x < right + 4) return;
+            var text = Text(label, 11, judge ? BranchBrush : FlagText);
+            var rect = new Rect(x, y, text.Width + 10, FlagHeight);
+            if (judge) ctx.DrawRectangle(JudgeFlagFill, new Pen(BranchBrush, 1), rect, 3, 3);
+            else ctx.DrawRectangle(BranchBrush, null, rect, 3, 3);
+            ctx.DrawText(text, new Point(x + 5, y + (FlagHeight - text.Height) / 2));
+            flags.Add((rect, branch, judge));
+            right = rect.Right;
+        }
+    }
+
+    ChartBranchMark? FlagAt(Point p)
+    {
+        foreach (var flag in flags)
+            if (flag.Rect.Contains(p)) return flag.Branch;
+        return null;
     }
 
     static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.FromArgb(70, 92, 200, 232)), 2);
@@ -271,7 +341,7 @@ public sealed class TimelineView : Control
                 return;
             case Drag.None when editor.Tool.Kind is { } kind:
                 int rowAt = RowAt(p.Y);
-                if (rowAt < 0) return;
+                if (rowAt < 0 || FlagAt(p) != null) return;
                 if (Snap(p.X, Rows[rowAt]) is { } place) DrawNote(ctx, kind, XOf(place.Time), XOf(place.Time), RowTop(rowAt) + RowHeight / 2, r, false, 0.45);
                 return;
         }
@@ -432,6 +502,14 @@ public sealed class TimelineView : Control
             }
             return;
         }
+        if (FlagAt(p) is { } branch)
+        {
+            // A branch's flag: its start is shown in the code; twice, its condition is changed.
+            if (point.IsRightButtonPressed) BranchMenu(branch);
+            else if (e.ClickCount == 2) _ = editor.EditCommand(branch.Start);
+            else if (point.IsLeftButtonPressed) editor.RevealCommand(branch.Start);
+            return;
+        }
         int row = RowAt(p.Y);
         if (row < 0) return;
         var route = Rows[row];
@@ -496,7 +574,8 @@ public sealed class TimelineView : Control
                 // The end of a roll can be dragged with Select.
                 int row = RowAt(p.Y);
                 bool onTail = editor.Tool.Kind == null && row >= 0 && TailAt(p, Rows[row]) != null;
-                Cursor = new Cursor(onTail ? StandardCursorType.SizeWestEast : InEvents(p.Y) && CommandNear(p.X) != null ? StandardCursorType.Hand : StandardCursorType.Cross);
+                bool onMark = InEvents(p.Y) ? CommandNear(p.X) != null : FlagAt(p) != null;
+                Cursor = new Cursor(onTail ? StandardCursorType.SizeWestEast : onMark ? StandardCursorType.Hand : StandardCursorType.Cross);
                 break;
             case Drag.Seek:
                 editor.Seek(TimeOf(Math.Max(HeaderWidth, p.X)));
@@ -601,6 +680,22 @@ public sealed class TimelineView : Control
         if (Snap(p.X, route) is { } at) items.Add(Item(Loc.T("PasteHere"), () => editor.Paste(at)));
         items.Add(Item(Loc.T("SelectAll"), editor.SelectAll));
         new ContextMenu { ItemsSource = items }.Open(this);
+    }
+
+    // A branch's flag: its condition changed, or its start shown in the code. (Moving or removing
+    // a branch is done in the code: it is the whole of its routes.)
+    void BranchMenu(ChartBranchMark branch)
+    {
+        if (editor == null) return;
+        var start = branch.Start;
+        new ContextMenu
+        {
+            ItemsSource = new List<object>
+            {
+                Item(Loc.F("EditCommand", (start.Name + " " + start.Value).Trim()), () => _ = editor.EditCommand(start)),
+                Item(Loc.T("ShowInCode"), () => editor.RevealCommand(start)),
+            },
+        }.Open(this);
     }
 
     // The command whose tick is nearest an x, within a few pixels.

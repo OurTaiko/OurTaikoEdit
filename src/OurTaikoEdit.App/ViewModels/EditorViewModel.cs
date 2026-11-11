@@ -486,8 +486,12 @@ public sealed partial class EditorViewModel : ViewModelBase
     }
 
     // The same command in the current analysis (a dialog may have let the text change).
+    // The command as the text has it now (a branch's start is one too, for its condition).
     ChartCommand? FindCommand(ChartCommand command)
-        => Analysis.Commands.FirstOrDefault(c => c == command) ?? Analysis.Commands.FirstOrDefault(c => c.Source == command.Source && c.Name == command.Name);
+    {
+        var all = Analysis.Commands.Concat(Analysis.Branches.Select(b => b.Start)).ToList();
+        return all.FirstOrDefault(c => c == command) ?? all.FirstOrDefault(c => c.Source == command.Source && c.Name == command.Name);
+    }
 
     // A roll, balloon or kusudama given a new end; it stays selected.
     public void ResizeRoll(ChartNote roll, GridPosition end, BranchRoute row)

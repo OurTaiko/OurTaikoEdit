@@ -176,6 +176,29 @@ public class TimelineEditTests
     }
 
     [Fact]
+    public void ABranchKnowsItsStartItsConditionAndWhenItIsJudged()
+    {
+        // The body starts on line 5; a measure is two seconds long.
+        string text = Chart("1,\n1,\n#SECTION\n1,\n#BRANCHSTART p, 60,85\n#N\n1,\n1,\n#E\n2,\n2,\n#BRANCHEND\n1,\n#BRANCHSTART r,1,2\n#N\n5008,\n#M\n,\n#BRANCHEND\n1,");
+        var a = Tja.Analyze(text, 0);
+        Assert.Equal(2, a.Branches.Count);
+        var first = a.Branches[0];
+        Assert.Equal(("#BRANCHSTART", "p, 60,85", 9, 1), (first.Start.Name, first.Start.Value, first.Start.Source.Line, first.Start.Source.Column));
+        // Judged at the bar line before the branch: the start of the measure before it.
+        Assert.Equal((6.0, 4.0, 10.0), (first.Time, first.DecisionTime, first.EndTime));
+        var second = a.Branches[1];
+        Assert.Equal(("r,1,2", 18), (second.Start.Value, second.Start.Source.Line));
+        Assert.Equal((12.0, 10.0, 14.0), (second.Time, second.DecisionTime, second.EndTime));
+        // Not among the commands the row moves and removes.
+        Assert.DoesNotContain(a.Commands, c => c.Name == "#BRANCHSTART");
+
+        // Its condition is changed as any command's value is.
+        string changed = Apply(text, Tja.Editing.ChangeCommand(a, first.Start, "p,50,80"));
+        Assert.Contains("\n#BRANCHSTART p,50,80\n#N\n", changed);
+        Assert.Equal("p,50,80", Tja.Analyze(changed, 0).Branches[0].Start.Value);
+    }
+
+    [Fact]
     public void ACommandMovesInOneChange()
     {
         string text = Chart("1000,\n#SCROLL 2\n2000,\n3000,");

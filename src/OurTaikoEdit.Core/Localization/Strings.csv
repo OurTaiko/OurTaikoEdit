@@ -193,6 +193,8 @@ InsertAtMeasure,Insert {0} at this measure…,在这一小节插入 {0}…,こ�
 EditCommand,Edit {0}…,编辑 {0}…,{0} を編集…
 RemoveCommand,Remove {0},删除 {0},{0} を削除
 ShowInCode,Show in code,在代码中显示,コードで表示
+BranchMark,Branch {0},分歧 {0},分岐 {0}
+JudgeMark,Judged,判定,判定
 LaneEmpty,The chart appears here once its difficulty parses.,当前难度解析成功后，谱面会显示在这里。,難易度を解析できると、ここに譜面が表示されます。
 LaneMeasure,Measure {0},第 {0} 小节,{0} 小節目
 LaneRoute,Route {0},路线 {0},ルート {0}
