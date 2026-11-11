@@ -233,8 +233,9 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (!caretChoosingBlock) BlockChosen?.Invoke();
     }
 
-    // The code editor's caret: the playhead follows it while stopped, and so does the block. Not
-    // when the caret was itself moved to follow the playhead (movePlayhead false).
+    // The code editor's caret: the playhead follows it while stopped, and so do the block and, in
+    // a branch, the route. Not when the caret was itself moved to follow the playhead
+    // (movePlayhead false).
     public void OnCaretMoved(int line, int column, bool movePlayhead = true)
     {
         caretLine = line; caretColumn = column;
@@ -254,6 +255,12 @@ public sealed partial class EditorViewModel : ViewModelBase
             break;
         }
         if (line < Analysis.StartLine || line > Analysis.EndLine) return;
+        // In another route of a branch than the one shown: that route is shown, so that the slot
+        // at the playhead is the one the caret is on. (Not when the route shown already plays
+        // this one, for a branch that does not have it.)
+        if (Analysis.RouteAt(line) is { BranchId: >= 0 } at && Analysis.Chart is { } chart && at.BranchId < chart.Branches.Count
+            && chart.Branches[at.BranchId].ResolveRoute(Route) != at.Route)
+            Route = at.Route;
         if (Analysis.SlotAt(line, column) is { } slot) Playhead = slot.Time;
     }
 

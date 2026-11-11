@@ -116,4 +116,28 @@ public sealed class ChartAnalysis
 
         static bool Before(SourceSpan a, SourceSpan b) => a.Line < b.Line || a.Line == b.Line && a.Column < b.Column;
     }
+
+    // The branch and route a line of the parsed block is written in (BranchId -1: the part every
+    // route plays): that of the notes or command on the line, or for a line with neither, of what
+    // is written before and after it when the two agree. Null between routes (a branch's own
+    // markers) and outside the chart.
+    public (int BranchId, BranchRoute Route)? RouteAt(int line)
+    {
+        (int Line, int BranchId, BranchRoute Route)? before = null, after = null;
+        foreach (var m in Measures)
+        {
+            foreach (var slot in m.Slots) See(slot.Source.Line, m.BranchId, m.Route);
+            if (!m.Comma.IsEmpty) See(m.Comma.Line, m.BranchId, m.Route);
+        }
+        foreach (var c in Commands) See(c.Source.Line, c.BranchId, c.Route);
+        if (before is not { } b || after is not { } a || b.BranchId != a.BranchId || b.Route != a.Route) return null;
+        return (b.BranchId, b.Route);
+
+        void See(int at, int branchId, BranchRoute route)
+        {
+            if (branchId < 0) (branchId, route) = (-1, BranchRoute.Normal);
+            if (at <= line && (before == null || at > before.Value.Line)) before = (at, branchId, route);
+            if (at >= line && (after == null || at < after.Value.Line)) after = (at, branchId, route);
+        }
+    }
 }

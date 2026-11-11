@@ -249,14 +249,16 @@ public partial class EditorView : UserControl
         finally { playheadDriving = false; }
     }
 
-    // The last slot at or before the playhead on the route being shown.
+    // The last slot at or before the playhead on the route being shown. (The measures are in the
+    // order they are written: a route's come after those of the routes written before it, which
+    // play at the same times.)
     static ChartSlot? SlotAtPlayhead(EditorViewModel vm)
     {
         if (vm.Analysis.Chart is not { } chart) return null;
         ChartSlot? best = null;
         foreach (var m in vm.Analysis.Measures)
         {
-            if (m.Time > vm.Playhead) break;
+            if (m.Time > vm.Playhead) continue;
             if (m.BranchId >= 0 && !Controls.LaneView.Shown(chart, m.BranchId, m.Route, vm.Route)) continue;
             foreach (var s in m.Slots)
                 if (s.Time <= vm.Playhead + 1e-6 && (best == null || s.Time >= best.Time)) best = s;

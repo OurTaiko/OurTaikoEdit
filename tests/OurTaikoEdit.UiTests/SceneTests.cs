@@ -492,4 +492,70 @@ public class SceneTests : IDisposable
         Press(code.TextArea, PhysicalKey.Z, command | RawInputModifiers.Shift);
         Assert.Equal(edited, code.Text);
     }
+
+    [AvaloniaFact]
+    public void TheCaretInAnotherRouteOfABranchChoosesThatRoute()
+    {
+        var (window, vm, registry) = Open();
+        // Two measures in each route: the measures are in the order they are written, so the
+        // expert and master ones come after normal ones that play later.
+        string folder = Path.Combine(root, "Branches");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "song.tja"),
+            "TITLE:Branches\nBPM:120\nCOURSE:Oni\nLEVEL:5\n#START\n1000100010001000,\n#BRANCHSTART p,60,85\n#N\n1000200010002000,\n1000000010000000,\n"
+            + "#E\n1010201010102010,\n1010101010101010,\n#M\n1111222211112222,\n2222111122221111,\n#BRANCHEND\n6000000000000008,\n#END\n");
+        var editor = new EditorViewModel(registry.OpenFolder(folder), new DialogService(window), () => { }, vm.Settings);
+        vm.Scene = editor;
+        Dispatcher.UIThread.RunJobs();
+        var code = Find<TextEditor>(window);
+        var caret = code.TextArea.Caret;
+        var lines = code.Text.Split('\n');
+        int LineOf(string text) => Array.IndexOf(lines, text) + 1;
+        // The box drawn on the slot at the playhead.
+        SourceSpan Box()
+        {
+            var renderer = code.TextArea.TextView.BackgroundRenderers.Single(r => r.GetType().Name == "PlayheadRenderer");
+            return (SourceSpan)renderer.GetType().GetProperty("Span")!.GetValue(renderer)!;
+        }
+        void Put(int line, int column)
+        {
+            caret.Position = new TextViewPosition(line, column);
+            Dispatcher.UIThread.RunJobs();
+        }
+        int normal = LineOf("1000200010002000,"), expert = LineOf("1010201010102010,"), master = LineOf("1111222211112222,");
+        Assert.Equal(BranchRoute.Normal, editor.Route);
+
+        // Into the expert route: the route shown follows, and the box is where the caret is.
+        Put(expert, 5);
+        Assert.Equal(BranchRoute.Expert, editor.Route);
+        Assert.Equal((expert, 5), (Box().Line, Box().Column));
+        Assert.Equal((expert, 5), (caret.Line, caret.Column));
+        Shot(window, "editor-caret-expert");
+
+        // The master route, then a line of its own in it that holds no note (its marker's line
+        // changes nothing), and back to the normal route.
+        Put(master, 9);
+        Assert.Equal(BranchRoute.Master, editor.Route);
+        Assert.Equal((master, 9), (Box().Line, Box().Column));
+        Put(LineOf("#E"), 1);
+        Assert.Equal(BranchRoute.Master, editor.Route);
+        Put(normal, 1);
+        Assert.Equal(BranchRoute.Normal, editor.Route);
+        Assert.Equal((normal, 1), (Box().Line, Box().Column));
+
+        // Further into each route than its first measure.
+        foreach (var (text, route, column) in new[] { ("2222111122221111,", BranchRoute.Master, 7), ("1010101010101010,", BranchRoute.Expert, 3), ("1000000010000000,", BranchRoute.Normal, 9) })
+        {
+            Put(LineOf(text), column);
+            Assert.Equal(route, editor.Route);
+            Assert.Equal((LineOf(text), column), (Box().Line, Box().Column));
+        }
+
+        // The part every route plays keeps the route that was chosen.
+        Put(expert, 1);
+        Put(LineOf("1000100010001000,"), 3);
+        Assert.Equal(BranchRoute.Expert, editor.Route);
+        Put(LineOf("6000000000000008,"), 1);
+        Assert.Equal(BranchRoute.Expert, editor.Route);
+    }
 }

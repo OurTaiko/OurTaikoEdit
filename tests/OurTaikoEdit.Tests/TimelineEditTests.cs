@@ -135,6 +135,32 @@ public class TimelineEditTests
     }
 
     [Fact]
+    public void ALineKnowsTheRouteItIsWrittenIn()
+    {
+        // The body starts on line 5.
+        var a = Tja.Analyze(Chart("10,\n#BRANCHSTART p,1,2\n#N\n1,\n#E\n#SCROLL 2\n\n2,\n// a comment\n2,\n#BRANCHEND\n#SCROLL 1\n1,"), 0);
+        (int, BranchRoute)? common = (-1, BranchRoute.Normal), normal = (0, BranchRoute.Normal), expert = (0, BranchRoute.Expert);
+        Assert.Equal(common, a.RouteAt(5));
+        // A branch's markers are between routes: no route of their own.
+        Assert.Null(a.RouteAt(6));
+        Assert.Null(a.RouteAt(7));
+        Assert.Equal(normal, a.RouteAt(8));
+        Assert.Null(a.RouteAt(9));
+        // A command, an empty line and a comment inside a route are that route's.
+        Assert.Equal(expert, a.RouteAt(10));
+        Assert.Equal(expert, a.RouteAt(11));
+        Assert.Equal(expert, a.RouteAt(12));
+        Assert.Equal(expert, a.RouteAt(13));
+        Assert.Equal(expert, a.RouteAt(14));
+        Assert.Null(a.RouteAt(15));
+        Assert.Equal(common, a.RouteAt(16));
+        Assert.Equal(common, a.RouteAt(17));
+        // Outside the chart.
+        Assert.Null(a.RouteAt(2));
+        Assert.Null(a.RouteAt(40));
+    }
+
+    [Fact]
     public void ACommandMovesInOneChange()
     {
         string text = Chart("1000,\n#SCROLL 2\n2000,\n3000,");
