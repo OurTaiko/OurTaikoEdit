@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OurTaikoEdit.App/OurTaikoEdit.App.csproj" />
+    <Project Path="src/OurTaikoEdit.Audio/OurTaikoEdit.Audio.csproj" />
+    <Project Path="src/OurTaikoEdit.Core/OurTaikoEdit.Core.csproj" />
+    <Project Path="src/OurTaikoEdit.Tja/OurTaikoEdit.Tja.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OurTaikoEdit.Tests/OurTaikoEdit.Tests.csproj" />
+    <Project Path="tests/OurTaikoEdit.UiTests/OurTaikoEdit.UiTests.csproj" />
+  </Folder>
+  <Folder Name="/external/">
+    <Project Path="external/TJAParser/dotnet~/OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OurTaikoEdit.App.Views.NewProjectDialog"
+        xmlns:l="using:OurTaikoEdit.App.Localization"
+        Title="{l:T NewProject}" Width="520" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock Classes="h1" Text="{l:T NewProject}" />
+    <TextBlock Classes="muted" TextWrapping="Wrap"
+               Text="{l:T NewProjectIntro}" />
+
+    <TextBlock Text="{l:T Name}" />
+    <TextBox x:Name="NameBox" PlaceholderText="{l:T SongName}" />
+
+    <TextBlock Text="{l:T Location}" />
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+      <TextBox x:Name="LocationBox" />
+      <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseLocation" />
+    </Grid>
+
+    <TextBlock Text="{l:T ChartType}" />
+    <ComboBox x:Name="TypeBox" HorizontalAlignment="Stretch" />
+
+    <TextBlock Text="{l:T AudioOptional}" />
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+      <TextBox x:Name="AudioBox" PlaceholderText="song.ogg" />
+      <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseAudio" />
+    </Grid>
+
+    <TextBlock x:Name="ErrorText" Foreground="#FF6A4D" TextWrapping="Wrap" IsVisible="False" />
+    <TextBlock x:Name="FolderText" Classes="muted" TextWrapping="Wrap" />
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Classes="accent" Content="{l:T Create}" IsDefault="True" Click="Create" />
+      <Button Content="{l:T Cancel}" IsCancel="True" Click="Cancel" />
+    </StackPanel>
+  </StackPanel>
+</Window>

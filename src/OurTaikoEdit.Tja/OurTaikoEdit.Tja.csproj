@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The TJA chart language: analysis through TJAParser, completion, highlighting and note edits. -->
+  <ItemGroup>
+    <ProjectReference Include="../OurTaikoEdit.Core/OurTaikoEdit.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Tja.xshd" LogicalName="OurTaikoEdit.Tja.Tja.xshd" />
+  </ItemGroup>
+</Project>

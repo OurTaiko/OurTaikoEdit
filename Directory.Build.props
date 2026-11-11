@@ -1,7 +1,9 @@
 <Project>
-  <!-- CharTaiko's own projects; the TJAParser submodule under external/ keeps its own settings. -->
+  <!-- OurTaikoEdit's own projects; the TJAParser submodule under external/ keeps its own settings. -->
   <PropertyGroup Condition="!$(MSBuildProjectDirectory.Contains('external'))">
     <TargetFramework>net10.0</TargetFramework>
+    <!-- The release version; CI reads it from here (or from a vX.Y.Z tag) and appends the commit count. -->
+    <Version>0.1.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

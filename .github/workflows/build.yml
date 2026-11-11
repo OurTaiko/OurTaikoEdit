@@ -1,0 +1,185 @@
+name: Build
+run-name: OurTaikoEdit ${{ github.ref_name }}
+
+# main publishes the rolling "nightly" pre-release; a vX.Y.Z tag publishes a formal release.
+# Both builds also go live in the RhythmHub launcher (bucket sparkbarry-public behind distrib.sparkbarry.com):
+# v* tags on its stable channel, main on its nightly channel (only the latest nightly is kept).
+# See sparkbarry/RhythmHub docs/operations.md. The tests (ci.yml) gate the builds.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+
+env:
+  BUILD_NAME: OurTaikoEdit
+
+jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      display: ${{ steps.v.outputs.display }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # version: assembly / CFBundleShortVersionString; display: file names, RhythmHub and the shipped version string.
+      - id: v
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+              echo "::error::Release tags must look like v1.2 or v1.2.3, got $GITHUB_REF_NAME"
+              exit 1
+            fi
+          else
+            VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)
+          fi
+          # Count the full history of the checked-out commit, never the CI run number.
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          DISPLAY="${VERSION}-${BUILD_NUMBER}"
+          {
+            echo "version=$VERSION"
+            echo "display=$DISPLAY"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION, display $DISPLAY"
+
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    needs: [version, test]
+    permissions:
+      contents: read
+      id-token: write # RhythmHub upload signs in to AWS through GitHub OIDC
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The .app needs macOS for its icon (sips) and its ad-hoc signature (codesign).
+          - name: macOS
+            os: macos-latest
+            rid: osx-arm64
+            platform: MacOS
+            entrypoint: OurTaikoEdit.app
+            archive: macOS-arm64
+          # Self-contained win-x64 publishes fine from Linux (GUI subsystem, soft_oal.dll included).
+          - name: Windows
+            os: ubuntu-latest
+            rid: win-x64
+            platform: Windows
+            entrypoint: OurTaikoEdit.exe
+            archive: Windows-x64
+    env:
+      DISPLAY_VERSION: ${{ needs.version.outputs.display }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # build-path for RhythmHub: holds exactly the .app (macOS) or the .exe and its files (Windows).
+      - name: Package
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/stage"
+          build/package.sh "${{ matrix.rid }}" "$STAGE" "${{ needs.version.outputs.version }}" "$DISPLAY_VERSION"
+          echo "STAGE=$STAGE" >> "$GITHUB_ENV"
+
+      - name: Archive
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          # -y keeps the bundle's symbolic links; zip keeps the executable bits.
+          (cd "$STAGE" && zip -qry "$GITHUB_WORKSPACE/out/$BUILD_NAME-$DISPLAY_VERSION-${{ matrix.archive }}.zip" .)
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: out-${{ matrix.rid }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Choose RhythmHub channel
+        id: rhythmhub
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "prune=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            echo "channel=nightly" >> "$GITHUB_OUTPUT"
+            echo "prune=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not main or a v* tag; skipping RhythmHub."
+          fi
+
+      - name: Publish to RhythmHub
+        if: steps.rhythmhub.outputs.channel != ''
+        uses: sparkbarry/RhythmHub/.github/actions/upload-build@main
+        with:
+          game: OurTaikoEdit
+          platform: ${{ matrix.platform }}
+          version: ${{ needs.version.outputs.display }}
+          build-path: ${{ env.STAGE }}
+          entrypoint: ${{ matrix.entrypoint }}
+          role-arn: ${{ vars.AWS_ROLE_ARN }}
+          bucket: sparkbarry-public
+          channel: ${{ steps.rhythmhub.outputs.channel }}
+          signing-key: ${{ secrets.RHYTHMHUB_SIGNING_KEY }}
+          prune-previous: ${{ steps.rhythmhub.outputs.prune }}
+
+  publish:
+    name: Publish ${{ startsWith(github.ref, 'refs/tags/') && 'release' || 'nightly' }}
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DISPLAY_VERSION: ${{ needs.version.outputs.display }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: out-*
+          path: collected
+          merge-multiple: true
+
+      - name: Publish nightly
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git tag -f nightly "$GITHUB_SHA"
+          git push origin -f nightly
+          gh release delete nightly -y 2>/dev/null || true
+          printf 'Automated nightly build.\nVersion: %s\nCommit: %s\nBuilt at: %s (UTC+8)\n' \
+            "$DISPLAY_VERSION" "$GITHUB_SHA" "$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')" > notes.md
+          gh release create nightly collected/* --title "Nightly" --notes-file notes.md --prerelease
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" collected/* --verify-tag \
+            --title "OurTaikoEdit $DISPLAY_VERSION" --generate-notes

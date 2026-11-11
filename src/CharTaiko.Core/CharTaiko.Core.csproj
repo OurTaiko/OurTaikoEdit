@@ -1,8 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <!-- Projects, the chart-language extension point and the language-neutral analysis model. -->
-  <ItemGroup>
-    <ProjectReference Include="../../external/TJAParser/dotnet~/OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
-    <!-- The interface's words in every language; see Localization/Strings.cs. -->
-    <EmbeddedResource Include="Localization/Strings.csv" LogicalName="CharTaiko.Core.Localization.Strings.csv" />
-  </ItemGroup>
-</Project>
