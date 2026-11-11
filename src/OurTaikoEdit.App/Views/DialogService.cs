@@ -61,6 +61,9 @@ public sealed class DialogService(Window owner) : IDialogService
         return result;
     }
 
+    public Task<string?> BranchConditionAsync(string title, OurTaikoEdit.Core.Languages.IChartLanguage language, string written)
+        => new BranchDialog(title, language, written).ShowDialog<string?>(owner);
+
     public Task<SaveChoice> AskSaveAsync(string name)
         => Ask(Loc.F("SaveQuestion", name), Loc.T("SaveLost"),
             (Loc.T("Save"), SaveChoice.Save), (Loc.T("DontSave"), SaveChoice.Discard), (Loc.T("Cancel"), SaveChoice.Cancel));

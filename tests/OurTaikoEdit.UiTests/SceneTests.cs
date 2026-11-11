@@ -617,6 +617,7 @@ public class SceneTests : IDisposable
         public Task MessageAsync(string title, string message) => Task.CompletedTask;
         public Task<bool> ConfirmAsync(string title, string message, string confirm) => Task.FromResult(true);
         public Task<string?> PromptAsync(string title, string message, string value) => Task.FromResult<string?>(answer);
+        public Task<string?> BranchConditionAsync(string title, IChartLanguage language, string written) => Task.FromResult<string?>(answer);
         public Task<SaveChoice> AskSaveAsync(string name) => Task.FromResult(SaveChoice.Discard);
         public Task<bool> SettingsAsync(AppSettings settings) => Task.FromResult(false);
     }
@@ -729,5 +730,142 @@ public class SceneTests : IDisposable
         Read(13);
         Assert.Equal(before, code.Text);
         Assert.Single(editor.Analysis.Branches);
+    }
+
+    [AvaloniaFact]
+    public void TheBranchDialogChoosesAConditionAndTwoThresholds()
+    {
+        var (window, vm, _) = Open();
+        var tja = new TjaLanguage();
+        var dialog = new BranchDialog("Branch condition", tja, "R,1,2,l");
+        var result = dialog.ShowDialog<string?>(window);
+        Dispatcher.UIThread.RunJobs();
+        var kind = dialog.FindControl<ComboBox>("KindBox")!;
+        var info = dialog.FindControl<TextBlock>("KindInfo")!;
+        var big = dialog.FindControl<CheckBox>("BigOnlyBox")!;
+        var less = dialog.FindControl<CheckBox>("LessBox")!;
+        var expert = dialog.FindControl<TextBox>("ExpertBox")!;
+        var master = dialog.FindControl<TextBox>("MasterBox")!;
+        var written = dialog.FindControl<TextBlock>("WrittenText")!;
+        var error = dialog.FindControl<TextBlock>("ErrorText")!;
+        void Ok(Window w) => w.FindControl<Button>("OkButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+
+        // What was written, taken apart: the kind with what it counts, a box for each threshold.
+        Assert.Equal(9, kind.ItemCount);
+        Assert.Equal("r — Drumroll hits", kind.SelectedItem);
+        Assert.Contains("drumrolls", info.Text);
+        Assert.Equal(("1", "2"), (expert.Text, master.Text));
+        Assert.True(big.IsVisible && big.IsChecked == true);
+        Assert.Equal("Count big drumrolls only", big.Content);
+        Assert.True(less.IsChecked);
+        Assert.Equal("Written as: R,1,2,l", written.Text);
+        Shot(dialog, "branch-dialog");
+
+        // Another kind, and a threshold that is not a number: not accepted until it is one.
+        kind.SelectedIndex = 0;
+        less.IsChecked = false;
+        expert.Text = "60";
+        master.Text = "eighty";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains("accuracy", info.Text);
+        Assert.Equal("Count big notes only", big.Content);
+        Assert.Equal("Written as: P,60,eighty", written.Text);
+        Ok(dialog);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(error.IsVisible);
+        Assert.False(result.IsCompleted);
+        master.Text = "85";
+        big.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(error.IsVisible);
+        Ok(dialog);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(result.IsCompleted);
+        Assert.Equal("p,60,85", result.Result);
+
+        // A new branch starts with no thresholds; the score cannot be asked for big notes only.
+        try
+        {
+            Choose(vm.Settings, s => s.Language = "zh");
+            var fresh = new BranchDialog(Loc.T("NewBranchTitle"), tja, "");
+            var cancelled = fresh.ShowDialog<string?>(window);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("p — 精度", fresh.FindControl<ComboBox>("KindBox")!.SelectedItem);
+            Assert.Equal("", fresh.FindControl<TextBox>("ExpertBox")!.Text);
+            Shot(fresh, "branch-dialog-zh");
+            Ok(fresh);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(fresh.FindControl<TextBlock>("ErrorText")!.IsVisible);
+            fresh.FindControl<ComboBox>("KindBox")!.SelectedIndex = 8;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(fresh.FindControl<CheckBox>("BigOnlyBox")!.IsVisible);
+            fresh.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(cancelled.Result);
+        }
+        finally
+        {
+            Choose(vm.Settings, s => s.Language = "en");
+        }
+    }
+
+    [AvaloniaFact]
+    public void ANewBranchIsMadeFromTheMenusAndUndone()
+    {
+        var (window, vm, registry) = Open();
+        var editor = new EditorViewModel(SampleProject(registry), new Answers("p,50,80"), () => { }, vm.Settings);
+        vm.Scene = editor;
+        Dispatcher.UIThread.RunJobs();
+        var code = Find<TextEditor>(window);
+        var timeline = Find<TimelineView>(window);
+        editor.Tool = editor.Tools.First(t => t.Kind == null);
+        // The first two measures in view: the timeline scrolls when the playhead jumps out of it.
+        var second = editor.Analysis.Measures[1];
+        editor.Seek(20);
+        editor.Seek(second.Time + 0.4);
+        Dispatcher.UIThread.RunJobs();
+        string before = code.Text;
+        double rowMiddle = 24 + (timeline.Bounds.Height - 48) / 6, commands = timeline.Bounds.Height - 12;
+        // The menu a right click opens at a time, on the normal row or the commands row.
+        List<MenuItem> MenuAt(double time, double y)
+        {
+            ContextMenu? menu = null;
+            var at = timeline.TranslatePoint(new Point(timeline.XOf(time), y), window)!.Value;
+            using (ContextMenu.OpenedEvent.AddClassHandler<ContextMenu>((opened, _) => menu = opened))
+            {
+                window.MouseMove(at);
+                window.MouseDown(at, MouseButton.Right);
+                window.MouseUp(at, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.NotNull(menu);
+            var items = menu!.Items.OfType<MenuItem>().ToList();
+            menu.Close();
+            Dispatcher.UIThread.RunJobs();
+            return items;
+        }
+        MenuItem NewBranch(List<MenuItem> items) => items.Single(m => m.Header as string == "New branch at this measure…");
+
+        // On the second measure's row, where it has no note: its condition is asked for, and the
+        // measure is written for each route.
+        var entry = NewBranch(MenuAt(second.TimeAt(14 / 16.0), rowMiddle));
+        Assert.True(entry.IsEnabled);
+        entry.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(editor.Message);
+        Assert.Contains("1000100010001000,\n#BRANCHSTART p,50,80\n#N\n1010200010102000,\n#E\n1010200010102000,\n#M\n1010200010102000,\n#BRANCHEND\n#GOGOSTART\n", code.Text);
+        Assert.Equal(2, editor.Analysis.Branches.Count);
+        Assert.Equal(("p,50,80", second.Time), (editor.Analysis.Branches[0].Start.Value, editor.Analysis.Branches[0].Time));
+        Shot(window, "timeline-new-branch");
+
+        // Not inside a branch: there the entry cannot be chosen. The commands row has it too.
+        Assert.False(NewBranch(MenuAt(second.TimeAt(14 / 16.0), rowMiddle)).IsEnabled);
+        Assert.False(NewBranch(MenuAt(second.TimeAt(14 / 16.0), commands)).IsEnabled);
+        Assert.True(NewBranch(MenuAt(editor.Analysis.Measures[0].TimeAt(14 / 16.0), commands)).IsEnabled);
+
+        // One step back.
+        code.Undo();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(before, code.Text);
     }
 }

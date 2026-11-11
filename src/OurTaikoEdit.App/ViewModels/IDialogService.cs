@@ -13,6 +13,9 @@ public interface IDialogService
     Task<bool> ConfirmAsync(string title, string message, string confirm);
     // A line of text, or null when cancelled.
     Task<string?> PromptAsync(string title, string message, string value);
+    // A branch's condition as the language writes it, starting from one as written (empty for a
+    // new branch); null when cancelled.
+    Task<string?> BranchConditionAsync(string title, OurTaikoEdit.Core.Languages.IChartLanguage language, string written);
     Task<SaveChoice> AskSaveAsync(string name);
     // Shows the settings; true when they were changed and saved.
     Task<bool> SettingsAsync(OurTaikoEdit.Core.Settings.AppSettings settings);

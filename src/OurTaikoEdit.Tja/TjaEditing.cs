@@ -258,6 +258,52 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(edits);
     }
 
+    // A branch made of one measure: the measure as written (from its first note to its comma,
+    // with whatever is written inside it) becomes the normal route and is written again as the
+    // expert and the master one, between a #BRANCHSTART and a #BRANCHEND, each on a line of its
+    // own. Commands written before the measure stay before the branch. The balloon lists give
+    // the copies the counts their balloons had. Refused where the result would not play as the
+    // chart does now on every route (a drumroll across the measure's ends, for one).
+    public EditResult InsertBranch(ChartAnalysis analysis, MeasureView measure, string condition)
+    {
+        if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsTimeline"));
+        if (measure.BranchId >= 0) return EditResult.Fail(Loc.T("BranchInsideBranch"));
+        if (measure.Comma.IsEmpty) return EditResult.Fail(Loc.T("MeasureNoCommaBefore"));
+        string text = analysis.Text, nl = Newline(text);
+        var index = new LineIndex(text);
+        var first = measure.Slots.Count > 0 ? measure.Slots[0].Source : measure.Comma;
+        int start = index.Offset(first.Line, first.Column), end = index.Offset(measure.Comma.Line, measure.Comma.Column) + measure.Comma.Length;
+        if (end <= start) return EditResult.Fail(Loc.T("MeasureNoCommaBefore"));
+        string written = text.Substring(start, end - start);
+
+        // From the start of the line when only blanks come before the measure there; a line of
+        // its own for what follows the comma, when anything does.
+        int lineStart = index.Offset(first.Line, 1), lineEnd = end;
+        while (lineEnd < text.Length && text[lineEnd] != '\r' && text[lineEnd] != '\n') lineEnd++;
+        bool startsLine = string.IsNullOrWhiteSpace(text.Substring(lineStart, start - lineStart));
+        bool endsLine = string.IsNullOrWhiteSpace(text.Substring(end, lineEnd - end));
+        int from = startsLine ? lineStart : start;
+        string branch = (startsLine ? "" : nl) + "#BRANCHSTART " + condition.Trim() + nl
+            + "#N" + nl + written + nl + "#E" + nl + written + nl + "#M" + nl + written + nl + "#BRANCHEND" + (endsLine ? "" : nl);
+        var (line, column) = index.Position(from);
+        var edits = new List<TextEdit> { new(line, column, end - from, branch) };
+        edits.AddRange(Balloons.EditsForCopies(analysis, measure));
+
+        // Read again: every route must play what it played.
+        if (analysis.Block < 0 || analysis.Block >= analysis.Blocks.Count) return new EditResult(edits);
+        var block = analysis.Blocks[analysis.Block];
+        var after = new TjaDocument(TextEdits.Apply(text, edits)).Analyze(block.Course, block.Side);
+        if (after.Chart == null || after.HasErrors) return EditResult.Fail(Loc.T("BranchChangesChart"));
+        foreach (var route in new[] { BranchRoute.Normal, BranchRoute.Expert, BranchRoute.Master })
+            if (!Played(analysis.Chart, route).SequenceEqual(Played(after.Chart, route))) return EditResult.Fail(Loc.T("BranchChangesChart"));
+        return new EditResult(edits);
+    }
+
+    // What a route plays: each note with when, how long, how fast and how many hits.
+    static IEnumerable<(NoteKind, double, double, double, double, double, int)> Played(TaikoChart chart, BranchRoute route)
+        => chart.Notes.Where(n => n.BranchId < 0 || n.BranchId < chart.Branches.Count && chart.Branches[n.BranchId].ResolveRoute(route) == n.Route)
+            .Select(n => (n.Kind, Math.Round(n.Time, 4), Math.Round(n.EndTime, 4), n.Bpm, n.ScrollX, n.ScrollY, n.BalloonHits));
+
     static string Describe(ChartNote n) => Loc.T(n.IsBalloon ? "DescribeBalloon" : "DescribeRoll");
 
     static BranchRoute RouteOf(GridPosition at) => at.Measure.BranchId >= 0 ? at.Measure.Route : at.Route;
@@ -431,12 +477,13 @@ sealed class TjaEditing : IChartEditing
             return edits;
         }
 
-        // A route's list written as its header, when it changed.
-        static void Write(string text, Header header, int r, List<int> values, int courseLine, List<TextEdit> edits)
+        // A route's list written as its header, when it changed; a route without a header gets
+        // one in the course when it has counts to keep.
+        static void Write(string text, Header? header, int r, List<int> values, int courseLine, List<TextEdit> edits)
         {
-            if (values.SequenceEqual(header.Values!)) return;
+            if (header == null ? values.Count == 0 : values.SequenceEqual(header.Values!)) return;
             string list = string.Join(",", values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
-            if (header.InCourse) edits.Add(ReplaceValue(text, header.Line, list));
+            if (header is { InCourse: true }) edits.Add(ReplaceValue(text, header.Line, list));
             else if (courseLine > 0)
             {
                 // The shared list stays for the other courses; this course gets its own.
@@ -444,6 +491,30 @@ sealed class TjaEditing : IChartEditing
                 string line = Lines(text)[courseLine - 1];
                 edits.Add(new TextEdit(courseLine, line.Length + 1, 0, Newline(text) + key + ":" + list));
             }
+        }
+
+        // The lists once a measure every route played is written for each route: its balloons
+        // are now the expert and master routes' own, read from those routes' lists at the places
+        // they had there, so those lists must hold the counts the balloons have now. Each is
+        // written out as its route's balloons are counted today (trailing fives a list did not
+        // have are left off: a balloon past its list's end gets five).
+        public static IEnumerable<TextEdit> EditsForCopies(ChartAnalysis analysis, MeasureView measure)
+        {
+            var text = Text(analysis);
+            if (text == null || !measure.Slots.Any(s => s.Note?.IsBalloon == true)) return Array.Empty<TextEdit>();
+            var (headers, courseLine) = HeadersFor(text, analysis.StartLine);
+            var edits = new List<TextEdit>();
+            for (int r = 1; r < 3; r++)
+            {
+                var header = headers[r];
+                if (header != null && header.Values == null) continue;
+                var values = analysis.Measures.Where(m => m.IsOn((BranchRoute)r)).SelectMany(m => m.Slots)
+                    .Where(s => s.Note?.IsBalloon == true).Select(s => s.Note!.BalloonHits).ToList();
+                int had = header?.Values!.Count ?? 0;
+                while (values.Count > had && values[^1] == DefaultBalloon) values.RemoveAt(values.Count - 1);
+                Write(text, header, r, values, courseLine, edits);
+            }
+            return edits;
         }
 
         // The lists once a branch is gone and one of its routes is what every route plays there:

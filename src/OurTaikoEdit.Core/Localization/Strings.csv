@@ -223,3 +223,38 @@ PlayHits,Play hit sounds,播放击打音,打音を鳴らす
 Latency,Audio latency (ms),音频延迟（毫秒）,オーディオ遅延（ミリ秒）
 LatencyHint,Raise it when notes reach the judge before you hear them; the playhead then waits for the sound.,如果音符先到判定点、声音后到，就调大这个值；播放头会等声音一起走。,音が聞こえる前に音符が判定枠に届くなら、値を上げてください。再生位置が音に合わせて遅れます。
 SettingsFile,Saved in {0},保存在 {0},保存先：{0}
+
+# Branches,,,
+NewBranchHere,New branch at this measure…,在这一小节新建分歧…,この小節に分岐を作成…
+NewBranchTitle,New branch,新建分歧,分岐を新規作成
+EditBranchTitle,Branch condition,分歧条件,分岐条件
+BranchCondition,Condition,条件,条件
+BranchExpert,Expert threshold,玄人阈值,玄人のしきい値
+BranchMaster,Master threshold,达人阈值,達人のしきい値
+BranchRule,"Judged at the bar line before the branch, on what was played since the last #SECTION (or the chart's start): at or above the Master threshold the Master route is taken, else at or above the Expert threshold the Expert route, else Normal.",在分歧前最后一条小节线判定，统计自上一个 #SECTION（或谱面开头）以来的演奏：数值达到达人阈值走达人路线，否则达到玄人阈值走玄人路线，否则走普通路线。,分岐の直前の小節線で、直前の #SECTION（または譜面の先頭）からの演奏を判定します。値が達人のしきい値以上なら達人、そうでなく玄人のしきい値以上なら玄人、それ以外は普通ルートです。
+BranchLess,"Thresholds are upper limits (l): below the Master threshold goes to Master, else below the Expert threshold to Expert",阈值为上界（l）：数值小于达人阈值走达人，否则小于玄人阈值走玄人,しきい値を上限にする（l）：達人のしきい値未満で達人、そうでなく玄人のしきい値未満で玄人
+BranchWritten,Written as: {0},写作：{0},書式：{0}
+BranchNumberNeeded,Both thresholds must be numbers.,两个阈值都必须是数字。,しきい値は両方とも数値で入力してください。
+BranchInsideBranch,That measure is already in a branch.,这一小节已经在分歧里。,その小節はすでに分岐の中にあります。
+"BranchChangesChart","A branch here would change what is played (a drumroll may cross the measure's ends); write it in the code.",在这里建分歧会改变演奏内容（可能有连打跨过这一小节的两端）；请在代码里写。,ここに分岐を作ると演奏内容が変わります（連打が小節の端をまたいでいる可能性があります）。コードで書いてください。
+BranchBigNotes,Count big notes only,只算大音符,大音符のみ数える
+BranchBigRolls,Count big drumrolls only,只算大连打,大連打のみ数える
+BranchKusudama,Count kusudama only,只算彩球,くすだまのみ数える
+BranchKind_p,Accuracy,精度,精度
+BranchKindInfo_p,"The accuracy of the notes played, in percent (0–100).",已演奏音符的精度，百分比（0–100）。,演奏した音符の精度（0〜100 %）。
+BranchKind_pp,Share of GOOD,良的百分比,良の割合
+BranchKindInfo_pp,"How many of the notes played were GOOD (良), in percent (0–100).",已演奏音符中「良」所占的百分比（0–100）。,演奏した音符のうち「良」の割合（0〜100 %）。
+BranchKind_jp,Number of GOOD,良的个数,良の数
+BranchKindInfo_jp,The number of GOOD (良) judgements.,「良」判定的个数。,「良」判定の数。
+BranchKind_d,Number of GOOD on big notes,大音符良的个数,大音符の良の数
+BranchKindInfo_d,"As jp, but big notes are always the only ones counted.",同 jp，但总是只算大音符。,jp と同じですが、常に大音符のみ数えます。
+BranchKind_jg,Number of OK,可的个数,可の数
+BranchKindInfo_jg,The number of OK (可) judgements.,「可」判定的个数。,「可」判定の数。
+BranchKind_jb,Number of BAD,不可的个数,不可の数
+BranchKindInfo_jb,The number of BAD (不可) judgements.,「不可」判定的个数。,「不可」判定の数。
+BranchKind_r,Drumroll hits,连打打数,連打数
+BranchKindInfo_r,The number of hits on drumrolls. Judged once a drumroll in the last measure before the branch has ended.,连打的打数。分歧前最后一小节里的连打结束后才判定。,連打を叩いた数。分岐直前の小節にある連打が終わってから判定します。
+BranchKind_rb,Balloon hits,气球打数,風船の打数
+BranchKindInfo_rb,The number of hits on balloons. Judged once a balloon in the last measure before the branch has ended.,气球的打数。分歧前最后一小节里的气球结束后才判定。,風船を叩いた数。分岐直前の小節にある風船が終わってから判定します。
+BranchKind_s,Score,分数,スコア
+BranchKindInfo_s,The score.,分数。,スコア。

@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OurTaikoEdit.App.Views.BranchDialog"
+        xmlns:l="using:OurTaikoEdit.App.Localization"
+        Width="500" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="20" Spacing="10">
+    <TextBlock Classes="h1" x:Name="Heading" />
+
+    <TextBlock Text="{l:T BranchCondition}" Margin="0,4,0,0" />
+    <ComboBox x:Name="KindBox" HorizontalAlignment="Stretch" />
+    <TextBlock x:Name="KindInfo" Classes="muted" TextWrapping="Wrap" />
+    <CheckBox x:Name="BigOnlyBox" />
+
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="4" Margin="0,4,0,0">
+      <TextBlock Text="{l:T BranchExpert}" />
+      <TextBlock Grid.Column="1" Text="{l:T BranchMaster}" />
+      <TextBox Grid.Row="1" x:Name="ExpertBox" />
+      <TextBox Grid.Row="1" Grid.Column="1" x:Name="MasterBox" />
+    </Grid>
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{l:T BranchRule}" />
+    <CheckBox x:Name="LessBox">
+      <TextBlock TextWrapping="Wrap" Text="{l:T BranchLess}" />
+    </CheckBox>
+
+    <TextBlock x:Name="WrittenText" FontFamily="{StaticResource CodeFont}" Margin="0,4,0,0" />
+    <TextBlock x:Name="ErrorText" Foreground="#FF6A4D" TextWrapping="Wrap" IsVisible="False" />
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button Classes="accent" x:Name="OkButton" Content="{l:T Ok}" IsDefault="True" MinWidth="80" HorizontalContentAlignment="Center" Click="Accept" />
+      <Button Content="{l:T Cancel}" IsCancel="True" MinWidth="80" HorizontalContentAlignment="Center" Click="Cancel" />
+    </StackPanel>
+  </StackPanel>
+</Window>

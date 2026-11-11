@@ -125,6 +125,38 @@ public sealed class TjaLanguage : IChartLanguage
         };
     }
 
+    // ---- Branch conditions: `type, expert, master[, l|m]` (the comma after the type may be left
+    // out); an upper-case type counts big notes only, except for s; d always does.
+
+    static readonly (string Key, string? BigOnly)[] ConditionKinds =
+    {
+        ("p", "BranchBigNotes"), ("pp", "BranchBigNotes"), ("jp", "BranchBigNotes"), ("d", null), ("jg", "BranchBigNotes"),
+        ("jb", "BranchBigNotes"), ("r", "BranchBigRolls"), ("rb", "BranchKusudama"), ("s", null),
+    };
+
+    public IReadOnlyList<BranchConditionKind> BranchConditions
+        => ConditionKinds.Select(k => new BranchConditionKind(k.Key, Loc.T("BranchKind_" + k.Key), Loc.T("BranchKindInfo_" + k.Key), k.BigOnly == null ? null : Loc.T(k.BigOnly))).ToList();
+
+    public BranchConditionText? ReadBranchCondition(string written)
+    {
+        string arg = System.Text.RegularExpressions.Regex.Replace(written, @"(?<=^\s*[a-zA-Z]+)\s*(?=\d)", ",");
+        string[] parts = arg.Split(',').Select(p => p.Trim()).ToArray();
+        if (parts.Length < 3 || parts.Length > 4 || parts[0].Length == 0) return null;
+        string kind = parts[0].ToLowerInvariant();
+        var known = ConditionKinds.FirstOrDefault(k => k.Key == kind);
+        if (known.Key == null || !TjaNumber.TryParse(parts[1], out _) || !TjaNumber.TryParse(parts[2], out _)) return null;
+        if (parts.Length == 4 && parts[3] != "" && parts[3] != "l" && parts[3] != "m") return null;
+        return new BranchConditionText(kind, parts[1], parts[2], known.BigOnly != null && char.IsUpper(parts[0][0]), parts.Length == 4 && parts[3] == "l");
+    }
+
+    public string WriteBranchCondition(BranchConditionText condition)
+    {
+        var known = ConditionKinds.FirstOrDefault(k => k.Key == condition.Kind.ToLowerInvariant());
+        string kind = known.Key ?? condition.Kind;
+        if (condition.BigOnly && known.BigOnly != null) kind = kind.ToUpperInvariant();
+        return $"{kind},{condition.Expert.Trim()},{condition.Master.Trim()}{(condition.Less ? ",l" : "")}";
+    }
+
     // ---- Editor features, from the library (TjaHover, TjaSignatureHelp, TjaFolding, TjaSummary,
     // TjaQuickFix, TjaRefactor, TjaFormat).
 

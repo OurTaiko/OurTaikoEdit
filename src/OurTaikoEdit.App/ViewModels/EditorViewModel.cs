@@ -486,6 +486,29 @@ public sealed partial class EditorViewModel : ViewModelBase
     }
 
     // The same command in the current analysis (a dialog may have let the text change).
+    // A branch's condition, asked for in its dialog and written as its start's value.
+    public async Task EditBranch(ChartBranchMark branch)
+    {
+        var value = await dialogs.BranchConditionAsync(Loc.T("EditBranchTitle"), Language, branch.Start.Value);
+        if (string.IsNullOrWhiteSpace(value)) return;
+        EnsureFresh();
+        if (FindCommand(branch.Start) is { } current && current.Value != value) Apply(Language.Editing.ChangeCommand(Analysis, current, value));
+    }
+
+    // A new branch of the measure at a place, its condition asked for first: every route starts
+    // as what the measure plays now. One change to the text.
+    public async Task NewBranch(GridPosition at)
+    {
+        EnsureFresh();
+        if (at.Measure.BranchId >= 0) { Message = Loc.T("BranchInsideBranch"); return; }
+        var value = await dialogs.BranchConditionAsync(Loc.T("NewBranchTitle"), Language, "");
+        if (string.IsNullOrWhiteSpace(value)) return;
+        EnsureFresh();
+        var measure = Analysis.Measures.FirstOrDefault(m => ReferenceEquals(m, at.Measure))
+            ?? Analysis.Measures.FirstOrDefault(m => m.Index == at.Measure.Index && m.BranchId == at.Measure.BranchId && m.Route == at.Measure.Route);
+        if (measure != null) Apply(Language.Editing.InsertBranch(Analysis, measure, value));
+    }
+
     // A branch taken out of the chart, one of its routes kept as what every route plays there.
     // One change to the text: one undo step brings the branch back.
     public void RemoveBranch(ChartBranchMark branch, BranchRoute keep = BranchRoute.Normal)

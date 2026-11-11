@@ -506,7 +506,7 @@ public sealed class TimelineView : Control
         {
             // A branch's flag: its start is shown in the code; twice, its condition is changed.
             if (point.IsRightButtonPressed) BranchMenu(branch);
-            else if (e.ClickCount == 2) _ = editor.EditCommand(branch.Start);
+            else if (e.ClickCount == 2) _ = editor.EditBranch(branch);
             else if (point.IsLeftButtonPressed) editor.RevealCommand(branch.Start);
             return;
         }
@@ -677,13 +677,21 @@ public sealed class TimelineView : Control
             Item(Loc.T("Cut"), () => editor.CutSelection(route), any),
             Item(Loc.T("Copy"), () => editor.CopySelection(route), any),
         };
-        if (Snap(p.X, route) is { } at) items.Add(Item(Loc.T("PasteHere"), () => editor.Paste(at)));
+        var place = Snap(p.X, route);
+        if (place is { } at) items.Add(Item(Loc.T("PasteHere"), () => editor.Paste(at)));
         items.Add(Item(Loc.T("SelectAll"), editor.SelectAll));
+        if (place is { } measure)
+        {
+            // Not in a branch already: branches do not nest.
+            items.Add(new Separator());
+            items.Add(Item(Loc.T("NewBranchHere"), () => _ = editor.NewBranch(measure), measure.Measure.BranchId < 0));
+        }
         new ContextMenu { ItemsSource = items }.Open(this);
     }
 
-    // A branch's flag: its condition changed, its start shown in the code, or the branch taken
-    // out with its normal route kept (undo brings it back).
+    // A branch's flag: its condition changed in its dialog, its start shown in the code, or the
+    // branch taken out with its normal route kept (undo brings it back). A new branch is made
+    // from the rows' and the commands row's menus, at the measure under the pointer.
     void BranchMenu(ChartBranchMark branch)
     {
         if (editor == null) return;
@@ -692,7 +700,7 @@ public sealed class TimelineView : Control
         {
             ItemsSource = new List<object>
             {
-                Item(Loc.F("EditCommand", (start.Name + " " + start.Value).Trim()), () => _ = editor.EditCommand(start)),
+                Item(Loc.F("EditCommand", (start.Name + " " + start.Value).Trim()), () => _ = editor.EditBranch(branch)),
                 Item(Loc.T("ShowInCode"), () => editor.RevealCommand(start)),
                 new Separator(),
                 Item(Loc.F("RemoveBranch", Localization.Names.Route(BranchRoute.Normal)), () => editor.RemoveBranch(branch)),
@@ -745,6 +753,8 @@ public sealed class TimelineView : Control
                 var position = kind == ChartEventKind.Measure ? at with { Step = 0 } : at;
                 items.Add(Item(label, () => _ = editor.InsertEvent(position, kind)));
             }
+            items.Add(new Separator());
+            items.Add(Item(Loc.T("NewBranchHere"), () => _ = editor.NewBranch(at), at.Measure.BranchId < 0));
         }
         if (CommandNear(p.X) is { } command)
         {

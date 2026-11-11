@@ -253,6 +253,94 @@ public class TimelineEditTests
     }
 
     [Fact]
+    public void ANewBranchIsOneMeasureWrittenForEveryRoute()
+    {
+        string text = Chart("1000,\n#SCROLL 2\n2000,\n3000,");
+        var a = Tja.Analyze(text, 0);
+        string branched = Apply(text, Tja.Editing.InsertBranch(a, a.Measures[1], "p,60,85"));
+        // The command before the measure stays before the branch.
+        Assert.Equal(Chart("1000,\n#SCROLL 2\n#BRANCHSTART p,60,85\n#N\n2000,\n#E\n2000,\n#M\n2000,\n#BRANCHEND\n3000,"), branched);
+        var b = Tja.Analyze(branched, 0);
+        Assert.False(b.HasErrors);
+        var branch = Assert.Single(b.Branches);
+        Assert.Equal(("p,60,85", 2.0, 0.0, 4.0), (branch.Start.Value, branch.Time, branch.DecisionTime, branch.EndTime));
+        foreach (var route in new[] { BranchRoute.Normal, BranchRoute.Expert, BranchRoute.Master })
+            Assert.Equal(a.Chart!.Notes.Select(n => (n.Kind, n.Time, n.ScrollX)),
+                b.Chart!.Notes.Where(n => n.BranchId < 0 || n.Route == route).Select(n => (n.Kind, n.Time, n.ScrollX)));
+        // And taken out again it is the chart it was.
+        Assert.Equal(text, Apply(branched, Tja.Editing.RemoveBranch(b, branch, BranchRoute.Normal)));
+
+        // Measures sharing a line, one with a command inside it and a comment after it.
+        string crowded = Chart("1,2,3,\n10\n#GOGOSTART\n20, // loud\n4,").Replace("\n", "\r\n");
+        var c = Tja.Analyze(crowded, 0);
+        Assert.Equal(Chart("1,\n#BRANCHSTART r,1,2\n#N\n2,\n#E\n2,\n#M\n2,\n#BRANCHEND\n3,\n10\n#GOGOSTART\n20, // loud\n4,").Replace("\n", "\r\n"),
+            Apply(crowded, Tja.Editing.InsertBranch(c, c.Measures[1], "r,1,2")));
+        Assert.Equal(Chart("1,2,3,\n#BRANCHSTART r,1,2\n#N\n10\n#GOGOSTART\n20,\n#E\n10\n#GOGOSTART\n20,\n#M\n10\n#GOGOSTART\n20,\n#BRANCHEND\n // loud\n4,").Replace("\n", "\r\n"),
+            Apply(crowded, Tja.Editing.InsertBranch(c, c.Measures[3], "r,1,2")));
+    }
+
+    [Fact]
+    public void ANewBranchIsRefusedWhereItWouldNotPlayTheSame()
+    {
+        // Inside a branch.
+        var a = Tja.Analyze(Chart("1,\n#BRANCHSTART p,1,2\n#N\n1,\n#E\n2,\n#BRANCHEND\n1,"), 0);
+        var inside = Tja.Editing.InsertBranch(a, a.Measures.First(m => m.BranchId >= 0), "p,1,2");
+        Assert.False(inside.Ok);
+        Assert.Empty(inside.Edits);
+        Assert.True(Tja.Editing.InsertBranch(a, a.Measures[0], "p,1,2").Ok);
+        // A measure that is not ended: nothing to write the branch's end after.
+        var open = Tja.Analyze(Chart("1,\n2"), 0);
+        Assert.False(Tja.Editing.InsertBranch(open, open.Measures[^1], "p,1,2").Ok);
+    }
+
+    [Fact]
+    public void ANewBranchKeepsTheBalloonCounts()
+    {
+        string head = "BPM:120\nCOURSE:Oni\nLEVEL:5\n";
+        string body = "#START\n7008,\n7008,\n7008,\n#END\n";
+        // One list, which only the normal route reads: the copies get lists of their own.
+        string text = head + "BALLOON:10,11,12\n" + body;
+        var a = Tja.Analyze(text, 0);
+        string branched = Apply(text, Tja.Editing.InsertBranch(a, a.Measures[1], "p,60,85"));
+        var b = Tja.Analyze(branched, 0);
+        Assert.False(b.HasErrors);
+        Assert.Equal(new[] { 10, 11, 11, 11, 12 }, b.Chart!.Notes.Select(n => n.BalloonHits));
+        Assert.Contains("\nBALLOON:10,11,12\n", branched);
+
+        // Lists for every route already: each keeps its own counts.
+        string three = head + "BALLOON:10,11,12\nBALLOONEXP:20,21,22\nBALLOONMAS:30,31,32\n" + body;
+        var c = Tja.Analyze(three, 0);
+        var before = c.Chart!.Notes.Select(n => n.BalloonHits).ToList();
+        var d = Tja.Analyze(Apply(three, Tja.Editing.InsertBranch(c, c.Measures[1], "p,60,85")), 0);
+        Assert.False(d.HasErrors);
+        foreach (var route in new[] { BranchRoute.Normal, BranchRoute.Expert, BranchRoute.Master })
+            Assert.Equal(before, d.Chart!.Notes.Where(n => n.BranchId < 0 || n.Route == route).Select(n => n.BalloonHits));
+    }
+
+    [Fact]
+    public void ABranchConditionIsTakenApartAndWritten()
+    {
+        Assert.Equal(new[] { "p", "pp", "jp", "d", "jg", "jb", "r", "rb", "s" }, Tja.BranchConditions.Select(k => k.Key));
+        Assert.All(Tja.BranchConditions, k => { Assert.NotEmpty(k.Name); Assert.NotEmpty(k.Description); });
+        // Big-only cannot be asked of d (always) or s (never).
+        Assert.Equal(new[] { "d", "s" }, Tja.BranchConditions.Where(k => k.BigOnly == null).Select(k => k.Key));
+
+        Assert.Equal(new BranchConditionText("p", "60", "85"), Tja.ReadBranchCondition("p, 60,85"));
+        Assert.Equal(new BranchConditionText("r", "1", "2", BigOnly: true, Less: true), Tja.ReadBranchCondition("R,1,2,l"));
+        Assert.Equal(new BranchConditionText("p", "50", "80.5"), Tja.ReadBranchCondition("p50,80.5,m"));
+        Assert.Equal(new BranchConditionText("s", "1000", "2000"), Tja.ReadBranchCondition("S,1000,2000"));
+        foreach (string unreadable in new[] { "", "p,60", "x,1,2", "p,a,b", "p,1,2,z" }) Assert.Null(Tja.ReadBranchCondition(unreadable));
+
+        Assert.Equal("p,60,85", Tja.WriteBranchCondition(new BranchConditionText("p", "60", " 85 ")));
+        Assert.Equal("RB,3,9,l", Tja.WriteBranchCondition(new BranchConditionText("rb", "3", "9", BigOnly: true, Less: true)));
+        Assert.Equal("s,1,2", Tja.WriteBranchCondition(new BranchConditionText("s", "1", "2", BigOnly: true)));
+        // What is written is what the parser reads.
+        var a = Tja.Analyze(Chart("1,\n#BRANCHSTART " + Tja.WriteBranchCondition(new BranchConditionText("jg", "3", "9", BigOnly: true)) + "\n#N\n1,\n#BRANCHEND"), 0);
+        var read = a.Chart!.Branches[0];
+        Assert.Equal((BranchCondition.JudgeGood, true, 3.0, 9.0), (read.Condition, read.BigOnly, read.ExpertThreshold(BranchRoute.Normal), read.MasterThreshold(BranchRoute.Normal)));
+    }
+
+    [Fact]
     public void ACommandMovesInOneChange()
     {
         string text = Chart("1000,\n#SCROLL 2\n2000,\n3000,");

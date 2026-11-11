@@ -43,7 +43,22 @@ public interface IChartLanguage
     IReadOnlyList<BlockSummary> Summaries(string text) => Array.Empty<BlockSummary>();
     // Diagnostics' messages in a language ("en", "zh", "ja") where the language has them.
     string MessageLanguage { get => "en"; set { } }
+
+    // What a branch can be decided by, named and explained in the interface's language; none
+    // when the language has no branches.
+    IReadOnlyList<BranchConditionKind> BranchConditions => Array.Empty<BranchConditionKind>();
+    // A branch's condition as written, taken apart (null when it cannot be read) and written.
+    BranchConditionText? ReadBranchCondition(string written) => null;
+    string WriteBranchCondition(BranchConditionText condition) => "";
 }
+
+// A kind of branch condition: how it is written, its name, what it counts, and what counting
+// "big only" means for it (null when it cannot be asked for).
+public sealed record BranchConditionKind(string Key, string Name, string Description, string? BigOnly = null);
+
+// A branch's condition: its kind's key, the two thresholds as written (to the middle route and to
+// the top one), whether only big notes count, and whether the thresholds are upper limits.
+public sealed record BranchConditionText(string Kind, string Expert, string Master, bool BigOnly = false, bool Less = false);
 
 // Text is what is inserted; Label what the list shows (Text when null).
 public sealed record CompletionItem(string Text, string Description, string? Detail = null, string? Label = null);
@@ -104,4 +119,8 @@ public interface IChartEditing
     // A branch of ChartAnalysis.Branches taken out, as one change: what one of its routes plays
     // stays, as the part every route plays; the other routes and the branch's own commands go.
     EditResult RemoveBranch(ChartAnalysis analysis, ChartBranchMark branch, BranchRoute keep);
+
+    // A branch made of one measure outside any branch: the measure becomes the branch's first
+    // route and is written again for each of the others, so that every route plays what it did.
+    EditResult InsertBranch(ChartAnalysis analysis, MeasureView measure, string condition);
 }
