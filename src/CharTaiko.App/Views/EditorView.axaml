@@ -65,7 +65,7 @@
     <!-- Blocks and note tools -->
     <Border Grid.Row="1" Classes="panel" BorderThickness="0,0,0,1" Padding="8,4">
       <Grid ColumnDefinitions="*,Auto">
-        <ListBox ItemsSource="{Binding Blocks}" SelectedIndex="{Binding BlockIndex}" Background="Transparent">
+        <ListBox x:Name="BlockList" ItemsSource="{Binding Blocks}" SelectedIndex="{Binding BlockIndex}" Background="Transparent">
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
           </ListBox.ItemsPanel>

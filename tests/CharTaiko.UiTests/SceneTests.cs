@@ -226,6 +226,41 @@ public class SceneTests : IDisposable
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(editor.Analysis.SlotAt(other.Source.Line, other.Source.Column + 1)!.Time, editor.Playhead, 3);
         Assert.Equal((other.Source.Line, other.Source.Column + 1), (caret.Line, caret.Column));
+
+        // Another difficulty from the picker: the caret goes into its chart at the same time, and
+        // its line is the editor's top line (unless the editor cannot scroll that far).
+        double at = editor.Playhead;
+        foreach (int block in new[] { 1, 0 })
+        {
+            editor.BlockIndex = block;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(block, editor.BlockIndex);
+            Assert.InRange(caret.Line, editor.Analysis.StartLine, editor.Analysis.EndLine);
+            Assert.Equal(at, editor.Playhead, 3);
+            var view = code.TextArea.TextView;
+            int top = view.GetDocumentLineByVisualTop(code.VerticalOffset).LineNumber;
+            bool atBottom = code.VerticalOffset + code.ViewportHeight >= code.ExtentHeight - 1;
+            Assert.True(top == caret.Line || (atBottom && top < caret.Line), $"top line {top}, caret line {caret.Line}");
+        }
+
+        // The chosen difficulty clicked again: its #START at the top, the caret at the start of the
+        // first measure, and the playhead there too.
+        editor.Seek(editor.Analysis.Chart!.Duration / 2);
+        Dispatcher.UIThread.RunJobs();
+        var list = window.GetVisualDescendants().OfType<ListBox>().First(l => l.Name == "BlockList");
+        var tab = list.ContainerFromIndex(editor.BlockIndex)!;
+        var press = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), window)!.Value;
+        window.MouseMove(press);
+        window.MouseDown(press, MouseButton.Left);
+        window.MouseUp(press, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, editor.BlockIndex);
+        var first = editor.Analysis.Measures[0];
+        Assert.Equal((first.Slots[0].Source.Line, first.Slots[0].Source.Column), (caret.Line, caret.Column));
+        Assert.Equal(first.Time, editor.Playhead, 3);
+        int startTop = code.TextArea.TextView.GetDocumentLineByVisualTop(code.VerticalOffset).LineNumber;
+        Assert.Equal(editor.Analysis.StartLine, startTop);
+        Assert.Equal("#START", code.Document.GetText(code.Document.GetLineByNumber(startTop)).Trim());
     }
 
     [AvaloniaFact]

@@ -5,6 +5,7 @@ using Avalonia.Input;
 using AvaloniaEdit;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.Folding;
 using AvaloniaEdit.Highlighting;
@@ -89,6 +90,16 @@ public partial class EditorView : UserControl
         };
         UndoButton.Click += (_, _) => Code.Undo();
         RedoButton.Click += (_, _) => Code.Redo();
+        // The chosen difficulty clicked again: back to the start of its chart. (Seen on the way down,
+        // before the list box acts on the press; choosing the same item again changes nothing.)
+        BlockList.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (vm == null || !e.GetCurrentPoint(BlockList).Properties.IsLeftButtonPressed) return;
+            if ((e.Source as Avalonia.Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { } item) return;
+            int index = BlockList.IndexFromContainer(item);
+            if (index < 0 || index != BlockList.SelectedIndex) return;
+            Avalonia.Threading.Dispatcher.UIThread.Post(GoToChartStart);
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ProblemList.DoubleTapped += (_, _) => GoToProblem();
         ProblemList.SelectionChanged += (_, _) => GoToProblem();
     }
@@ -101,6 +112,7 @@ public partial class EditorView : UserControl
             vm.PropertyChanged -= Changed;
             vm.EditsRequested -= ApplyEdits;
             vm.CaretRequested -= MoveCaret;
+            vm.BlockChosen -= FollowIntoBlock;
         }
         vm = DataContext as EditorViewModel;
         if (vm == null) return;
@@ -118,6 +130,7 @@ public partial class EditorView : UserControl
         vm.PropertyChanged += Changed;
         vm.EditsRequested += ApplyEdits;
         vm.CaretRequested += MoveCaret;
+        vm.BlockChosen += FollowIntoBlock;
         ApplySettings();
         if (vm.Analysis.StartLine > 0) MoveCaret(Math.Min(vm.Analysis.StartLine + 1, Code.Document.LineCount), 1);
         Refresh();
@@ -160,6 +173,43 @@ public partial class EditorView : UserControl
         // when stopped (a seek on the lane or timeline) whenever it is not there already.
         var caret = Code.TextArea.Caret;
         if (vm.IsPlaying ? moved : caret.Line != span.Line || caret.Column != span.Column) FollowPlayhead(span.Line, span.Column);
+    }
+
+    // A block chosen in the picker: the caret goes to the slot at the playhead in its chart (or to
+    // the chart's first line when the playhead is before it), and that line is always scrolled to
+    // the top of the editor, not to whichever edge is nearer.
+    void FollowIntoBlock()
+    {
+        if (vm == null) return;
+        Refresh();
+        var span = SlotAtPlayhead(vm)?.Source ?? default;
+        if (!span.IsEmpty) FollowPlayhead(span.Line, span.Column);
+        else if (vm.Analysis.StartLine > 0) FollowPlayhead(Math.Min(vm.Analysis.StartLine + 1, Code.Document.LineCount), 1);
+        else return;
+        Code.ScrollTo(Code.TextArea.Caret.Line, 1, AvaloniaEdit.Rendering.VisualYPosition.LineTop, 0, 0);
+    }
+
+    // The start of the chosen block's chart: its #START at the top of the editor, the caret at the
+    // start of the first measure, and the playhead there with it.
+    public void GoToChartStart()
+    {
+        if (vm == null) return;
+        if (vm.Analysis.StartLine < 1 || vm.Analysis.StartLine > Code.Document.LineCount) return;
+        var first = vm.Analysis.Measures.FirstOrDefault();
+        var span = first == null ? default : first.Slots.Count > 0 ? first.Slots[0].Source : first.Comma;
+        int line = span.IsEmpty ? Math.Min(vm.Analysis.StartLine + 1, Code.Document.LineCount) : span.Line;
+        int column = span.IsEmpty ? 1 : span.Column;
+        caretDriving = true;
+        try
+        {
+            Code.TextArea.ClearSelection();
+            Code.TextArea.Caret.Position = new TextViewPosition(line, column);
+            // Also when the caret was there already (then it reports no move), and while playing.
+            if (first != null) vm.Seek(first.Time);
+        }
+        finally { caretDriving = false; }
+        Code.ScrollTo(vm.Analysis.StartLine, 1, AvaloniaEdit.Rendering.VisualYPosition.LineTop, 0, 0);
+        Code.TextArea.Focus();
     }
 
     // The caret goes to the slot at the playhead, without sending the playhead back to the slot's

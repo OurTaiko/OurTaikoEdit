@@ -125,6 +125,10 @@ public sealed partial class EditorViewModel : ViewModelBase
     // The code editor moves its caret there (1-based line and column) and shows it.
     public event Action<int, int>? CaretRequested;
 
+    // Another block was chosen in the picker (not by the caret walking into it): the code editor
+    // takes its caret into the new block's chart, at the playhead.
+    public event Action? BlockChosen;
+
     public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null)
     {
         Settings = settings ?? new AppSettings();
@@ -219,11 +223,14 @@ public sealed partial class EditorViewModel : ViewModelBase
 
     // Set while the block follows the analysis, which must not start another one.
     bool syncingBlock;
+    // Set while the block follows the caret, which is already where it should be.
+    bool caretChoosingBlock;
 
     partial void OnBlockIndexChanged(int value)
     {
         if (value < 0 || syncingBlock) return;
         Reanalyze();
+        if (!caretChoosingBlock) BlockChosen?.Invoke();
     }
 
     // The code editor's caret: the playhead follows it while stopped, and so does the block. Not
@@ -238,7 +245,12 @@ public sealed partial class EditorViewModel : ViewModelBase
         for (int i = blocks.Count - 1; i >= 0; i--)
         {
             if (blocks[i].StartLine > line) continue;
-            if (i != BlockIndex) BlockIndex = i;
+            if (i != BlockIndex)
+            {
+                caretChoosingBlock = true;
+                try { BlockIndex = i; }
+                finally { caretChoosingBlock = false; }
+            }
             break;
         }
         if (line < Analysis.StartLine || line > Analysis.EndLine) return;
