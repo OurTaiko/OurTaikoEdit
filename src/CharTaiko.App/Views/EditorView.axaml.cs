@@ -17,8 +17,8 @@ using CharTaiko.Core.Localization;
 namespace CharTaiko.App.Views;
 
 // Binds the AvaloniaEdit code editor to the editor view model: text and caret go to the model,
-// timeline edits come back as one undoable document change, diagnostics are underlined and the
-// slot at the playhead is boxed.
+// timeline edits come back as one undoable document change, diagnostics are underlined, and the
+// slot at the playhead is boxed and the caret follows it (the playhead follows the caret too).
 public partial class EditorView : UserControl
 {
     EditorViewModel? vm;
@@ -29,6 +29,9 @@ public partial class EditorView : UserControl
     CompletionWindow? completion;
     InsightWindow? signature;
     bool applying;
+    // The caret is moving the playhead (so the playhead must not move the caret back), or the
+    // playhead is moving the caret (so the caret must not move the playhead back).
+    bool caretDriving, playheadDriving;
 
     public EditorView()
     {
@@ -56,7 +59,9 @@ public partial class EditorView : UserControl
         Code.TextArea.Caret.PositionChanged += (_, _) =>
         {
             if (applying) return;
-            vm?.OnCaretMoved(Code.TextArea.Caret.Line, Code.TextArea.Caret.Column);
+            caretDriving = true;
+            try { vm?.OnCaretMoved(Code.TextArea.Caret.Line, Code.TextArea.Caret.Column, movePlayhead: !playheadDriving); }
+            finally { caretDriving = false; }
             if (signature != null) UpdateSignature(open: false);
         };
         Code.TextArea.TextEntered += (_, e) =>
@@ -121,7 +126,8 @@ public partial class EditorView : UserControl
     void Changed(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(EditorViewModel.Settings)) ApplySettings();
-        if (e.PropertyName is nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Route)) Refresh();
+        if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Route)) Refresh(follow: !caretDriving);
+        else if (e.PropertyName == nameof(EditorViewModel.Analysis)) Refresh();
     }
 
     // Font size, line wrapping and the hints at line ends, from the settings.
@@ -134,7 +140,7 @@ public partial class EditorView : UserControl
         Code.TextArea.TextView.InvalidateLayer(AvaloniaEdit.Rendering.KnownLayer.Background);
     }
 
-    void Refresh()
+    void Refresh(bool follow = false)
     {
         if (vm == null) return;
         diagnostics.Diagnostics = vm.Analysis.Diagnostics;
@@ -149,7 +155,26 @@ public partial class EditorView : UserControl
         playhead.Span = span;
         Code.TextArea.TextView.InvalidateLayer(AvaloniaEdit.Rendering.KnownLayer.Selection);
         Code.TextArea.TextView.InvalidateLayer(AvaloniaEdit.Rendering.KnownLayer.Background);
-        if (moved && vm.IsPlaying && !span.IsEmpty) Code.ScrollToLine(span.Line);
+        if (!follow || span.IsEmpty) return;
+        // While playing only when the slot changes, so the caret can still be put elsewhere to type;
+        // when stopped (a seek on the lane or timeline) whenever it is not there already.
+        var caret = Code.TextArea.Caret;
+        if (vm.IsPlaying ? moved : caret.Line != span.Line || caret.Column != span.Column) FollowPlayhead(span.Line, span.Column);
+    }
+
+    // The caret goes to the slot at the playhead, without sending the playhead back to the slot's
+    // own time (the playhead may be between slots, or running).
+    void FollowPlayhead(int line, int column)
+    {
+        if (line < 1 || line > Code.Document.LineCount) return;
+        playheadDriving = true;
+        try
+        {
+            Code.TextArea.ClearSelection();
+            Code.TextArea.Caret.Position = new TextViewPosition(line, column);
+            Code.TextArea.Caret.BringCaretToView();
+        }
+        finally { playheadDriving = false; }
     }
 
     // The last slot at or before the playhead on the route being shown.

@@ -226,12 +226,13 @@ public sealed partial class EditorViewModel : ViewModelBase
         Reanalyze();
     }
 
-    // The code editor's caret: the playhead follows it while stopped, and so does the block.
-    public void OnCaretMoved(int line, int column)
+    // The code editor's caret: the playhead follows it while stopped, and so does the block. Not
+    // when the caret was itself moved to follow the playhead (movePlayhead false).
+    public void OnCaretMoved(int line, int column, bool movePlayhead = true)
     {
         caretLine = line; caretColumn = column;
         Caret = Loc.F("Caret", line, column);
-        if (IsPlaying) return;
+        if (IsPlaying || !movePlayhead) return;
         EnsureFresh();
         var blocks = Analysis.Blocks;
         for (int i = blocks.Count - 1; i >= 0; i--)

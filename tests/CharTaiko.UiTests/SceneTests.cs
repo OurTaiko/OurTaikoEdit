@@ -204,6 +204,31 @@ public class SceneTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void TheCaretFollowsThePlayhead()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        var code = Find<TextEditor>(window);
+        var caret = code.TextArea.Caret;
+
+        // A seek between two slots: the caret goes to the earlier one, the playhead stays put.
+        var m = editor.Analysis.Measures[1];
+        var (a, b) = (m.Slots[4], m.Slots[5]);
+        double t = (a.Time + b.Time) / 2;
+        editor.Seek(t);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(t, editor.Playhead, 3);
+        Assert.Equal((a.Source.Line, a.Source.Column), (caret.Line, caret.Column));
+
+        // Moved by hand, the caret still takes the playhead with it, and stays where it was put.
+        var other = editor.Analysis.Measures[2].Slots[3];
+        caret.Position = new TextViewPosition(other.Source.Line, other.Source.Column + 1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(editor.Analysis.SlotAt(other.Source.Line, other.Source.Column + 1)!.Time, editor.Playhead, 3);
+        Assert.Equal((other.Source.Line, other.Source.Column + 1), (caret.Line, caret.Column));
+    }
+
+    [AvaloniaFact]
     public void ClickingTheTimelineWritesTheNoteAndUndoTakesItBack()
     {
         var (window, vm, registry) = Open();
