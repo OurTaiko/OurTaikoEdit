@@ -64,7 +64,9 @@ public sealed record BlockCourse(string Id, string Name, int Level);
 // what is asked for kept where it is: Tempo (the commands that say when measures fall: tempo,
 // measure lengths, delays), Branches (the branches with every route; without them only what the
 // normal route plays) and Gogo (go-go time). Notes are never copied.
-public sealed record NewBlock(string Course, int Level, int From = -1, bool Tempo = false, bool Branches = false, bool Gogo = false);
+public sealed record NewBlock(string Course, int Level, int From = -1, bool Tempo = false, bool Branches = false, bool Gogo = false, ImportedBlock? Imported = null);
+
+public sealed record ImportedBlock(double Bpm, IReadOnlyList<int> BalloonHits, IReadOnlyList<string> Body);
 
 // A kind of branch condition: how it is written, its name, what it counts, and what counting
 // "big only" means for it (null when it cannot be asked for).

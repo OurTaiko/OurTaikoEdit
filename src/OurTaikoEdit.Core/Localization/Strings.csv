@@ -254,7 +254,7 @@ NewBlockTip,New difficulty…,新建难度…,新しい難易度…
 NewBlockTitle,New difficulty,新建难度,新しい難易度
 NewBlockCourse,Difficulty,难度,難易度
 NewBlockLevel,Level (★),星级（★）,レベル（★）
-InheritFrom,Start with the shape of,继承自,引き継ぐ難易度
+NewBlockSource,Start from,创建来源,作成元
 InheritNothing,Nothing,不继承,引き継がない
 InheritNothingHint,The new difficulty starts as four empty measures.,新难度从四个空小节开始。,新しい難易度は空の 4 小節から始まります。
 InheritTempo,"Tempo and measures (#BPMCHANGE, #MEASURE, #DELAY)",速度与小节（#BPMCHANGE、#MEASURE、#DELAY）,テンポと小節（#BPMCHANGE、#MEASURE、#DELAY）
@@ -264,6 +264,7 @@ InheritHint,"The measures of {0} are written empty, with what is ticked where it
 CourseExists,The chart already has {0}.,谱面里已经有 {0} 了。,この譜面には {0} がすでにあります。
 NoCourseLeft,The chart already has every difficulty.,谱面里五个难度都已经有了。,この譜面にはすべての難易度があります。
 BlockAdded,Added {0}.,已添加 {0}。,{0} を追加しました。
+BlockImportInvalid,The imported chart could not be added as {0}.,导入的谱面无法添加为 {0} 难度。,{0} として譜面を追加できませんでした。
 BlockNotCarried,"{0} would not read back as the difficulty it starts from; write it in the code.",{0} 写出来之后与所继承的难度对不上；请在代码里写。,{0} は、書き出すと引き継ぎ元と一致しません。コードで書いてください。
 "BranchChangesChart","A branch here would change what is played (a drumroll may cross the measure's ends); write it in the code.",在这里建分歧会改变演奏内容（可能有连打跨过这一小节的两端）；请在代码里写。,ここに分岐を作ると演奏内容が変わります（連打が小節の端をまたいでいる可能性があります）。コードで書いてください。
 BranchBigNotes,Count big notes only,只算大音符,大音符のみ数える

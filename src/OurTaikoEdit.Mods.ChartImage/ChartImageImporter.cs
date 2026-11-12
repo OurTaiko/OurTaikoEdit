@@ -9,7 +9,7 @@ namespace OurTaikoEdit.Mods.ChartImage;
 // (ChartImageDecoder), which a writer for the target language turns into text; TJA is the one
 // written so far, so TJA is the chart type offered. What is written is read back by the target
 // language and compared with what was decoded before it is handed over.
-public sealed class ChartImageImporter : IChartImporter
+public sealed class ChartImageImporter : IChartBlockImporter
 {
     public string Id => "chart-image";
     public string DisplayName => Loc.T("ChartImageSource");
@@ -33,9 +33,28 @@ public sealed class ChartImageImporter : IChartImporter
         }
     }
 
+    public ImportedBlock ImportBlock(string source, IChartLanguage target)
+    {
+        try
+        {
+            if (!CanWrite(target)) throw new DecodeException("ChartImageTarget", target.DisplayName);
+            var chart = ChartImageDecoder.Decode(source);
+            var body = WriteBody(chart);
+            VerifyRoundTrip(chart, target, WriteTja(chart, "", null, body));
+            return new ImportedBlock(chart.Bpm, chart.BalloonHits, body);
+        }
+        catch (DecodeException e)
+        {
+            throw new ChartImportException(Loc.F("ChartImageFailed", e.Message) + "\n" + Loc.T("ChartImageHint"));
+        }
+    }
+
     // The decoded chart as TJA. The image has no title a program can read, no course or level
     // and no audio timing: the title and audio are the project's, the rest the usual defaults.
     public static string WriteTja(DecodedChart chart, string title, string? audioFile)
+        => WriteTja(chart, title, audioFile, WriteBody(chart));
+
+    static string WriteTja(DecodedChart chart, string title, string? audioFile, IReadOnlyList<string> body)
     {
         var lines = new List<string>
         {
@@ -52,6 +71,15 @@ public sealed class ChartImageImporter : IChartImporter
             "",
             "#START",
         };
+        lines.AddRange(body);
+        lines.Add("#END");
+        lines.Add("");
+        return string.Join("\n", lines);
+    }
+
+    static List<string> WriteBody(DecodedChart chart)
+    {
+        var lines = new List<string>();
         string signature = "4/4";
         foreach (var measure in chart.Measures)
         {
@@ -70,9 +98,7 @@ public sealed class ChartImageImporter : IChartImporter
             }
             lines.Add(new string(measure.Notes.Skip(written).ToArray()) + ",");
         }
-        lines.Add("#END");
-        lines.Add("");
-        return string.Join("\n", lines);
+        return lines;
     }
 
     // The target language reads the text back: no errors, and every measure the characters that

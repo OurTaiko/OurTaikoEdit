@@ -130,9 +130,8 @@ public static class ChartImageDecoder
         public bool ContinuesRight;
         // Where the note starts, when the pixels say so.
         public int? StartX;
-        // Otherwise an earlier note hides so much of the start that the pixels only say how late
-        // it can be (StartMax) and where the note hiding it is (XCover): the grid places it.
-        public int StartMax, XCover;
+        // If the pixels leave more than one possible start, the grid places it within this range.
+        public int StartMin, StartMax;
         public int? HitCount;
 
         public Disc Disc => Kind == LongKind.DrumrollBig ? Big : Small;
@@ -347,6 +346,10 @@ public static class ChartImageDecoder
             // The rows over and under the disc are looked at across the disc's first and last row.
             bool inDisc = i >= 0 && i < disc.Rows.Length;
             var (left, right) = disc.Rows[Math.Clamp(i, 0, disc.Rows.Length - 1)];
+            // The top of a big note can have one extra pixel on the left.
+            int extra = position + left - 1;
+            if (disc == Big && i == 0 && Clear(lane, extra, y, covers) && pixels.IsAny(extra, y, colors))
+                left--;
             for (int x = position + left - (inDisc ? 1 : 0); x <= position + right + (inDisc ? 1 : 0); x++)
             {
                 if (!Clear(lane, x, y, covers)) continue;
@@ -409,9 +412,8 @@ public static class ChartImageDecoder
     // Where the long notes of a lane start. A balloon's band starts a fixed way after its
     // numbered head. A drumroll starts with a disc like a note's: in each of its rows the colour
     // begins where the disc does, unless the ring of something before it hides that. So every row
-    // whose first pixel has nothing reaching the pixel before it says where the drumroll starts,
-    // and they all have to say the same; the other rows only say that it starts no later. With
-    // no such row, the grid is left to place it between the note hiding it and that limit.
+    // whose first pixel has nothing reaching the pixel before it constrains the start;
+    // the other rows only give an upper bound. The grid resolves any remaining ambiguity.
     static void FindLongNoteStarts(Pixels pixels, Lane lane, List<LongNote> longNotes, List<ShortNote> notes)
     {
         foreach (var note in longNotes)
@@ -428,23 +430,22 @@ public static class ChartImageDecoder
                 .Concat(longNotes.Where(n => !n.ContinuesRight && n.XMax < note.XMin).Select(n => n.EndCover)).ToList();
             var disc = note.Disc;
             int middle = (note.XMin + note.XMax) / 2;
-            int? start = null;
-            int limit = int.MaxValue;
+            int min = int.MinValue, max = int.MaxValue;
             for (int i = 0; i < disc.Rows.Length; i++)
             {
                 int y = lane.YMin + disc.Top + i, x = middle;
                 if (!pixels.IsAny(x, y, DrumrollFill)) continue;
                 while (pixels.IsAny(x - 1, y, DrumrollFill)) x--;
-                int says = x - disc.Rows[i].Left;
-                limit = Math.Min(limit, says);
-                if (!Clear(lane, x - 1, y, covers)) continue;
-                if (start != null && start != says) throw new DecodeException("ChartImageHeadShape", lane.Index + 1, note.XMin);
-                start = says;
+                int first = x - disc.Rows[i].Left;
+                // The top row of a big roll has two rasterizations, one pixel apart.
+                int last = note.Kind == LongKind.DrumrollBig && i == 0 ? first + 1 : first;
+                max = Math.Min(max, last);
+                if (Clear(lane, x - 1, y, covers)) min = Math.Max(min, first);
             }
-            if (limit == int.MaxValue || start > limit) throw new DecodeException("ChartImageHeadShape", lane.Index + 1, note.XMin);
-            note.StartX = start;
-            note.StartMax = limit;
-            note.XCover = before.Count > 0 ? before.Max(n => n.X) : int.MinValue;
+            if (max == int.MaxValue || min > max) throw new DecodeException("ChartImageHeadShape", lane.Index + 1, note.XMin);
+            note.StartX = min == max ? min : null;
+            note.StartMin = before.Count > 0 ? Math.Max(min, before.Max(n => n.X) + 1) : min;
+            note.StartMax = max;
         }
     }
 
@@ -697,10 +698,7 @@ public static class ChartImageDecoder
             if (note.StartX is { } x) start = x - measure.XMin;
             else
             {
-                // The note before it hides every row's start, so the pixels only say how late the
-                // drumroll can start: the grid places it, if it has one position for it.
-                int headMax = note.StartMax - measure.XMin, cover = note.XCover - measure.XMin;
-                var candidates = positions.Where(o => o <= headMax && o > cover).ToList();
+                var candidates = positions.Where(o => measure.XMin + o >= note.StartMin && measure.XMin + o <= note.StartMax).ToList();
                 if (candidates.Count != 1) throw new DecodeException("ChartImageHeadCovered", measure.Lane.Index + 1, note.XMin);
                 start = candidates[0];
             }

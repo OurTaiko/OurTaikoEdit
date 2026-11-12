@@ -20,7 +20,7 @@ public interface IDialogService
     Task<string?> BranchConditionAsync(string title, OurTaikoEdit.Core.Languages.IChartLanguage language, string written);
     // A new difficulty of those the language offers, with the block it starts with the shape of
     // chosen among the chart's (current is the one being edited); null when cancelled.
-    Task<OurTaikoEdit.Core.Languages.NewBlock?> NewBlockAsync(IReadOnlyList<OurTaikoEdit.Core.Languages.BlockCourse> courses, IReadOnlyList<OurTaikoEdit.Core.Languages.ChartBlock> blocks, int current);
+    Task<OurTaikoEdit.Core.Languages.NewBlock?> NewBlockAsync(OurTaikoEdit.Core.Languages.IChartLanguage language, IReadOnlyList<OurTaikoEdit.Core.Languages.BlockCourse> courses, IReadOnlyList<OurTaikoEdit.Core.Languages.ChartBlock> blocks, int current);
     Task<SaveChoice> AskSaveAsync(string name);
     // Shows the settings; true when they were changed and saved.
     Task<bool> SettingsAsync(OurTaikoEdit.Core.Settings.AppSettings settings);

@@ -84,6 +84,28 @@ public class ChartImageTests : IDisposable
         Assert.Equal(28, chart.Measures.Sum(m => m.Notes.Count(n => n == '8')));
     }
 
+    [Theory]
+    [InlineData(574, 472)] // Big drumroll
+    [InlineData(454, 280)] // Big don
+    public void AOnePixelWiderTopDoesNotMoveABigNote(int topX, int topY)
+    {
+        var pixels = Png.Read(File.ReadAllBytes(Fixture("wrapped_drumrolls.png")));
+        var expected = ChartImageDecoder.Decode(pixels);
+        var rgb = new byte[pixels.Width * pixels.Height * 3];
+        for (int y = 0; y < pixels.Height; y++)
+        for (int x = 0; x < pixels.Width; x++)
+        {
+            var (r, g, b) = pixels.At(x, y);
+            int i = (y * pixels.Width + x) * 3;
+            (rgb[i], rgb[i + 1], rgb[i + 2]) = ((byte)r, (byte)g, (byte)b);
+        }
+
+        int top = (topY * pixels.Width + topX) * 3;
+        Array.Copy(rgb, top + 3, rgb, top, 3);
+        var actual = ChartImageDecoder.Decode(new Pixels(pixels.Width, pixels.Height, rgb));
+        Assert.Equal(ChartImageImporter.WriteTja(expected, "Test", null), ChartImageImporter.WriteTja(actual, "Test", null));
+    }
+
     // An image the original tool refuses (the user's, 2026-11-11): drumrolls whose starts are under
     // the note before them, in measures too finely divided for the grid alone to place them.
     [Fact]

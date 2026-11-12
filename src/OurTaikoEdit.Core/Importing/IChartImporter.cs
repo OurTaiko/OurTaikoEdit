@@ -22,6 +22,11 @@ public interface IChartImporter
     ImportedChart Import(ChartImportRequest request);
 }
 
+public interface IChartBlockImporter : IChartImporter
+{
+    ImportedBlock ImportBlock(string source, IChartLanguage target);
+}
+
 // Source is the file to read; Title and AudioFile (the audio's name next to the chart, if any)
 // are the new project's, for the chart's headers.
 public sealed record ChartImportRequest(string Source, IChartLanguage Target, string Title, string? AudioFile);

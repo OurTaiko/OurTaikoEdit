@@ -538,7 +538,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         EnsureFresh();
         var courses = Language.NewBlockCourses(Analysis);
         if (courses.Count == 0) { Message = Loc.T("NoCourseLeft"); return; }
-        var block = await dialogs.NewBlockAsync(courses, Analysis.Blocks, Analysis.Block);
+        var block = await dialogs.NewBlockAsync(Language, courses, Analysis.Blocks, Analysis.Block);
         if (block == null) return;
         EnsureFresh();
         var result = Language.Editing.InsertBlock(Analysis, block);

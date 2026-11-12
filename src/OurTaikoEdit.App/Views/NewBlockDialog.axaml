@@ -24,7 +24,7 @@
 
       <!-- The difficulty it starts with the shape of, and what of it is carried over -->
       <StackPanel Classes="field">
-        <TextBlock Classes="label" Text="{l:T InheritFrom}" />
+        <TextBlock Classes="label" Text="{l:T NewBlockSource}" />
         <ComboBox x:Name="FromBox" HorizontalAlignment="Stretch" />
         <StackPanel x:Name="InheritPanel" Spacing="0" Margin="0,2,0,0">
           <CheckBox x:Name="TempoBox" Content="{l:T InheritTempo}" />
@@ -32,6 +32,11 @@
           <CheckBox x:Name="GogoBox" Content="{l:T InheritGogo}" />
         </StackPanel>
         <TextBlock x:Name="InheritHint" Classes="caption" TextWrapping="Wrap" />
+        <Grid x:Name="SourceFilePanel" ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="False">
+          <TextBox x:Name="SourceFileBox" PlaceholderText="{l:T ChooseSource}" />
+          <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseSource" />
+        </Grid>
+        <TextBlock x:Name="ImportError" Classes="error" TextWrapping="Wrap" IsVisible="False" />
       </StackPanel>
     </StackPanel>
   </DockPanel>

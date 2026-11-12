@@ -311,11 +311,8 @@ sealed class TjaEditing : IChartEditing
     static readonly HashSet<string> RouteMarkers = new(StringComparer.OrdinalIgnoreCase) { "#N", "#E", "#M" };
     static readonly HashSet<string> BranchCommands = new(StringComparer.OrdinalIgnoreCase) { "#BRANCHSTART", "#BRANCHEND", "#N", "#E", "#M", "#SECTION", "#LEVELHOLD" };
 
-    // A new difficulty after everything else in the file: COURSE, LEVEL and an empty BALLOON of
-    // its own (so that a list written for every course is not its), then its block. Without a
-    // block to start from that is four empty measures; with one, that block's measures written
-    // empty (Skeleton). The text is read again: the new block must read without errors, and with
-    // the tempo carried over its measures must fall when the other block's do.
+    // Append a course with its own level and balloon counts, then check that it parses.
+    // An inherited block must also preserve the requested measure timing.
     public EditResult InsertBlock(ChartAnalysis analysis, NewBlock block)
     {
         string text = analysis.Text, newline = text.Contains("\r\n") ? "\r\n" : "\n";
@@ -327,7 +324,12 @@ sealed class TjaEditing : IChartEditing
         List<string> body;
         TjaAnalysis? source = null;
         bool everyBranchHasNormal = true;
-        if (block.From >= 0)
+        if (block.Imported is { } imported)
+        {
+            body = new List<string> { $"#BPMCHANGE {imported.Bpm.ToString(CultureInfo.InvariantCulture)}" };
+            body.AddRange(imported.Body);
+        }
+        else if (block.From >= 0)
         {
             if (block.From >= doc.Blocks.Count) return EditResult.Fail(Loc.T("FixErrorsFirst"));
             var from = doc.Blocks[block.From];
@@ -337,7 +339,8 @@ sealed class TjaEditing : IChartEditing
         }
         else body = Enumerable.Repeat(",", 4).ToList();
 
-        var lines = new List<string> { "", $"COURSE:{course}", $"LEVEL:{Math.Clamp(block.Level, 1, 10)}", "BALLOON:", "", "#START" };
+        string balloonHits = block.Imported == null ? "" : string.Join(",", block.Imported.BalloonHits);
+        var lines = new List<string> { "", $"COURSE:{course}", $"LEVEL:{Math.Clamp(block.Level, 1, 10)}", $"BALLOON:{balloonHits}", "", "#START" };
         lines.AddRange(body);
         lines.Add("#END");
         lines.Add("");
@@ -346,7 +349,8 @@ sealed class TjaEditing : IChartEditing
         var edit = new TextEdit(line, column, 0, written);
 
         var after = new TjaDocument(TextEdits.Apply(text, new[] { edit })).Analyze(course, "single");
-        if (after.Chart == null || after.HasErrors) return EditResult.Fail(Loc.F("BlockNotCarried", course));
+        if (after.Chart == null || after.HasErrors)
+            return EditResult.Fail(Loc.F(block.Imported == null ? "BlockNotCarried" : "BlockImportInvalid", course));
         if (source != null && block.Tempo)
         {
             // What the new block has of the other's: every measure, or without the branches, the

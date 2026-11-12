@@ -698,7 +698,7 @@ public class SceneTests : IDisposable
         public Task<bool> ConfirmAsync(string title, string message, string confirm) => Task.FromResult(true);
         public Task<string?> PromptAsync(string title, string message, string value) => Task.FromResult<string?>(answer);
         public Task<string?> BranchConditionAsync(string title, IChartLanguage language, string written) => Task.FromResult<string?>(answer);
-        public Task<NewBlock?> NewBlockAsync(IReadOnlyList<BlockCourse> courses, IReadOnlyList<ChartBlock> blocks, int current) => Task.FromResult<NewBlock?>(null);
+        public Task<NewBlock?> NewBlockAsync(OurTaikoEdit.Core.Languages.IChartLanguage language, IReadOnlyList<BlockCourse> courses, IReadOnlyList<ChartBlock> blocks, int current) => Task.FromResult<NewBlock?>(null);
         public Task<SaveChoice> AskSaveAsync(string name) => Task.FromResult(SaveChoice.Discard);
         public Task<bool> SettingsAsync(AppSettings settings) => Task.FromResult(false);
     }
@@ -1110,6 +1110,60 @@ public class SceneTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void ANewDifficultyCanBeImportedFromAPngAndUndone()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        try
+        {
+            var code = Find<TextEditor>(window);
+            string before = code.Text;
+            double originalStart = editor.Analysis.Measures[0].Time;
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NewBlockButton").Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            var dialog = Assert.IsType<NewBlockDialog>(window.OwnedWindows.Last());
+            var from = dialog.FindControl<ComboBox>("FromBox")!;
+            from.SelectedIndex = from.Items.Count - 1;
+            Assert.False(dialog.FindControl<StackPanel>("InheritPanel")!.IsVisible);
+            var file = dialog.FindControl<TextBox>("SourceFileBox")!;
+            Assert.True(file.IsVisible);
+
+            var ok = dialog.FindControl<Button>("OkButton")!;
+            void Create()
+            {
+                ok.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            string invalid = Path.Combine(root, "invalid.png");
+            File.WriteAllText(invalid, "invalid image");
+            file.Text = invalid;
+            Create();
+            Assert.Contains(dialog, window.OwnedWindows);
+            Assert.True(dialog.FindControl<TextBlock>("ImportError")!.IsVisible);
+            Assert.Equal(before, code.Text);
+
+            file.Text = Path.Combine(AppContext.BaseDirectory, "Fixtures", "wrapped_drumrolls.png");
+            dialog.FindControl<NumericUpDown>("LevelBox")!.Value = 4;
+            Create();
+
+            Assert.DoesNotContain(dialog, window.OwnedWindows);
+            Assert.StartsWith(before, code.Text);
+            Assert.Contains("\nCOURSE:Easy\nLEVEL:4\nBALLOON:6,10\n\n#START\n#BPMCHANGE 160\n", code.Text);
+            Assert.Equal("Easy ★4", editor.Blocks[editor.BlockIndex].Name);
+            Assert.Equal(107, editor.Analysis.Measures.Count);
+            Assert.Equal(originalStart, editor.Analysis.Measures[0].Time, 3);
+            Assert.False(editor.Analysis.HasErrors);
+
+            code.Undo();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, code.Text);
+        }
+        finally { editor.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ANewDifficultyStartsWithTheShapeOfAnotherAndUndoTakesItBack()
     {
         var (window, vm, registry) = Open();
@@ -1136,7 +1190,7 @@ public class SceneTests : IDisposable
 
             // The difficulties the chart has not; the one being edited to start from, all of it.
             Assert.Equal(new[] { "Easy", "Normal", "Edit" }, course.Items.Cast<string>());
-            Assert.Equal(new[] { "Nothing", "Oni ★9", "Hard ★6" }, from.Items.Cast<string>());
+            Assert.Equal(new[] { "Nothing", "Oni ★9", "Hard ★6", "Chart image" }, from.Items.Cast<string>());
             Assert.Equal(1, from.SelectedIndex);
             Assert.True(tempo.IsChecked == true && branches.IsChecked == true && gogo.IsChecked == true);
             Assert.True(panel.IsEnabled && branches.IsEnabled);
