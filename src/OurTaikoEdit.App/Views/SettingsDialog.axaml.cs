@@ -41,6 +41,9 @@ public partial class SettingsDialog : Window
         HitSetBox.ItemsSource = sets.Count > 0 ? sets : new[] { "—" };
         HitSetBox.SelectedIndex = Math.Clamp(s.HitSoundSet, 0, Math.Max(0, sets.Count - 1));
         LatencyBox.Value = (decimal)s.LatencyMs;
+        // What the system says of the output device is allowed for already; the number is added to it.
+        double device = Math.Round(OutputDevice.Latency * 1000);
+        LatencyHintText.Text = (device > 0 ? Loc.F("LatencyDevice", device) : Loc.T("LatencyDeviceUnknown")) + " " + Loc.T("LatencyHint");
         FileText.Text = s.File == null ? "" : Loc.F("SettingsFile", s.File);
         ShowMods(s);
     }

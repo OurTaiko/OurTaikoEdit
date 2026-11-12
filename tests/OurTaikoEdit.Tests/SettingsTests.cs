@@ -155,9 +155,10 @@ public class SettingsTests : IDisposable
         var s = AppSettings.Load(root);
         Assert.Equal((14.0, 16, "system"), (s.FontSize, s.Division, s.Language));
 
-        File.WriteAllText(Path.Combine(root, "settings.json"), """{ "language": "xx", "fontSize": 400, "division": 7, "volume": 3, "latencyMs": -5, "window": { "width": 10, "height": 10 } }""");
+        File.WriteAllText(Path.Combine(root, "settings.json"), """{ "language": "xx", "fontSize": 400, "division": 7, "volume": 3, "latencyMs": -5000, "window": { "width": 10, "height": 10 } }""");
         s = AppSettings.Load(root);
-        Assert.Equal(("system", 40.0, 16, 1.0, 0.0), (s.Language, s.FontSize, s.Division, s.Volume, s.LatencyMs));
+        // The latency is what is added to the device's own: it may take some off, to a limit.
+        Assert.Equal(("system", 40.0, 16, 1.0, -200.0), (s.Language, s.FontSize, s.Division, s.Volume, s.LatencyMs));
         Assert.Null(s.Window);
     }
 }

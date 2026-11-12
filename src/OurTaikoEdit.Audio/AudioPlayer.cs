@@ -16,7 +16,17 @@ public interface IAudioPlayer : IDisposable
     void Play();
     void Pause();
     void Seek(double seconds);
+    // A don or ka, started now: heard after the device's latency.
     void PlayHit(bool ka, bool big);
+    // A don or ka for a time of the song that is still to come, the song playing: it starts on
+    // that very sample of the song, so the two are heard together whatever the device's latency.
+    // Asked for a little ahead (the player needs the time before the device has got that far).
+    void PlayHitAt(double songTime, bool ka, bool big);
+    // The hits asked for ahead that have not started are dropped: the song stopped or moved.
+    void CancelHits();
+    // Seconds from the device being handed a sample to it being heard, where the system says
+    // (0 where it does not).
+    double OutputLatency { get; }
     // The don and ka sounds to play from now on.
     void SetHitSounds(PcmAudio don, PcmAudio ka);
 }
@@ -32,7 +42,16 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
     readonly uint buffer, source;
     uint donBuffer, kaBuffer;
     readonly uint[] hitSources;
+    // The time of the song each hit source was asked to start at; -∞ for one started at once.
+    readonly double[] hitTimes;
     int nextHit;
+    // OpenAL Soft's AL_SOFT_source_start_delay and ALC_SOFT_device_clock: a source started at a
+    // time of the device's clock, and where the song is at a time of that clock. Null without them.
+    readonly delegate* unmanaged[Cdecl]<uint, long, void> playAtTime;
+    readonly delegate* unmanaged[Cdecl]<uint, int, double*, void> getSourceDoubles;
+    const int SecOffsetClock = 0x1203;
+    // Without them: hits waiting for their time, started from Position as the song gets there.
+    readonly List<(double Time, bool Ka, bool Big)> waiting = new();
     readonly Stopwatch sinceReport = new();
     double lastReport = -1;
     double seekTo;
@@ -49,7 +68,16 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         donBuffer = Upload(HitSounds.Don(44100));
         kaBuffer = Upload(HitSounds.Ka(44100));
         hitSources = Enumerable.Range(0, 8).Select(_ => al.GenSource()).ToArray();
+        hitTimes = Enumerable.Repeat(double.NegativeInfinity, hitSources.Length).ToArray();
+        if (al.IsExtensionPresent("AL_SOFT_source_start_delay") && al.IsExtensionPresent("AL_SOFT_source_latency"))
+        {
+            playAtTime = (delegate* unmanaged[Cdecl]<uint, long, void>)al.GetProcAddress("alSourcePlayAtTimeSOFT");
+            getSourceDoubles = (delegate* unmanaged[Cdecl]<uint, int, double*, void>)al.GetProcAddress("alGetSourcedvSOFT");
+            if (getSourceDoubles == null) playAtTime = null;
+        }
     }
+
+    public double OutputLatency => OutputDevice.Latency;
 
     // The player, or null when there is no audio device (the editor then runs a silent clock).
     public static OpenAlPlayer? Open(PcmAudio audio)
@@ -110,6 +138,7 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
             if (!IsPlaying) return lastReport >= 0 ? lastReport : seekTo;
             al.GetSourceProperty(source, SourceFloat.SecOffset, out float reported);
             if (reported != lastReport) { lastReport = reported; sinceReport.Restart(); }
+            StartWaiting(reported);
             return lastReport + sinceReport.Elapsed.TotalSeconds;
         }
     }
@@ -133,12 +162,14 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
     public void Pause()
     {
         seekTo = Position;
+        CancelHits();
         al.SourcePause(source);
         lastReport = -1;
     }
 
     public void Seek(double seconds)
     {
+        CancelHits();
         seekTo = Math.Clamp(seconds, 0, Duration);
         al.SetSourceProperty(source, SourceFloat.SecOffset, (float)seekTo);
         lastReport = IsPlaying ? seekTo : -1;
@@ -153,13 +184,63 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         kaBuffer = Upload(ka);
     }
 
-    public void PlayHit(bool ka, bool big)
+    // The next hit source, ready to play a don or a ka.
+    (uint Source, int Index) Ready(bool ka, bool big)
     {
-        uint s = hitSources[nextHit++ % hitSources.Length];
+        int i = nextHit++ % hitSources.Length;
+        uint s = hitSources[i];
         al.SourceStop(s);
         al.SetSourceProperty(s, SourceInteger.Buffer, ka ? kaBuffer : donBuffer);
         al.SetSourceProperty(s, SourceFloat.Gain, (big ? 1f : 0.7f) * Math.Clamp(HitVolume, 0, 1));
+        return (s, i);
+    }
+
+    public void PlayHit(bool ka, bool big)
+    {
+        var (s, i) = Ready(ka, big);
+        hitTimes[i] = double.NegativeInfinity;
         al.SourcePlay(s);
+    }
+
+    // The song's place at a time of the device's clock gives the clock's time for a place of the
+    // song; the source is started then, to the sample. A source played with alSourcePlay instead
+    // starts with the next block the device mixes (11 ms blocks on macOS), where the song is by
+    // then, and only once a timer has seen that the time has come.
+    public void PlayHitAt(double songTime, bool ka, bool big)
+    {
+        if (!IsPlaying) { PlayHit(ka, big); return; }
+        if (playAtTime == null) { waiting.Add((songTime, ka, big)); return; }
+        var (s, i) = Ready(ka, big);
+        double* at = stackalloc double[2];
+        getSourceDoubles(source, SecOffsetClock, at);
+        hitTimes[i] = songTime;
+        playAtTime(s, (long)Math.Round((at[1] + (songTime - at[0])) * 1e9));
+    }
+
+    // Without the extensions: a hit is started when the block the device mixes next is the one
+    // nearest its time (the reported place is where that block starts).
+    void StartWaiting(double reported)
+    {
+        if (waiting.Count == 0) return;
+        const double halfBlock = 0.005;
+        for (int i = 0; i < waiting.Count; i++)
+        {
+            if (waiting[i].Time > reported + halfBlock) continue;
+            PlayHit(waiting[i].Ka, waiting[i].Big);
+            waiting.RemoveAt(i--);
+        }
+    }
+
+    public void CancelHits()
+    {
+        waiting.Clear();
+        al.GetSourceProperty(source, SourceFloat.SecOffset, out float reported);
+        for (int i = 0; i < hitSources.Length; i++)
+        {
+            // One that has started rings on; one still waiting for its time is not played.
+            if (hitTimes[i] > reported) al.SourceStop(hitSources[i]);
+            hitTimes[i] = double.NegativeInfinity;
+        }
     }
 
     public void Dispose()

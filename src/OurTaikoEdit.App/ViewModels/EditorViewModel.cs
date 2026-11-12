@@ -104,7 +104,6 @@ public sealed partial class EditorViewModel : ViewModelBase
     }
     [ObservableProperty] bool hitSounds = true;
     [ObservableProperty] double volume = 0.8;
-    double lastTick;
 
     public ObservableCollection<DiagnosticItem> Diagnostics { get; } = new();
     public ObservableCollection<ChartBlock> Blocks { get; } = new();
@@ -668,7 +667,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     public void Seek(double time)
     {
         Playhead = time;
-        lastTick = time;
+        hits.StartAt(time + Latency);
         if (!IsPlaying) return;
         playFrom = time;
         playClock.Restart();
@@ -745,7 +744,8 @@ public sealed partial class EditorViewModel : ViewModelBase
         }
         EnsureFresh();
         if (Analysis.Chart is { } c && Playhead >= c.Duration) Playhead = StartTime;
-        playFrom = lastTick = Playhead;
+        playFrom = Playhead;
+        hits.StartAt(Playhead + Latency);
         playClock.Restart();
         IsPlaying = true;
         if (player != null && Playhead + Latency >= 0 && Playhead + Latency < player.Duration) { player.Seek(Playhead + Latency); player.Play(); }
@@ -758,10 +758,13 @@ public sealed partial class EditorViewModel : ViewModelBase
         Seek(StartTime);
     }
 
-    // Seconds from the device taking a sample to it being heard: the song is played that much
-    // ahead of the playhead, and the hit sounds are started that much early, so that what is
-    // seen and what is heard meet.
-    double Latency => Settings.LatencyMs / 1000.0;
+    // Seconds from the device taking a sample to it being heard: what the system says of the
+    // device (where it does) and what the settings add to that. The song is played that much
+    // ahead of the playhead, so the playhead is where the song is heard to be, and the hit sounds
+    // go by the song's own time (HitPlayback), so that what is seen and what is heard meet.
+    double Latency => (player?.OutputLatency ?? 0) + Settings.LatencyMs / 1000.0;
+
+    readonly HitPlayback hits = new();
 
     void Tick()
     {
@@ -773,24 +776,8 @@ public sealed partial class EditorViewModel : ViewModelBase
             // From before the song (a negative OFFSET start), the song comes in at 0.
             if (player != null && Playhead + Latency >= 0 && Playhead + Latency < player.Duration - 0.05) { player.Seek(Playhead + Latency); player.Play(); }
         }
-        if (HitSounds && player != null && Analysis.Chart is { } chart) Hits(chart, lastTick + Latency, Playhead + Latency);
-        lastTick = Playhead;
+        if (player != null && Analysis.Chart is { } chart) hits.Advance(chart, Route, player, Playhead + Latency, HitSounds);
         if (Analysis.Chart is not { } c || Playhead > c.Duration + 2) TogglePlay();
-    }
-
-    // The don and ka sounds of the notes the playhead passed, on the route being shown.
-    void Hits(TaikoChart chart, double from, double to)
-    {
-        if (to <= from || to - from > 0.25) return;
-        foreach (var n in chart.Notes)
-        {
-            if (n.Time <= from) continue;
-            if (n.Time > to) break;
-            if (n.BranchId >= 0 && !(n.BranchId < chart.Branches.Count && chart.Branches[n.BranchId].ResolveRoute(Route) == n.Route)) continue;
-            if (n.IsLong || n.IsAdLib || n.IsMine) continue;
-            if (n.IsKadon) { player!.PlayHit(false, true); player.PlayHit(true, true); }
-            else player!.PlayHit(n.IsKa, n.IsBigNote);
-        }
     }
 
     [RelayCommand]

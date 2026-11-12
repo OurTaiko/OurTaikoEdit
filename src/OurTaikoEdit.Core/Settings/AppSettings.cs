@@ -30,7 +30,9 @@ public sealed class AppSettings
     [JsonPropertyName("hitVolume")] public double HitVolume { get; set; } = 0.8;
     // The game's hit sound set (0 is its default, 太鼓).
     [JsonPropertyName("hitSoundSet")] public int HitSoundSet { get; set; }
-    // Milliseconds between the device reporting a position and the sound being heard.
+    // Milliseconds added to the output device's own latency (which the system reports on macOS;
+    // elsewhere this is the whole of it): more for a device that is later than it says, less for
+    // one that is earlier.
     [JsonPropertyName("latencyMs")] public double LatencyMs { get; set; }
 
     // The ids of mods that are found but not loaded (ModRegistry).
@@ -78,7 +80,7 @@ public sealed class AppSettings
         Volume = Unit(Volume, 0.8);
         HitVolume = Unit(HitVolume, 0.8);
         if (HitSoundSet < 0) HitSoundSet = 0;
-        LatencyMs = double.IsFinite(LatencyMs) ? Math.Clamp(Math.Round(LatencyMs), 0, 500) : 0;
+        LatencyMs = double.IsFinite(LatencyMs) ? Math.Clamp(Math.Round(LatencyMs), -200, 500) : 0;
         DisabledMods = (DisabledMods ?? new()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (Window is { } w && !(w.Width >= 400 && w.Height >= 300 && double.IsFinite(w.Width) && double.IsFinite(w.Height))) Window = null;
 

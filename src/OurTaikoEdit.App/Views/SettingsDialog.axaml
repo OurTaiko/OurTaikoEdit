@@ -81,8 +81,8 @@
           <TextBlock Grid.Row="3" Text="{l:T HitSoundSet}" />
           <ComboBox Grid.Row="3" Grid.Column="1" x:Name="HitSetBox" MinWidth="180" />
           <TextBlock Grid.Row="4" Text="{l:T Latency}" />
-          <NumericUpDown Grid.Row="4" Grid.Column="1" x:Name="LatencyBox" Minimum="0" Maximum="500" Increment="5" FormatString="0" Width="130" HorizontalAlignment="Left" />
-          <TextBlock Grid.Row="5" Grid.Column="1" Classes="caption" TextWrapping="Wrap" Text="{l:T LatencyHint}" />
+          <NumericUpDown Grid.Row="4" Grid.Column="1" x:Name="LatencyBox" Minimum="-200" Maximum="500" Increment="5" FormatString="0" Width="130" HorizontalAlignment="Left" />
+          <TextBlock Grid.Row="5" Grid.Column="1" x:Name="LatencyHintText" Classes="caption" TextWrapping="Wrap" />
         </Grid>
       </StackPanel>
 

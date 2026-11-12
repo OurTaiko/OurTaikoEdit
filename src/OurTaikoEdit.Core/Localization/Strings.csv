@@ -220,8 +220,10 @@ SectionPlayback,Playback,播放,再生
 HitVolume,Hit sound volume,击打音音量,打音の音量
 HitSoundSet,Hit sounds,击打音色,打音の種類
 PlayHits,Play hit sounds,播放击打音,打音を鳴らす
-Latency,Audio latency (ms),音频延迟（毫秒）,オーディオ遅延（ミリ秒）
-LatencyHint,Raise it when notes reach the judge before you hear them; the playhead then waits for the sound.,如果音符先到判定点、声音后到，就调大这个值；播放头会等声音一起走。,音が聞こえる前に音符が判定枠に届くなら、値を上げてください。再生位置が音に合わせて遅れます。
+Latency,Audio latency adjustment (ms),音频延迟微调（毫秒）,オーディオ遅延の調整（ミリ秒）
+LatencyHint,"Raise it when notes still reach the judge before you hear them (wireless headphones), lower it when they come after.",如果音符仍然先到判定点、声音后到（比如无线耳机），就调大；反过来就调小。,音が聞こえる前に音符が判定枠に届くなら（ワイヤレスイヤホンなど）値を上げ、逆なら下げてください。
+LatencyDevice,"The output device's own latency, {0} ms by the system, is allowed for already.",输出设备自身的延迟（系统报告为 {0} 毫秒）已经自动补偿。,出力デバイス自体の遅延（システムの報告では {0} ミリ秒）は自動で補正されています。
+LatencyDeviceUnknown,The system does not say what the output device's latency is here: this is the whole of it.,这个系统上读不到输出设备的延迟：这里填的就是全部延迟。,このシステムでは出力デバイスの遅延を取得できません。ここに全体の遅延を設定します。
 SettingsFile,Saved in {0},保存在 {0},保存先：{0}
 SectionMods,Mods,Mod,Mod
 ModsHint,"A mod is a folder with a mod.json in {0}. Switching one on or off takes effect the next time the app starts.",每个 Mod 是 {0} 里一个带 mod.json 的文件夹。开关在下次启动应用时生效。,Mod は {0} にある、mod.json の入ったフォルダーです。オン／オフの切り替えは次回の起動時に反映されます。
