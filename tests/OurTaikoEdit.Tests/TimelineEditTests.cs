@@ -393,4 +393,56 @@ public class TimelineEditTests
             Assert.Equal(ka.Time, slots[i].Time);
         }
     }
+
+    // Where the first measure starts after the edit.
+    static double StartOf(string text, int block = 0) => Tja.Analyze(text, block).Measures.Min(m => m.Time);
+
+    [Fact]
+    public void TheFirstMeasureIsPutAtATimeOfTheSongByChangingOffset()
+    {
+        // OFFSET is how long before the song's start the chart starts.
+        string text = Chart("1020,\n0000,", "OFFSET:-1\n");
+        Assert.Equal(1, StartOf(text), 6);
+        string moved = Apply(text, Tja.Editing.MoveStart(Tja.Analyze(text, 0), 2.5));
+        Assert.Equal(Chart("1020,\n0000,", "OFFSET:-2.5\n"), moved);
+        Assert.Equal(2.5, StartOf(moved), 6);
+
+        // Before the song starts; to the millisecond, as the game reads it; a comment stays.
+        Assert.Equal(Chart("1020,", "OFFSET:0.25 // was -1\n"), Apply(Chart("1020,", "OFFSET:-1 // was -1\n"), Tja.Editing.MoveStart(Tja.Analyze(Chart("1020,", "OFFSET:-1 // was -1\n"), 0), -0.25)));
+        Assert.Equal(Chart("1020,", "OFFSET:-1.235\n"), Apply(text, Tja.Editing.MoveStart(Tja.Analyze(text, 0), 1.23456)).Replace("\n0000,", ""));
+        Assert.Equal(Chart("1020,\n0000,", "OFFSET:0\n"), Apply(text, Tja.Editing.MoveStart(Tja.Analyze(text, 0), 0)));
+
+        // Already there: nothing to change.
+        var same = Tja.Editing.MoveStart(Tja.Analyze(text, 0), 1);
+        Assert.True(same.Ok);
+        Assert.Empty(same.Edits);
+    }
+
+    [Fact]
+    public void AChartWithoutAnOffsetGetsOneAfterItsBpm()
+    {
+        string text = Chart("1020,");
+        Assert.Equal("BPM:120\nOFFSET:-3\nCOURSE:Oni\nLEVEL:5\n#START\n1020,\n#END\n", Apply(text, Tja.Editing.MoveStart(Tja.Analyze(text, 0), 3)));
+        // Without a BPM line either, it is the first line; line endings are kept.
+        string bare = "COURSE:Oni\r\n#START\r\n1,\r\n#END\r\n";
+        Assert.Equal("OFFSET:-3\r\n" + bare, Apply(bare, Tja.Editing.MoveStart(Tja.Analyze(bare, 0), 3)));
+        Assert.False(Tja.Editing.MoveStart(Tja.Analyze("TITLE:x\n", 0), 3).Ok);
+    }
+
+    [Fact]
+    public void WhatComesBeforeTheFirstMeasureMovesWithIt()
+    {
+        // A delay before the first note: the measure, not the header's own time, is what is placed.
+        string text = Chart("#DELAY 0.5\n1020,", "OFFSET:-1\n");
+        double before = StartOf(text);
+        string moved = Apply(text, Tja.Editing.MoveStart(Tja.Analyze(text, 0), 4));
+        Assert.Equal(4, StartOf(moved), 6);
+        Assert.Contains($"OFFSET:{(-1 - (4 - before)).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}\n", moved);
+
+        // Every course the header is in force for moves: the other one starts there too.
+        string two = "BPM:120\nOFFSET:-1\nCOURSE:Oni\n#START\n1,\n#END\nCOURSE:Hard\n#START\n2,\n#END\n";
+        string both = Apply(two, Tja.Editing.MoveStart(Tja.Analyze(two, 1), 2));
+        Assert.Equal(2, StartOf(both, 0), 6);
+        Assert.Equal(2, StartOf(both, 1), 6);
+    }
 }

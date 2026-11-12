@@ -120,6 +120,10 @@ public interface IChartEditing
     // stays, as the part every route plays; the other routes and the branch's own commands go.
     EditResult RemoveBranch(ChartAnalysis analysis, ChartBranchMark branch, BranchRoute keep);
 
+    // The whole chart moved along its song, so that its first measure starts at a time of the song
+    // (TJA: OFFSET). Every block the same header is in force for moves with it.
+    EditResult MoveStart(ChartAnalysis analysis, double time);
+
     // A branch made of one measure outside any branch: the measure becomes the branch's first
     // route and is written again for each of the others, so that every route plays what it did.
     EditResult InsertBranch(ChartAnalysis analysis, MeasureView measure, string condition);

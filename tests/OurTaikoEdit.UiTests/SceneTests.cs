@@ -1056,4 +1056,55 @@ public class SceneTests : IDisposable
         Assert.Empty(dialog.Edited().DisabledMods);
         dialog.Close();
     }
+
+    [AvaloniaFact]
+    public void TheFirstMeasureIsBroughtToThePlayheadFromTheRulersMenu()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        try
+        {
+            var code = Find<TextEditor>(window);
+            var timeline = Find<TimelineView>(window);
+            string before = code.Text;
+            Assert.Contains("\nOFFSET:-1.5\n", before);
+            Assert.Equal(1.5, editor.Analysis.Measures[0].Time, 6);
+            var firstNote = editor.Analysis.Chart!.Notes[0].Time;
+
+            // The other button on the ruler puts the playhead there and offers to bring the chart to it.
+            ContextMenu? menu = null;
+            double time = timeline.TimeOf(timeline.XOf(1.5) + 137);
+            var at = timeline.TranslatePoint(new Point(timeline.XOf(time), 10), window)!.Value;
+            using (ContextMenu.OpenedEvent.AddClassHandler<ContextMenu>((opened, _) => menu = opened))
+            {
+                window.MouseMove(at);
+                window.MouseDown(at, MouseButton.Right);
+                window.MouseUp(at, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.NotNull(menu);
+            Assert.Equal(time, editor.Playhead, 3);
+            var item = Assert.Single(menu!.Items.OfType<MenuItem>());
+            Assert.Equal($"Start the first measure at the playhead ({EditorViewModel.Clock(time)})", item.Header);
+            Shot(window, "timeline-start-here-menu");
+            menu.Close();
+            item.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            // OFFSET is what changed, to the millisecond; every note moved as far as the measure did.
+            string offset = (-Math.Round(time, 3)).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Equal(before.Replace("OFFSET:-1.5", "OFFSET:" + offset), code.Text);
+            Assert.Equal(time, editor.Analysis.Measures[0].Time, 3);
+            Assert.Equal(firstNote + (time - 1.5), editor.Analysis.Chart!.Notes[0].Time, 3);
+            Assert.Equal(time, editor.Playhead, 3);
+            Assert.Equal($"The first measure now starts at {EditorViewModel.Clock(time)}.", editor.Message);
+            Shot(window, "timeline-start-here");
+
+            // One step back.
+            code.Undo();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, code.Text);
+        }
+        finally { editor.Close(); }
+    }
 }

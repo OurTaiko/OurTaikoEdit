@@ -99,7 +99,7 @@ public sealed class TimelineView : Control
     double RowHeight => Math.Max(28, (Bounds.Height - RulerHeight - EventsHeight) / Rows.Count);
     double RowTop(int row) => RulerHeight + row * RowHeight;
     public double XOf(double time) => HeaderWidth + (time - viewStart) * pixelsPerSecond;
-    double TimeOf(double x) => viewStart + (x - HeaderWidth) / pixelsPerSecond;
+    public double TimeOf(double x) => viewStart + (x - HeaderWidth) / pixelsPerSecond;
 
     int RowAt(double y)
     {
@@ -515,8 +515,10 @@ public sealed class TimelineView : Control
         pressPoint = p;
         if (RowAt(p.Y) == -1)
         {
-            drag = Drag.Seek;
             editor.Seek(TimeOf(p.X));
+            // The other button: the playhead goes there, and the menu is about that place.
+            if (point.IsRightButtonPressed) { new ContextMenu { ItemsSource = new List<object> { StartHereItem() } }.Open(this); return; }
+            drag = Drag.Seek;
             e.Pointer.Capture(this);
             return;
         }
@@ -687,6 +689,14 @@ public sealed class TimelineView : Control
         return item;
     }
 
+    // The chart brought to the playhead: its first measure starts there (the song's first beat,
+    // found by ear or on the waveform).
+    MenuItem StartHereItem()
+    {
+        double time = editor!.Playhead;
+        return Item(Loc.F("FirstMeasureAtPlayhead", EditorViewModel.Clock(time)), () => editor.StartFirstMeasureAt(time), editor.Analysis.Measures.Count > 0);
+    }
+
     // With Select: what to do with the notes (the one under the pointer joins the selection).
     void NoteMenu(Point p, BranchRoute route, ChartNote? note)
     {
@@ -717,6 +727,8 @@ public sealed class TimelineView : Control
             items.Add(new Separator());
             items.Add(Item(Loc.T("NewBranchHere"), () => _ = editor.NewBranch(measure), measure.Measure.BranchId < 0));
         }
+        items.Add(new Separator());
+        items.Add(StartHereItem());
         new ContextMenu { ItemsSource = items }.Open(this);
     }
 
@@ -795,7 +807,9 @@ public sealed class TimelineView : Control
             items.Add(Item(Loc.F("RemoveCommand", written), () => editor.RemoveCommand(command)));
             items.Add(Item(Loc.T("ShowInCode"), () => editor.RevealCommand(command)));
         }
-        if (items.Count > 0) new ContextMenu { ItemsSource = items }.Open(this);
+        if (items.Count > 0) items.Add(new Separator());
+        items.Add(StartHereItem());
+        new ContextMenu { ItemsSource = items }.Open(this);
     }
 
     protected override void OnPointerExited(PointerEventArgs e)

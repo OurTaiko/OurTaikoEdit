@@ -264,6 +264,52 @@ sealed class TjaEditing : IChartEditing
     // own. Commands written before the measure stay before the branch. The balloon lists give
     // the copies the counts their balloons had. Refused where the result would not play as the
     // chart does now on every route (a drumroll across the measure's ends, for one).
+    // OFFSET is how long before the song's start the chart starts, so the first measure moves
+    // later by as much as OFFSET gets smaller. The OFFSET in force for the block is the last one
+    // written before it; without one it is written after BPM (or first of all). The value is a
+    // whole number of milliseconds, as the game reads it. The text is read again to see that the
+    // measure is where it was asked to be.
+    public EditResult MoveStart(ChartAnalysis analysis, double time)
+    {
+        if (analysis.Measures.Count == 0) return EditResult.Fail(Loc.T("NoMeasureToPlace"));
+        string text = analysis.Text;
+        double first = analysis.Measures.Min(m => m.Time);
+        int offsetLine = 0, bpmLine = 0;
+        string written = "";
+        foreach (var l in TjaLines.Read(text))
+        {
+            if (l.Line >= analysis.StartLine) break;
+            if (l.Kind != TjaLineKind.Header) continue;
+            if (l.Key == "OFFSET") (offsetLine, written) = (l.Line, l.Value);
+            else if (l.Key == "BPM") bpmLine = l.Line;
+        }
+        int comment = written.IndexOf("//", StringComparison.Ordinal);
+        if (comment >= 0) written = written[..comment];
+        // One that cannot be read is 0 to the parser.
+        if (!TjaNumber.TryParse(written, out double offset)) offset = 0;
+        double value = Math.Round((offset - (time - first)) * 1000) / 1000;
+        string number = value == 0 ? "0" : value.ToString("0.###", CultureInfo.InvariantCulture);
+
+        string[] lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        string newline = text.Contains("\r\n") ? "\r\n" : "\n";
+        TextEdit edit;
+        if (offsetLine > 0)
+        {
+            string raw = lines[offsetLine - 1];
+            int colon = raw.IndexOf(':'), end = raw.IndexOf("//", colon + 1, StringComparison.Ordinal);
+            if (end < 0) end = raw.Length;
+            while (end > colon + 1 && char.IsWhiteSpace(raw[end - 1])) end--;
+            if (raw[(colon + 1)..end].Trim() == number) return new EditResult(Array.Empty<TextEdit>());
+            edit = new TextEdit(offsetLine, colon + 2, end - colon - 1, number);
+        }
+        else if (bpmLine > 0) edit = new TextEdit(bpmLine, lines[bpmLine - 1].Length + 1, 0, newline + "OFFSET:" + number);
+        else edit = new TextEdit(1, 1, 0, "OFFSET:" + number + newline);
+
+        var after = new TjaLanguage().Analyze(TextEdits.Apply(text, new[] { edit }), analysis.Block);
+        if (after.Measures.Count == 0 || Math.Abs(after.Measures.Min(m => m.Time) - time) > 0.0015) return EditResult.Fail(Loc.T("StartNotMoved"));
+        return new EditResult(new[] { edit });
+    }
+
     public EditResult InsertBranch(ChartAnalysis analysis, MeasureView measure, string condition)
     {
         if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsTimeline"));

@@ -486,6 +486,27 @@ public sealed partial class EditorViewModel : ViewModelBase
     }
 
     // The same command in the current analysis (a dialog may have let the text change).
+    // The chart moved along the song so that its first measure starts at a time: for a chart whose
+    // notes are right but whose place in the song is not known yet (an imported one, a new one),
+    // the playhead is put on the song's first beat and the chart is brought to it. One change to
+    // the text; the playhead stays where it is, now at the first measure.
+    public void StartFirstMeasureAt(double time)
+    {
+        EnsureFresh();
+        var result = Language.Editing.MoveStart(Analysis, time);
+        Apply(result);
+        if (!result.Ok) return;
+        Seek(time);
+        Message = Loc.F("FirstMeasureMoved", Clock(time));
+    }
+
+    // A time of the song as minutes, seconds and milliseconds.
+    public static string Clock(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Abs(Math.Round(seconds, 3)));
+        return $"{(seconds < 0 ? "-" : "")}{(int)t.TotalMinutes:00}:{t.Seconds:00}.{t.Milliseconds:000}";
+    }
+
     // A branch's condition, asked for in its dialog and written as its start's value.
     public async Task EditBranch(ChartBranchMark branch)
     {
