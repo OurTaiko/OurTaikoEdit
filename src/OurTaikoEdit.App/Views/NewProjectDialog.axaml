@@ -32,6 +32,20 @@
         <TextBlock x:Name="FolderText" Classes="caption" TextWrapping="Wrap" IsVisible="False" />
       </StackPanel>
 
+      <!-- What the chart starts from: shown when a mod has added something to start from. -->
+      <StackPanel x:Name="SourcePanel" Classes="field" IsVisible="False">
+        <TextBlock Classes="label" Text="{l:T StartFrom}" />
+        <ComboBox x:Name="SourceBox" HorizontalAlignment="Stretch" />
+      </StackPanel>
+
+      <StackPanel x:Name="SourceFilePanel" Classes="field" IsVisible="False">
+        <TextBlock x:Name="SourceFileLabel" Classes="label" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox x:Name="SourceFileBox" TextChanged="SourceFileChanged" />
+          <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseSource" VerticalAlignment="Stretch" />
+        </Grid>
+      </StackPanel>
+
       <StackPanel Classes="field">
         <TextBlock Classes="label" Text="{l:T ChartType}" />
         <ComboBox x:Name="TypeBox" HorizontalAlignment="Stretch" />

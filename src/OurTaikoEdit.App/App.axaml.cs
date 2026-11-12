@@ -4,6 +4,7 @@ using Avalonia.Markup.Xaml;
 using OurTaikoEdit.App.ViewModels;
 using OurTaikoEdit.App.Views;
 using OurTaikoEdit.Core.Languages;
+using OurTaikoEdit.Core.Mods;
 using OurTaikoEdit.Core.Projects;
 using OurTaikoEdit.Core.Settings;
 using OurTaikoEdit.Tja;
@@ -22,6 +23,9 @@ public partial class App : Application
         {
             var registry = new ProjectRegistry(ProjectRegistry.DefaultDataFolder);
             var settings = AppSettings.Load(ProjectRegistry.DefaultDataFolder);
+            // Mods: the ones the app ships with, then the user's.
+            ModRegistry.LoadFolder(ModRegistry.ShippedFolder, settings.DisabledMods);
+            ModRegistry.LoadFolder(ModRegistry.UserFolder(ProjectRegistry.DefaultDataFolder), settings.DisabledMods);
             var window = new MainWindow();
             window.DataContext = new MainWindowViewModel(registry, new DialogService(window), settings);
             window.Restore(settings.Window);

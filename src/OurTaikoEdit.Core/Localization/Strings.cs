@@ -12,7 +12,22 @@ public static class Strings
 {
     public const string ResourceName = "OurTaikoEdit.Core.Localization.Strings.csv";
 
-    public static IReadOnlyDictionary<string, Words> Table { get; } = Load();
+    static volatile Dictionary<string, Words> table = Load();
+
+    public static IReadOnlyDictionary<string, Words> Table => table;
+
+    // A mod's words, in a CSV of the same shape. A key the table already has keeps its words.
+    // The table is replaced, not changed, so whoever is reading it goes on reading what it was.
+    public static void Add(TextReader csv)
+    {
+        var added = Read(csv);
+        lock (typeof(Strings))
+        {
+            var next = new Dictionary<string, Words>(table);
+            foreach (var (key, words) in added) next.TryAdd(key, words);
+            table = next;
+        }
+    }
 
     static Dictionary<string, Words> Load()
     {

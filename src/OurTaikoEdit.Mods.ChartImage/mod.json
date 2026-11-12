@@ -1,0 +1,6 @@
+{
+  "id": "chart-image",
+  "name": "Chart image import",
+  "version": "0.1.0",
+  "assembly": "OurTaikoEdit.Mods.ChartImage.dll"
+}

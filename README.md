@@ -35,10 +35,11 @@ build/package.sh osx-arm64 dist/osx
 ```
 build/package.sh         自包含发布并打成 .app（osx-arm64）或文件夹（win-x64），CI 与本地共用
 external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.13.0）
-src/OurTaikoEdit.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings）
+src/OurTaikoEdit.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings），Mod 的接口与加载（Mods/）、导入器的接口（Importing/）
 src/OurTaikoEdit.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
 src/OurTaikoEdit.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLayer）／WAV，波形，OpenAL Soft 播放，游戏的 21 套打击音（HitSounds/）
 src/OurTaikoEdit.App/       Avalonia 应用：Projects 与编辑两个场景；界面的颜色、图标与控件样式在 Theme/
+src/OurTaikoEdit.Mods.ChartImage/  Mod「谱面图片导入」：从谱面图片新建项目（见下文「Mod」）
 tests/OurTaikoEdit.Tests/   语言与项目的单元测试
 tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 ```
@@ -47,7 +48,7 @@ tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 
 项目是一个文件夹：谱面文件、音频，以及 `ourtaikoedit.json`（`name`、`chartType`、`chart`、`created`、`lastBlock`）。应用在数据目录（macOS `~/Library/Application Support/OurTaikoEdit/projects.json`）里记录跟踪的项目文件夹。
 
-- **New Project**：在所选位置建文件夹，按语言模板写谱面，可选把音频复制进来并写入 `WAVE:`。
+- **New Project**：在所选位置建文件夹，按语言模板写谱面，可选把音频复制进来并写入 `WAVE:`。有 Mod 提供导入器时，对话框多一栏「起点」：选「空白谱面」之外的一项（例如「谱面图片」）就再选一个要读取的文件，谱面由它转成所选的谱面类型（只列出这个导入器能写的类型）；读不了时原因写在对话框里，对话框不关。
 - **Open Folder**：有 `ourtaikoedit.json` 就读它；没有就取文件夹里第一个已知语言的谱面文件，生成一个。
 - 从列表移除只是不再跟踪，文件不动。
 - 2026-11-11 由 CharTaiko 改名：旧项目里的 `chartaiko.json` 在打开时改名为 `ourtaikoedit.json`；数据目录 `CharTaiko` 在应用第一次取数据目录时整体改名为 `OurTaikoEdit`（已有新目录时不动旧的）。
@@ -81,7 +82,7 @@ tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 - 界面有英文、简体中文、日文，默认跟随系统语言（其他语言用英文）。文字表是 `src/OurTaikoEdit.Core/Localization/Strings.csv`（UTF-8 带 BOM，可直接用 Excel／Numbers 打开；列 `key,en,zh,ja` 按表头认，键以 `#` 开头的行是分节标题、空行忽略；含逗号、引号或换行的格按 CSV 规则加引号），编进 Core 程序集、启动时读入。单元测试检查每条都有三种语言、占位符一致，以及 XAML 和代码里写死的键都在表里。XAML 里写 `{l:T 键}`，切换语言即时生效；代码里用 `Loc.T`／`Loc.F`／`Loc.Plural`。
 - 诊断、悬停说明、补全说明、参数提示、修复与重构的标题、轨道下方的摘要来自 TJAParser（v0.10.0 起三种语言），语言由设置里的「谱面提示的语言」决定（默认与界面相同）。
 - 中日文字体：先找 PingFang SC／微软雅黑／Noto Sans CJK 等（界面为日文时先找 Hiragino／Yu Gothic），避免同一行里字重不一；顺序在启动时按界面语言定，切换语言后重启才换。
-- 设置（Projects 场景右上的「设置」，或编辑场景顶栏最右的按钮）存在数据目录的 `settings.json`：界面语言、诊断消息语言、新项目的默认位置、代码字号、行尾提示、自动换行、打开项目时的网格、歌曲音量、打击音开关与音量、音频延迟（0–500 ms）；另记窗口大小。工具栏上改的音量与打击音开关也会存下来。文件读不了或数值越界时退回默认值。
+- 设置（Projects 场景右上的「设置」，或编辑场景顶栏最右的按钮）存在数据目录的 `settings.json`：界面语言、诊断消息语言、新项目的默认位置、代码字号、行尾提示、自动换行、打开项目时的网格、歌曲音量、打击音开关与音量、音频延迟（0–500 ms）、关闭的 Mod；另记窗口大小。工具栏上改的音量与打击音开关也会存下来。文件读不了或数值越界时退回默认值。
 
 ### 时间轴编辑如何写回文本
 
@@ -96,9 +97,32 @@ tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 - 字符格的时刻按小节内的 BPM 与 `#DELAY` 逐格推算（有音符的格直接用音符时刻），所以小节中途变速时网格也对。
 - 跨分歧边界的连打、`#MEASURE` 小节中途改变等情况请在代码里写。
 
+## Mod
+
+Mod 是放在自己程序集里的功能，只通过 `OurTaikoEdit.Core` 认识应用：程序集里有一个实现 `IMod` 的公开类，应用把 `IModHost` 交给它，它登记自己加的东西——谱面类型（`AddLanguage`）、新建项目的起点（`AddImporter`，`IChartImporter`）、自己的界面文字（`AddStrings`，与 `Strings.csv` 同样的 CSV，键以 Mod 自己的名字开头）。
+
+- 一个 Mod 是一个文件夹：`mod.json`（`id`、`name`、`version`、`assembly`）和它的程序集。应用启动时先读自己旁边的 `Mods/`（随应用提供的），再读数据目录的 `Mods/`（用户自己放的，macOS `~/Library/Application Support/OurTaikoEdit/Mods/`）；同一个 `id` 先到的算数。Mod 用应用自己的 Core、TJAParser 与框架程序集，其余依赖从 Mod 的文件夹里找。
+- 设置的「Mod」一节列出找到的 Mod，取消勾选即关闭（`settings.json` 的 `disabledMods`），下次启动生效；加载失败的 Mod 列出原因，应用照常运行。
+- 随应用提供的 Mod 不被应用引用：`OurTaikoEdit.App.csproj` 里的 `ShippedMod` 项目引用只负责一起构建，并把程序集与 `mod.json` 放到输出与发布目录的 `Mods/<ModFolder>/`。新加一个随应用提供的 Mod 就在那里加一行。
+
+### 谱面图片导入（`src/OurTaikoEdit.Mods.ChartImage`）
+
+把一张谱面图片读回谱面：新建项目时「起点」选「谱面图片」、选 PNG，转成 TJA。读的是 wiki 上那种谱面图（灰色轨道、红蓝音符、5 像素高的点阵字）。版式、标签与网格的读法来自 [TJAAnalyzer](https://github.com/jack9966qk/TJAAnalyzer) 的 `offline-analysis/chart-image-decoder.ts`（MIT，见该目录的 `PROVENANCE.md`）；音符与连打的识别是这里重写的：
+
+- 形状是量出来的：音符是一个圆盘（小 12 像素、大 16 像素宽，`Small`／`Big` 两张逐行的像素表）外加一圈环（半径 9／12）；连打是起点一个圆盘、终点一个圆盘、中间一条带；气球是带数字的头加一条带。
+- 画的顺序是后打的先画，所以**先打的盖在上面**：每样东西的右端总是露着，左边可能被前一个音符的环盖住。于是一律从轨道中线上的右端找起。
+- 音符：右端确定后只有「小」和「大」两种可能的位置，取那个「整个圆盘减去前面的东西盖住的部分，恰好等于图上像素」的；两种都说得通（露得太少）或都说不通就拒绝。
+- 连打的起点：圆盘每一行的左端本应在固定的位置；凡是「左边那个像素没有被任何环碰到」的行都直接给出起点，这些行必须一致。所有行都被盖住时才交给网格，在盖住它的音符与上限之间只有一个格时采用，否则拒绝。
+
+- 图是逐像素精确的：颜色与位置都按渲染器的原值比对，不做阈值或猜测。所以**只能读原始 PNG**，截图、缩放过的、另存为 JPEG 的都读不了。PNG 由 Mod 自己的 `Png.cs` 读（各种颜色类型与位深，不支持隔行扫描）。
+- 读得到：小节与拍号（`#MEASURE`，由小节宽度得出）、咚咔与大音符、连打与大连打、气球及打数、BPM 与 `#BPMCHANGE`、`#SCROLL`、go-go 区间。每个小节取能容纳其中所有内容的最粗网格；落不到网格上、被遮住而无法确定的一律拒绝并说明原因，不挪到最近的位置。
+- 图里没有的：`OFFSET`、难度与星级（写成 `COURSE:Oni`、`LEVEL:0`）、分歧条件（有分歧的图没有试过，解码器是按一行一条轨道写的）、标题（用项目名）、图上没画出的 BPM／SCROLL 小数位。导入后弹出的说明会列出这些，以及每格不到 4 像素、需要核对的小节。
+- 写出的谱面交给目标谱面类型读回一遍，逐小节与解码结果比对，一致才交给新项目。
+- 现在只会写 TJA，所以谱面类型一栏只有 TJA；别的谱面类型要在 `ChartImageImporter` 里加它的写法（`CanWrite` 与写出）。
+
 ## 扩展新的谱面格式
 
-实现 `IChartLanguage`（分析、补全、高亮、`IChartEditing`），在 `App.OnFrameworkInitializationCompleted` 里 `ChartLanguages.Register`，`ourtaikoedit.json` 的 `chartType` 用它的 `Id`。预览与时间轴读的是语言无关的 `ChartAnalysis`（`TaikoChart` + 小节／字符格的源码位置）。
+实现 `IChartLanguage`（分析、补全、高亮、`IChartEditing`），在 `App.OnFrameworkInitializationCompleted` 里 `ChartLanguages.Register`（或者做成 Mod，在 `IMod.Load` 里 `host.AddLanguage`），`ourtaikoedit.json` 的 `chartType` 用它的 `Id`。预览与时间轴读的是语言无关的 `ChartAnalysis`（`TaikoChart` + 小节／字符格的源码位置）。
 
 ## 许可
 

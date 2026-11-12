@@ -11,7 +11,9 @@ using OurTaikoEdit.Audio;
 using OurTaikoEdit.App.ViewModels;
 using OurTaikoEdit.App.Views;
 using OurTaikoEdit.Core.Languages;
+using OurTaikoEdit.Core.Importing;
 using OurTaikoEdit.Core.Localization;
+using OurTaikoEdit.Core.Mods;
 using OurTaikoEdit.Core.Projects;
 using OurTaikoEdit.Core.Settings;
 using OurTaikoEdit.Tja;
@@ -29,6 +31,8 @@ public class SceneTests : IDisposable
     public SceneTests()
     {
         ChartLanguages.Register(new TjaLanguage());
+        // The mods the app ships with, from the folder the build lays them out in next to the app.
+        ModRegistry.LoadFolder(ModRegistry.ShippedFolder);
         // No sound from the tests: the song is decoded and drawn, never played.
         EditorViewModel.OpenPlayer = _ => null;
         Directory.CreateDirectory(root);
@@ -943,5 +947,113 @@ public class SceneTests : IDisposable
         code.Undo();
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(before, code.Text);
+    }
+
+    [AvaloniaFact]
+    public void ANewProjectIsReadFromAChartImageByTheShippedMod()
+    {
+        // The mod is there because the build put it in Mods/ChartImage next to the app.
+        var mod = Assert.Single(ModRegistry.All, m => m.Id == "chart-image");
+        Assert.True(mod.Loaded, mod.Error);
+        Assert.StartsWith(ModRegistry.ShippedFolder, mod.Folder);
+        Assert.NotNull(ChartImporters.Find("chart-image"));
+
+        var (window, vm, registry) = Open();
+        vm.Settings.ProjectsFolder = Path.Combine(root, "Charts");
+        var projects = Assert.IsType<ProjectsViewModel>(vm.Scene);
+        projects.NewProjectCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<NewProjectDialog>(window.OwnedWindows.Last());
+        var source = dialog.FindControl<ComboBox>("SourceBox")!;
+        var filePanel = dialog.FindControl<StackPanel>("SourceFilePanel")!;
+        var file = dialog.FindControl<TextBox>("SourceFileBox")!;
+        var name = dialog.FindControl<TextBox>("NameBox")!;
+        var type = dialog.FindControl<ComboBox>("TypeBox")!;
+        var error = dialog.FindControl<TextBlock>("ErrorText")!;
+        void Create() => dialog.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Create")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+
+        // A chart starts empty unless something else is chosen; the image asks for its file and
+        // offers the chart types it can be written as.
+        Assert.True(dialog.FindControl<StackPanel>("SourcePanel")!.IsVisible);
+        Assert.Equal(new[] { "An empty chart", "Chart image" }, source.Items.Cast<string>());
+        Assert.Equal(0, source.SelectedIndex);
+        Assert.False(filePanel.IsVisible);
+        source.SelectedIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(filePanel.IsVisible);
+        Assert.Equal("Chart image (*.png)", dialog.FindControl<TextBlock>("SourceFileLabel")!.Text);
+        Assert.Equal(new[] { "TJA" }, type.Items.Cast<string>());
+
+        // No file, then a file that is no chart image: said in the dialog, which stays open.
+        name.Text = "Matsuri";
+        Create();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Choose the file to read.", error.Text);
+        string photo = Path.Combine(root, "photo.png");
+        File.WriteAllBytes(photo, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0, 0 });
+        file.Text = photo;
+        Create();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(error.IsVisible);
+        Assert.Contains("not a PNG", error.Text);
+        Assert.Contains(dialog, window.OwnedWindows);
+        Shot(dialog, "new-project-image-refused");
+
+        // The image itself. Its file names a project that has no name yet.
+        string image = Path.Combine(AppContext.BaseDirectory, "Fixtures", "wrapped_drumrolls.png");
+        name.Text = "";
+        file.Text = image;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("wrapped_drumrolls", name.Text);
+        Assert.False(error.IsVisible);
+        name.Text = "Matsuri";
+        Dispatcher.UIThread.RunJobs();
+        Shot(dialog, "new-project-image");
+        Create();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(dialog, window.OwnedWindows);
+
+        // What was read and what an image does not say, before the editor opens on the chart.
+        var report = window.OwnedWindows.Last();
+        Assert.Contains(Texts(report), t => t == "Chart imported");
+        Assert.Contains(Texts(report), t => t.Contains("107 measures") && t.Contains("OFFSET"));
+        Shot(report, "new-project-image-report");
+        report.Close();
+        Dispatcher.UIThread.RunJobs();
+
+        var editor = Assert.IsType<EditorViewModel>(vm.Scene);
+        try
+        {
+            string text = File.ReadAllText(Path.Combine(root, "Charts", "Matsuri", "Matsuri.tja"));
+            Assert.StartsWith("TITLE:Matsuri\n", text);
+            Assert.Contains("\nBALLOON:6,10\n", text);
+            Assert.Equal(107, editor.Analysis.Measures.Count);
+            Assert.False(editor.Analysis.HasErrors);
+            Assert.Single(registry.Projects);
+            Shot(window, "editor-from-image");
+        }
+        finally { editor.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsListTheModsAndSwitchThemOff()
+    {
+        var (window, vm, _) = Open();
+        var dialog = new SettingsDialog(vm.Settings);
+        dialog.Show();
+        Dispatcher.UIThread.RunJobs();
+        var box = dialog.FindControl<StackPanel>("ModsPanel")!.GetVisualDescendants().OfType<CheckBox>().Single(b => (b.Content as string)!.StartsWith("Chart image import"));
+        Assert.True(box.IsChecked);
+        Assert.True(box.IsEnabled);
+        Assert.Contains(Texts(dialog), t => t.Contains("picture of a chart") && t.Contains("comes with the app"));
+        Shot(dialog, "settings-mods");
+
+        // Unticked, the mod's id is in the settings: it is left alone at the next start.
+        box.IsChecked = false;
+        Assert.Equal(new[] { "chart-image" }, dialog.Edited().DisabledMods);
+        box.IsChecked = true;
+        Assert.Empty(dialog.Edited().DisabledMods);
+        dialog.Close();
     }
 }

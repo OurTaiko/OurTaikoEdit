@@ -1,0 +1,40 @@
+﻿key,en,zh,ja
+# The chart image mod,,,
+ChartImageModName,Chart image import,谱面图片导入,譜面画像の取り込み
+ChartImageModInfo,Starts a new project from a picture of a chart: the pixel-exact PNG that TJAAnalyzer draws.,从谱面图片新建项目：读取 TJAAnalyzer 画出的、逐像素精确的 PNG。,譜面の画像から新規プロジェクトを作ります。TJAAnalyzer が描く、ピクセル単位で正確な PNG を読みます。
+ChartImageSource,Chart image,谱面图片,譜面画像
+ChartImageFailed,The image could not be read as a chart. {0},无法把这张图片读成谱面。{0},この画像を譜面として読めませんでした。{0}
+ChartImageHint,"Only the original PNG is read, pixel by pixel: a screenshot, a resized copy or one saved again as JPEG is not.",只能读原始的 PNG（逐像素比对）；截图、缩放过的或另存为 JPEG 的图片都不行。,読めるのは元の PNG だけです（ピクセル単位で照合します）。スクリーンショット、拡大縮小したもの、JPEG で保存し直したものは読めません。
+ChartImageTarget,A chart image cannot be written as {0}.,谱面图片不能转成 {0}。,譜面画像は {0} として書き出せません。
+ChartImageUnreadable,The file could not be opened: {0},无法打开文件：{0},ファイルを開けませんでした：{0}
+ChartImageNotPng,It is not a PNG file.,它不是 PNG 文件。,PNG ファイルではありません。
+ChartImageBadPng,"The PNG file is damaged, or of a kind that is not read.",PNG 文件已损坏，或是无法读取的类型。,PNG ファイルが壊れているか、読めない種類です。
+ChartImageInterlaced,Interlaced PNG files are not read.,不支持隔行扫描的 PNG。,インターレース PNG は読めません。
+ChartImageNoLanes,No chart lanes were found in it.,图里没有找到谱面轨道。,譜面のレーンが見つかりません。
+ChartImageGlyph,A character in row {0} at x={1} could not be read.,第 {0} 行 x={1} 处的字符读不出来。,{0} 段目 x={1} の文字を読めません。
+ChartImageMeasureNumber,A measure number in row {0} reads “{1}”.,第 {0} 行的一个小节号读成了“{1}”。,{0} 段目の小節番号が「{1}」と読めます。
+ChartImageLabel,A BPM or HS label in row {0} at x={1} reads “{2}”; two labels are probably drawn over each other.,第 {0} 行 x={1} 处的 BPM 或 HS 标签读成了“{2}”，多半是两个标签叠在了一起。,{0} 段目 x={1} の BPM／HS ラベルが「{2}」と読めます。ラベルが重なっているようです。
+ChartImageNoteClipped,A note in row {0} ending at x={1} is covered too far to tell small from big.,第 {0} 行止于 x={1} 的音符被遮住太多，分不出大小。,{0} 段目の x={1} で終わる音符は隠れすぎていて、大小を判別できません。
+ChartImageNoteShape,What ends at x={1} in row {0} is not shaped like a note.,第 {0} 行止于 x={1} 的东西不是音符的形状。,{0} 段目の x={1} で終わるものは、音符の形をしていません。
+ChartImageHeadShape,The start of the drumroll in row {0} at x={1} is not shaped like one.,第 {0} 行 x={1} 处的连打开头不是应有的形状。,{0} 段目 x={1} の連打の始点が、あるべき形をしていません。
+ChartImageHeadCovered,The start of a drumroll in row {0} at x={1} is covered by another note and cannot be placed.,第 {0} 行 x={1} 处的连打开头被别的音符盖住，无法确定位置。,{0} 段目 x={1} の連打の始点が他の音符に隠れていて、位置を決められません。
+ChartImageBalloonCount,The balloon in row {0} at x={1} has no readable hit count.,第 {0} 行 x={1} 处的气球读不出打数。,{0} 段目 x={1} の風船の打数を読めません。
+ChartImageNoMeasureLines,Row {0} has no measure lines.,第 {0} 行没有小节线。,{0} 段目に小節線がありません。
+ChartImageMeasureUnlabelled,Row {0} does not number its first measure.,第 {0} 行的第一个小节没有小节号。,{0} 段目の最初の小節に番号がありません。
+ChartImageMeasureLabel,Row {0} numbers measure {1} as {2}.,第 {0} 行把第 {1} 小节标成了 {2}。,{0} 段目で小節 {1} が {2} と書かれています。
+ChartImageWrap,A drumroll or balloon at the edge of row {0} does not match what continues on the next row.,第 {0} 行边缘的连打或气球与下一行接续的部分对不上。,{0} 段目の端の連打・風船が、次の段の続きと合いません。
+ChartImageLayout,The rows of the image are not laid out alike.,图片各行的版式不一致。,画像の各段のレイアウトが揃っていません。
+ChartImageMeasureOrder,Measure {0} is missing: the next one found is {1}.,缺少第 {0} 小节：找到的下一个是第 {1} 小节。,小節 {0} がありません。次に見つかったのは小節 {1} です。
+ChartImageNoBeatLines,"No beat lines were found, so the scale of the image is unknown.",没有找到拍线，无法确定图片的比例。,拍の線が見つからず、画像の縮尺が分かりません。
+ChartImageMeasureWidth,"Measure {0} is {1} px wide, which is not a whole or half number of beats.",第 {0} 小节宽 {1} 像素，不是整数拍或半拍。,小節 {0} の幅は {1} px で、拍の整数倍でも半拍単位でもありません。
+ChartImageNoGrid,What is drawn in measure {0} does not fall on any grid down to 2 px a position.,第 {0} 小节里画的内容落不到任何网格上（最细到每格 2 像素）。,小節 {0} の内容は、どのグリッドにも乗りません（1 マス 2 px まで）。
+ChartImageTwoNotes,Two notes of measure {0} land on the same position.,第 {0} 小节有两个音符落在同一格。,小節 {0} で二つの音符が同じ位置になります。
+ChartImageLongOpen,The drumroll or balloon that starts in measure {0} has no end of its own.,第 {0} 小节开始的连打或气球没有自己的结束。,小節 {0} で始まる連打・風船に終点がありません。
+ChartImageLongEnd,A drumroll or balloon ends in measure {0} without having started.,第 {0} 小节有一个连打或气球的结束，却没有开头。,小節 {0} に、始点のない連打・風船の終点があります。
+ChartImageBalloons,{0} balloons were found but {1} hit counts were read.,找到 {0} 个气球，却读到 {1} 个打数。,風船は {0} 個ありますが、読めた打数は {1} 個です。
+ChartImageNoBpm,No BPM label was found.,没有找到 BPM 标签。,BPM のラベルが見つかりません。
+ChartImageRoundTrip,Measure {0} did not read back as it was written.,第 {0} 小节写出后再读回来，与原来不一致。,小節 {0} は、書き出したものを読み戻すと一致しません。
+ChartImageRoundTripErrors,The chart written from the image does not read back: {0},由图片写出的谱面读不回来：{0},画像から書き出した譜面を読み戻せません：{0}
+ChartImageReport,"Read {0} measures from the image: {1} notes, {2} drumrolls and balloons.",从图片读出 {0} 个小节：{1} 个音符，{2} 个连打与气球。,画像から {0} 小節を読み取りました：音符 {1} 個、連打・風船 {2} 個。
+ChartImageTight,"These measures are drawn at under 4 px a position, where neighbouring positions are barely told apart; check them: {0}",这些小节每格不到 4 像素，相邻的位置几乎分不开，请核对：{0},次の小節は 1 マス 4 px 未満で描かれていて、隣の位置との区別がほとんどつきません。確認してください：{0}
+ChartImageMissing,"An image does not say the OFFSET, the course and level (written as Oni, level 0), branch conditions, or BPM and scroll decimals beyond those drawn. Fill them in the code.",图片里没有 OFFSET、难度与星级（写成了 Oni、0 星）、分歧条件，以及图上没画出来的 BPM／SCROLL 小数位。请在代码里补上。,画像には OFFSET、コースとレベル（Oni・レベル 0 として書きました）、分岐条件、描かれていない桁の BPM／SCROLL の小数はありません。コードで補ってください。

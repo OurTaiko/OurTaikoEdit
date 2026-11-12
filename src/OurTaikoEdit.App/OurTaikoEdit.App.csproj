@@ -26,4 +26,17 @@
     <ProjectReference Include="../OurTaikoEdit.Tja/OurTaikoEdit.Tja.csproj" />
     <ProjectReference Include="../OurTaikoEdit.Audio/OurTaikoEdit.Audio.csproj" />
   </ItemGroup>
+  <!-- The mods the app ships with. The app does not reference them: each is built with it and laid
+       out as Mods/<ModFolder>/ (its assembly and mod.json) next to the app, in the build output and
+       in what is published, where ModRegistry finds it at startup like any other mod. -->
+  <ItemGroup>
+    <ProjectReference Include="../OurTaikoEdit.Mods.ChartImage/OurTaikoEdit.Mods.ChartImage.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="ShippedMod" ModFolder="ChartImage" />
+  </ItemGroup>
+  <Target Name="ShipMods" DependsOnTargets="ResolveProjectReferences" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Include="@(ShippedMod)" Link="Mods/%(ShippedMod.ModFolder)/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="@(ShippedMod->'%(RootDir)%(Directory)mod.json')" Link="Mods/%(ShippedMod.ModFolder)/mod.json" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>

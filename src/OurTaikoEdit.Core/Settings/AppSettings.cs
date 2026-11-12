@@ -33,10 +33,15 @@ public sealed class AppSettings
     // Milliseconds between the device reporting a position and the sound being heard.
     [JsonPropertyName("latencyMs")] public double LatencyMs { get; set; }
 
+    // The ids of mods that are found but not loaded (ModRegistry).
+    [JsonPropertyName("disabledMods")] public List<string> DisabledMods { get; set; } = new();
+
     [JsonPropertyName("window")] public WindowPlacement? Window { get; set; }
 
     // Where the settings are saved; null keeps them in memory (tests).
     [JsonIgnore] public string? File { get; private set; }
+    // The app's data folder, which the file is in.
+    [JsonIgnore] public string? DataFolder => File == null ? null : Path.GetDirectoryName(File);
 
     // After Save: for views that read the settings.
     public event Action? Changed;
@@ -74,6 +79,7 @@ public sealed class AppSettings
         HitVolume = Unit(HitVolume, 0.8);
         if (HitSoundSet < 0) HitSoundSet = 0;
         LatencyMs = double.IsFinite(LatencyMs) ? Math.Clamp(Math.Round(LatencyMs), 0, 500) : 0;
+        DisabledMods = (DisabledMods ?? new()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (Window is { } w && !(w.Width >= 400 && w.Height >= 300 && double.IsFinite(w.Width) && double.IsFinite(w.Height))) Window = null;
 
         static double Unit(double v, double fallback) => double.IsFinite(v) ? Math.Clamp(v, 0, 1) : fallback;
@@ -84,6 +90,7 @@ public sealed class AppSettings
         var copy = (AppSettings)MemberwiseClone();
         copy.Changed = null;
         copy.Window = Window == null ? null : Window with { };
+        copy.DisabledMods = DisabledMods.ToList();
         return copy;
     }
 
@@ -102,6 +109,7 @@ public sealed class AppSettings
         HitVolume = edited.HitVolume;
         HitSoundSet = edited.HitSoundSet;
         LatencyMs = edited.LatencyMs;
+        DisabledMods = edited.DisabledMods.ToList();
         Save();
     }
 

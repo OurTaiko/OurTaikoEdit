@@ -11,8 +11,12 @@
     <ProjectReference Include="../../src/OurTaikoEdit.Core/OurTaikoEdit.Core.csproj" />
     <ProjectReference Include="../../src/OurTaikoEdit.Tja/OurTaikoEdit.Tja.csproj" />
     <ProjectReference Include="../../src/OurTaikoEdit.Audio/OurTaikoEdit.Audio.csproj" />
+    <ProjectReference Include="../../src/OurTaikoEdit.Mods.ChartImage/OurTaikoEdit.Mods.ChartImage.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The mod as it is shipped, for loading it from a folder. -->
+    <None Include="../../src/OurTaikoEdit.Mods.ChartImage/mod.json" Link="Fixtures/mod.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

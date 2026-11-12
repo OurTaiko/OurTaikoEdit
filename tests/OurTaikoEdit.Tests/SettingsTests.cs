@@ -10,6 +10,9 @@ public class SettingsTests : IDisposable
 {
     readonly string root = Path.Combine(Path.GetTempPath(), "ourtaikoedit-settings-" + Guid.NewGuid().ToString("N"));
 
+    // The mods' words are checked with the app's.
+    public SettingsTests() => OurTaikoEdit.Core.Mods.ModRegistry.Load(new OurTaikoEdit.Mods.ChartImage.ChartImageMod());
+
     public void Dispose()
     {
         try { Directory.Delete(root, true); } catch (IOException) { }

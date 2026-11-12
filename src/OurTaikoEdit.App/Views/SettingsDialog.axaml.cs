@@ -4,6 +4,7 @@ using Avalonia.Platform.Storage;
 using OurTaikoEdit.App.Localization;
 using OurTaikoEdit.Audio;
 using OurTaikoEdit.Core.Localization;
+using OurTaikoEdit.Core.Mods;
 using OurTaikoEdit.Core.Settings;
 
 namespace OurTaikoEdit.App.Views;
@@ -41,6 +42,49 @@ public partial class SettingsDialog : Window
         HitSetBox.SelectedIndex = Math.Clamp(s.HitSoundSet, 0, Math.Max(0, sets.Count - 1));
         LatencyBox.Value = (decimal)s.LatencyMs;
         FileText.Text = s.File == null ? "" : Loc.F("SettingsFile", s.File);
+        ShowMods(s);
+    }
+
+    // The ids of the mods whose box is unticked.
+    readonly Dictionary<string, CheckBox> modBoxes = new();
+
+    // Every mod found, with a box that switches it on or off for the next start: its name and
+    // version, then what it does, where it is from, or why it could not be loaded.
+    void ShowMods(AppSettings s)
+    {
+        foreach (var mod in ModRegistry.All)
+        {
+            var box = new CheckBox
+            {
+                Content = mod.Version.Length > 0 ? $"{mod.Name}  {mod.Version}" : mod.Name,
+                IsChecked = !s.DisabledMods.Contains(mod.Id, StringComparer.OrdinalIgnoreCase),
+                // A mod built into the app is not a folder that can be left alone.
+                IsEnabled = mod.Folder != null,
+            };
+            modBoxes[mod.Id] = box;
+            var detail = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Avalonia.Thickness(28, -4, 0, 0) };
+            if (mod.Error != null)
+            {
+                detail.Classes.Add("error");
+                detail.Text = Loc.F("ModFailed", mod.Error);
+            }
+            else
+            {
+                detail.Classes.Add("caption");
+                bool shipped = mod.Folder == null || Path.GetFullPath(mod.Folder).StartsWith(Path.GetFullPath(ModRegistry.ShippedFolder), StringComparison.Ordinal);
+                string from = string.Join(" · ", new[] { shipped ? Loc.T("ModShipped") : mod.Folder, mod.Enabled ? null : Loc.T("ModOff") }.Where(t => !string.IsNullOrEmpty(t)));
+                detail.Text = mod.Description.Length > 0 ? mod.Description + "\n" + from : from;
+            }
+            ModsPanel.Children.Add(new StackPanel { Children = { box, detail } });
+        }
+        if (modBoxes.Count == 0)
+        {
+            var none = new TextBlock { Text = Loc.T("NoMods") };
+            none.Classes.Add("muted");
+            ModsPanel.Children.Add(none);
+        }
+        ModsHint.Text = s.DataFolder == null ? "" : Loc.F("ModsHint", ModRegistry.UserFolder(s.DataFolder));
+        ModsHint.IsVisible = ModsHint.Text.Length > 0;
     }
 
     async void BrowseFolder(object? sender, RoutedEventArgs e)
@@ -67,6 +111,9 @@ public partial class SettingsDialog : Window
         s.HitVolume = HitVolumeBox.Value;
         s.HitSoundSet = Math.Max(0, HitSetBox.SelectedIndex);
         s.LatencyMs = (double)(LatencyBox.Value ?? 0);
+        // Mods that are not there now keep their place in the list: they may be back.
+        s.DisabledMods = s.DisabledMods.Where(id => !modBoxes.ContainsKey(id))
+            .Concat(modBoxes.Where(b => b.Value.IsChecked != true).Select(b => b.Key)).ToList();
         return s;
     }
 

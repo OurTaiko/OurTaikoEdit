@@ -80,9 +80,9 @@ public sealed class ProjectRegistry
         Save();
     }
 
-    // A new project folder `parent/name` with the chart from the language's template and, when
-    // given, a copy of the audio file next to it.
-    public ChartProject CreateProject(string parent, string name, IChartLanguage language, string? audioSource)
+    // A new project folder `parent/name` with the chart from the language's template (or the text
+    // given, for a chart that was imported) and, when given, a copy of the audio file next to it.
+    public ChartProject CreateProject(string parent, string name, IChartLanguage language, string? audioSource, string? chartText = null)
     {
         string folder = Path.Combine(parent, SafeName(name));
         if (Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
@@ -95,7 +95,7 @@ public sealed class ProjectRegistry
             File.Copy(audioSource, Path.Combine(folder, audio), overwrite: false);
         }
         string chart = SafeName(name) + language.FileExtension;
-        ChartFile.Write(Path.Combine(folder, chart), new ChartText(language.CreateTemplate(name, audio)));
+        ChartFile.Write(Path.Combine(folder, chart), new ChartText(chartText ?? language.CreateTemplate(name, audio)));
         var project = ChartProject.Create(folder, name, language.Id, chart);
         project.Save();
         Track(folder);

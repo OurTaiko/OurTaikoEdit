@@ -2,7 +2,9 @@ namespace OurTaikoEdit.App.ViewModels;
 
 public enum SaveChoice { Save, Discard, Cancel }
 
-public sealed record NewProjectRequest(string Name, string Location, string ChartType, string? Audio);
+// ChartText is the chart when it was imported from another file rather than started from the
+// chart type's template, and ImportReport what the importer has to say about it.
+public sealed record NewProjectRequest(string Name, string Location, string ChartType, string? Audio, string? ChartText = null, string? ImportReport = null);
 
 public interface IDialogService
 {

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A mod: a new project's chart read from a picture of the chart (the pixel-exact images of
+       TJAAnalyzer's renderer and the wiki it follows). Knows the app only through Core, whose
+       assemblies the app already has, so only this assembly and mod.json are shipped, in
+       Mods/ChartImage next to the app (see OurTaikoEdit.App.csproj). -->
+  <ItemGroup>
+    <ProjectReference Include="../OurTaikoEdit.Core/OurTaikoEdit.Core.csproj" Private="false" />
+    <EmbeddedResource Include="Strings.csv" LogicalName="OurTaikoEdit.Mods.ChartImage.Strings.csv" />
+    <None Include="mod.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

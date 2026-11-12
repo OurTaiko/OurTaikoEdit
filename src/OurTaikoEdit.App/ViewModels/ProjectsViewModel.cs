@@ -44,7 +44,9 @@ public sealed partial class ProjectsViewModel : ViewModelBase
         try
         {
             var language = ChartLanguages.Find(request.ChartType) ?? throw new InvalidOperationException(Loc.F("UnknownChartType", request.ChartType));
-            open(registry.CreateProject(request.Location, request.Name, language, request.Audio));
+            var project = registry.CreateProject(request.Location, request.Name, language, request.Audio, request.ChartText);
+            if (request.ImportReport != null) await dialogs.MessageAsync(Loc.T("ImportedTitle"), request.ImportReport);
+            open(project);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
         {

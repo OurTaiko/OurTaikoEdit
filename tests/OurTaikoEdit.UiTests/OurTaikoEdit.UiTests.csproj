@@ -18,5 +18,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <None Include="Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- TJAAnalyzer's chart image, shared with the unit tests. -->
+    <None Include="../OurTaikoEdit.Tests/Fixtures/wrapped_drumrolls.png" Link="Fixtures/wrapped_drumrolls.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

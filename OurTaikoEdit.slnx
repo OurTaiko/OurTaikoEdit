@@ -3,6 +3,7 @@
     <Project Path="src/OurTaikoEdit.App/OurTaikoEdit.App.csproj" />
     <Project Path="src/OurTaikoEdit.Audio/OurTaikoEdit.Audio.csproj" />
     <Project Path="src/OurTaikoEdit.Core/OurTaikoEdit.Core.csproj" />
+    <Project Path="src/OurTaikoEdit.Mods.ChartImage/OurTaikoEdit.Mods.ChartImage.csproj" />
     <Project Path="src/OurTaikoEdit.Tja/OurTaikoEdit.Tja.csproj" />
   </Folder>
   <Folder Name="/tests/">

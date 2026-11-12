@@ -85,6 +85,14 @@
           <TextBlock Grid.Row="5" Grid.Column="1" Classes="caption" TextWrapping="Wrap" Text="{l:T LatencyHint}" />
         </Grid>
       </StackPanel>
+
+      <StackPanel Classes="group">
+        <TextBlock Classes="section" Text="{l:T SectionMods}" />
+        <Border />
+        <!-- A row for each mod found, made in code. -->
+        <StackPanel x:Name="ModsPanel" Spacing="8" />
+        <TextBlock x:Name="ModsHint" Classes="caption" TextWrapping="Wrap" />
+      </StackPanel>
     </StackPanel>
   </DockPanel>
 </Window>

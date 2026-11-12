@@ -52,6 +52,12 @@ Creates,Creates {0},将创建 {0},{0} を作成します
 WhereToCreate,Where to create the project,选择项目的创建位置,プロジェクトの作成場所
 ChooseAudio,Choose the song's audio,选择歌曲音频,曲の音源を選ぶ
 AudioFilter,Audio,音频,音源
+StartFrom,Start from,起点,作成方法
+EmptyChart,An empty chart,空白谱面,空の譜面
+ChooseSource,Choose the file to read,选择要读取的文件,読み込むファイルを選ぶ
+NeedSource,Choose the file to read.,请选择要读取的文件。,読み込むファイルを選んでください。
+SourceMissing,The file to read does not exist.,要读取的文件不存在。,読み込むファイルが存在しません。
+ImportedTitle,Chart imported,谱面已导入,譜面を取り込みました
 
 # Save prompt,,,
 SaveQuestion,Save {0}?,保存 {0}？,{0} を保存しますか？
@@ -217,6 +223,14 @@ PlayHits,Play hit sounds,播放击打音,打音を鳴らす
 Latency,Audio latency (ms),音频延迟（毫秒）,オーディオ遅延（ミリ秒）
 LatencyHint,Raise it when notes reach the judge before you hear them; the playhead then waits for the sound.,如果音符先到判定点、声音后到，就调大这个值；播放头会等声音一起走。,音が聞こえる前に音符が判定枠に届くなら、値を上げてください。再生位置が音に合わせて遅れます。
 SettingsFile,Saved in {0},保存在 {0},保存先：{0}
+SectionMods,Mods,Mod,Mod
+ModsHint,"A mod is a folder with a mod.json in {0}. Switching one on or off takes effect the next time the app starts.",每个 Mod 是 {0} 里一个带 mod.json 的文件夹。开关在下次启动应用时生效。,Mod は {0} にある、mod.json の入ったフォルダーです。オン／オフの切り替えは次回の起動時に反映されます。
+NoMods,No mods were found.,没有找到 Mod。,Mod が見つかりません。
+ModShipped,comes with the app,随应用提供,アプリに付属
+ModOff,switched off,已关闭,オフ
+ModFailed,Could not be loaded: {0},无法加载：{0},読み込めませんでした：{0}
+ModNoAssembly,its assembly “{0}” is not in the mod's folder,Mod 的文件夹里没有它的程序集“{0}”,Mod のフォルダーにアセンブリ「{0}」がありません
+ModNoClass,its assembly has no public mod class,它的程序集里没有公开的 Mod 类,アセンブリに公開の Mod クラスがありません
 
 # Branches,,,
 NewBranchHere,New branch at this measure…,在这一小节新建分歧…,この小節に分岐を作成…
