@@ -250,6 +250,21 @@ FirstMeasureAtPlayhead,Start the first measure at the playhead ({0}),把第一�
 FirstMeasureMoved,The first measure now starts at {0}.,第一小节现在从 {0} 开始。,最初の小節は {0} から始まります。
 NoMeasureToPlace,There is no measure to place yet.,还没有可以放置的小节。,配置できる小節がまだありません。
 StartNotMoved,The chart did not move with OFFSET; set it in the code.,改了 OFFSET 谱面也没有跟着移动；请在代码里设置。,OFFSET を変えても譜面が動きませんでした。コードで設定してください。
+NewBlockTip,New difficulty…,新建难度…,新しい難易度…
+NewBlockTitle,New difficulty,新建难度,新しい難易度
+NewBlockCourse,Difficulty,难度,難易度
+NewBlockLevel,Level (★),星级（★）,レベル（★）
+InheritFrom,Start with the shape of,继承自,引き継ぐ難易度
+InheritNothing,Nothing,不继承,引き継がない
+InheritNothingHint,The new difficulty starts as four empty measures.,新难度从四个空小节开始。,新しい難易度は空の 4 小節から始まります。
+InheritTempo,"Tempo and measures (#BPMCHANGE, #MEASURE, #DELAY)",速度与小节（#BPMCHANGE、#MEASURE、#DELAY）,テンポと小節（#BPMCHANGE、#MEASURE、#DELAY）
+InheritBranches,"Branches (#BRANCHSTART … #BRANCHEND, every route)",分歧（#BRANCHSTART … #BRANCHEND，含各路线）,分岐（#BRANCHSTART … #BRANCHEND、全ルート）
+InheritGogo,"Go-go time (#GOGOSTART, #GOGOEND)",Go-go time（#GOGOSTART、#GOGOEND）,ゴーゴータイム（#GOGOSTART、#GOGOEND）
+InheritHint,"The measures of {0} are written empty, with what is ticked where it stands there. Notes are not copied; without the branches, only its normal route is.",按 {0} 的小节写成空小节，勾选的指令留在原来的位置。不复制音符；不继承分歧时只取它的普通路线。,{0} の小節を空のまま書き、チェックした命令を同じ位置に残します。音符はコピーしません。分岐を引き継がない場合は普通ルートだけを使います。
+CourseExists,The chart already has {0}.,谱面里已经有 {0} 了。,この譜面には {0} がすでにあります。
+NoCourseLeft,The chart already has every difficulty.,谱面里五个难度都已经有了。,この譜面にはすべての難易度があります。
+BlockAdded,Added {0}.,已添加 {0}。,{0} を追加しました。
+BlockNotCarried,"{0} would not read back as the difficulty it starts from; write it in the code.",{0} 写出来之后与所继承的难度对不上；请在代码里写。,{0} は、書き出すと引き継ぎ元と一致しません。コードで書いてください。
 "BranchChangesChart","A branch here would change what is played (a drumroll may cross the measure's ends); write it in the code.",在这里建分歧会改变演奏内容（可能有连打跨过这一小节的两端）；请在代码里写。,ここに分岐を作ると演奏内容が変わります（連打が小節の端をまたいでいる可能性があります）。コードで書いてください。
 BranchBigNotes,Count big notes only,只算大音符,大音符のみ数える
 BranchBigRolls,Count big drumrolls only,只算大连打,大連打のみ数える

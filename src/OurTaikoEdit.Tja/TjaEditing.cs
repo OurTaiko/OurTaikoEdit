@@ -258,12 +258,6 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(edits);
     }
 
-    // A branch made of one measure: the measure as written (from its first note to its comma,
-    // with whatever is written inside it) becomes the normal route and is written again as the
-    // expert and the master one, between a #BRANCHSTART and a #BRANCHEND, each on a line of its
-    // own. Commands written before the measure stay before the branch. The balloon lists give
-    // the copies the counts their balloons had. Refused where the result would not play as the
-    // chart does now on every route (a drumroll across the measure's ends, for one).
     // OFFSET is how long before the song's start the chart starts, so the first measure moves
     // later by as much as OFFSET gets smaller. The OFFSET in force for the block is the last one
     // written before it; without one it is written after BPM (or first of all). The value is a
@@ -310,6 +304,171 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(new[] { edit });
     }
 
+    // ---- A new block.
+
+    static readonly HashSet<string> TempoCommands = new(StringComparer.OrdinalIgnoreCase) { "#BPMCHANGE", "#MEASURE", "#DELAY" };
+    static readonly HashSet<string> GogoCommands = new(StringComparer.OrdinalIgnoreCase) { "#GOGOSTART", "#GOGOEND" };
+    static readonly HashSet<string> RouteMarkers = new(StringComparer.OrdinalIgnoreCase) { "#N", "#E", "#M" };
+    static readonly HashSet<string> BranchCommands = new(StringComparer.OrdinalIgnoreCase) { "#BRANCHSTART", "#BRANCHEND", "#N", "#E", "#M", "#SECTION", "#LEVELHOLD" };
+
+    // A new difficulty after everything else in the file: COURSE, LEVEL and an empty BALLOON of
+    // its own (so that a list written for every course is not its), then its block. Without a
+    // block to start from that is four empty measures; with one, that block's measures written
+    // empty (Skeleton). The text is read again: the new block must read without errors, and with
+    // the tempo carried over its measures must fall when the other block's do.
+    public EditResult InsertBlock(ChartAnalysis analysis, NewBlock block)
+    {
+        string text = analysis.Text, newline = text.Contains("\r\n") ? "\r\n" : "\n";
+        if (SongInfo.DifficultyOf(block.Course) is not { } difficulty || difficulty < Difficulty.Easy) return EditResult.Fail(Loc.F("CourseExists", block.Course));
+        string course = SongInfo.CourseName(difficulty);
+        var doc = new TjaDocument(text);
+        if (doc.Blocks.Any(b => b.Side == "single" && SongInfo.DifficultyOf(b.Course) == difficulty)) return EditResult.Fail(Loc.F("CourseExists", course));
+
+        List<string> body;
+        TjaAnalysis? source = null;
+        bool everyBranchHasNormal = true;
+        if (block.From >= 0)
+        {
+            if (block.From >= doc.Blocks.Count) return EditResult.Fail(Loc.T("FixErrorsFirst"));
+            var from = doc.Blocks[block.From];
+            source = doc.Analyze(from.Course, from.Side);
+            if (source.Chart == null || source.HasErrors) return EditResult.Fail(Loc.T("FixErrorsFirst"));
+            body = Skeleton(doc, from, block, out everyBranchHasNormal);
+        }
+        else body = Enumerable.Repeat(",", 4).ToList();
+
+        var lines = new List<string> { "", $"COURSE:{course}", $"LEVEL:{Math.Clamp(block.Level, 1, 10)}", "BALLOON:", "", "#START" };
+        lines.AddRange(body);
+        lines.Add("#END");
+        lines.Add("");
+        string written = (text.Length == 0 || text.EndsWith('\n') || text.EndsWith('\r') ? "" : newline) + string.Join(newline, lines);
+        var (line, column) = new LineIndex(text).Position(text.Length);
+        var edit = new TextEdit(line, column, 0, written);
+
+        var after = new TjaDocument(TextEdits.Apply(text, new[] { edit })).Analyze(course, "single");
+        if (after.Chart == null || after.HasErrors) return EditResult.Fail(Loc.F("BlockNotCarried", course));
+        if (source != null && block.Tempo)
+        {
+            // What the new block has of the other's: every measure, or without the branches, the
+            // common ones and the normal route's.
+            bool branching = source.Chart!.Branches.Count > 0;
+            var expected = source.Measures.Where(m => block.Branches || m.BranchId < 0 || m.Route == BranchRoute.Normal).ToList();
+            if (block.Branches || !branching || everyBranchHasNormal)
+            {
+                if (after.Measures.Count != expected.Count) return EditResult.Fail(Loc.F("BlockNotCarried", course));
+                for (int i = 0; i < expected.Count; i++)
+                    if (Math.Abs(after.Measures[i].StartTime - expected[i].StartTime) > 0.0015 || Math.Abs(after.Measures[i].EndTime - expected[i].EndTime) > 0.0015)
+                        return EditResult.Fail(Loc.F("BlockNotCarried", course));
+            }
+        }
+        return new EditResult(new[] { edit });
+    }
+
+    // A block's lines between #START and #END with nothing to play: each measure is a comma, and
+    // the commands asked for stand where they stood. A command inside a measure keeps its place
+    // by the measure being written as rests around it, as few as hold the place (a tempo change
+    // half-way through sixteen notes becomes `0`, the command, `0,`). Other commands, comments
+    // and the notes are left out. Without the branches, of each branch only the normal route is
+    // written (the first route written, where there is no normal one), as what every route plays.
+    static List<string> Skeleton(TjaDocument doc, TjaDocumentBlock block, NewBlock options, out bool everyBranchHasNormal)
+    {
+        var tokens = doc.Syntax;
+        var lines = new List<string>();
+        var pending = new List<(int At, string Text)>();
+        int slots = 0;
+        bool inBranch = false;
+        string? route = null, kept = null;
+        everyBranchHasNormal = true;
+
+        string Name(int i) => doc.Text.Substring(tokens[i].Span.Start, tokens[i].Span.Length).ToUpperInvariant();
+
+        // The route of the branch starting at a token that is written out: #N, or the first written.
+        string? KeptRoute(int start)
+        {
+            string? first = null;
+            for (int i = start + 1; i < tokens.Count && tokens[i].Span.Start < block.EndSpan.Start; i++)
+            {
+                if (tokens[i].Kind != TjaSyntaxKind.Command) continue;
+                string name = Name(i);
+                if (name is "#BRANCHSTART" or "#BRANCHEND") break;
+                if (!RouteMarkers.Contains(name)) continue;
+                if (name == "#N") return name;
+                first ??= name;
+            }
+            return first;
+        }
+
+        void Flush()
+        {
+            int unit = slots;
+            foreach (var c in pending)
+                if (c.At > 0 && c.At < slots) unit = Gcd(unit, c.At);
+            int written = 0;
+            foreach (var c in pending)
+            {
+                if (c.At > written) { lines.Add(new string('0', (c.At - written) / unit)); written = c.At; }
+                lines.Add(c.Text);
+            }
+            lines.Add((written > 0 && slots > written ? new string('0', (slots - written) / unit) : "") + ",");
+            pending.Clear();
+            slots = 0;
+        }
+
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            if (t.Span.Start < block.StartSpan.End) continue;
+            if (t.Span.Start >= block.EndSpan.Start) break;
+            // Without the branches, the other routes are passed over whole.
+            bool skipped = !options.Branches && inBranch && route != null && route != kept;
+            switch (t.Kind)
+            {
+                case TjaSyntaxKind.Note:
+                case TjaSyntaxKind.Blank:
+                case TjaSyntaxKind.RollEnd:
+                case TjaSyntaxKind.Unknown:
+                    if (!skipped) slots++;
+                    break;
+                case TjaSyntaxKind.Comma:
+                    if (!skipped) Flush();
+                    break;
+                case TjaSyntaxKind.Command:
+                    string name = Name(i);
+                    // The command as written, with what follows it on its line.
+                    int end = t.Span.End;
+                    while (i + 1 < tokens.Count && tokens[i + 1].Kind is TjaSyntaxKind.Argument or TjaSyntaxKind.Whitespace)
+                    {
+                        if (tokens[i + 1].Kind == TjaSyntaxKind.Argument) end = tokens[i + 1].Span.End;
+                        i++;
+                    }
+                    if (name == "#BRANCHSTART")
+                    {
+                        (inBranch, route, kept) = (true, null, KeptRoute(i));
+                        if (kept != "#N") everyBranchHasNormal = false;
+                        skipped = false;
+                    }
+                    else if (name == "#BRANCHEND") (inBranch, route, skipped) = (false, null, false);
+                    else if (RouteMarkers.Contains(name)) { route = name; skipped = !options.Branches && route != kept; }
+                    bool wanted = TempoCommands.Contains(name) ? options.Tempo
+                        : GogoCommands.Contains(name) ? options.Gogo
+                        : BranchCommands.Contains(name) && options.Branches;
+                    if (wanted && !skipped) pending.Add((slots, doc.Text.Substring(t.Span.Start, end - t.Span.Start).TrimEnd()));
+                    break;
+            }
+        }
+        // Commands after the last measure.
+        lines.AddRange(pending.Select(c => c.Text));
+        return lines;
+
+        static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
+    }
+
+    // A branch made of one measure: the measure as written (from its first note to its comma,
+    // with whatever is written inside it) becomes the normal route and is written again as the
+    // expert and the master one, between a #BRANCHSTART and a #BRANCHEND, each on a line of its
+    // own. Commands written before the measure stay before the branch. The balloon lists give
+    // the copies the counts their balloons had. Refused where the result would not play as the
+    // chart does now on every route (a drumroll across the measure's ends, for one).
     public EditResult InsertBranch(ChartAnalysis analysis, MeasureView measure, string condition)
     {
         if (analysis.Chart == null || analysis.HasErrors) return EditResult.Fail(Loc.T("FixErrorsTimeline"));

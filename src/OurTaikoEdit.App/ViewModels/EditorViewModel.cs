@@ -529,6 +529,25 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (measure != null) Apply(Language.Editing.InsertBranch(Analysis, measure, value));
     }
 
+    // A new difficulty, asked for in its dialog: written after the chart's last block, empty or
+    // with the shape of one of the chart's (its tempo and measures, branches, go-go time, as
+    // chosen), and then the one being edited. One change to the text.
+    [RelayCommand]
+    public async Task NewBlock()
+    {
+        EnsureFresh();
+        var courses = Language.NewBlockCourses(Analysis);
+        if (courses.Count == 0) { Message = Loc.T("NoCourseLeft"); return; }
+        var block = await dialogs.NewBlockAsync(courses, Analysis.Blocks, Analysis.Block);
+        if (block == null) return;
+        EnsureFresh();
+        var result = Language.Editing.InsertBlock(Analysis, block);
+        Apply(result);
+        if (!result.Ok || result.Edits.Count == 0) return;
+        BlockIndex = Blocks.Count - 1;
+        Message = Loc.F("BlockAdded", Blocks[^1].Name);
+    }
+
     // A branch taken out of the chart, one of its routes kept as what every route plays there.
     // One change to the text: one undo step brings the branch back.
     public void RemoveBranch(ChartBranchMark branch, BranchRoute keep = BranchRoute.Normal)

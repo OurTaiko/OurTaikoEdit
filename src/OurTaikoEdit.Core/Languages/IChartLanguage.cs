@@ -50,7 +50,21 @@ public interface IChartLanguage
     // A branch's condition as written, taken apart (null when it cannot be read) and written.
     BranchConditionText? ReadBranchCondition(string written) => null;
     string WriteBranchCondition(BranchConditionText condition) => "";
+
+    // The difficulties a new block can be given: those the chart does not have yet. None when
+    // the language cannot add a block.
+    IReadOnlyList<BlockCourse> NewBlockCourses(ChartAnalysis analysis) => Array.Empty<BlockCourse>();
 }
+
+// A difficulty for a new block: how the language writes it, its name, and a level to start from.
+public sealed record BlockCourse(string Id, string Name, int Level);
+
+// A new block: its difficulty and level and, with From (an index into the analysis' Blocks, -1
+// for none), the block whose shape it starts with. That block's measures are written empty, with
+// what is asked for kept where it is: Tempo (the commands that say when measures fall: tempo,
+// measure lengths, delays), Branches (the branches with every route; without them only what the
+// normal route plays) and Gogo (go-go time). Notes are never copied.
+public sealed record NewBlock(string Course, int Level, int From = -1, bool Tempo = false, bool Branches = false, bool Gogo = false);
 
 // A kind of branch condition: how it is written, its name, what it counts, and what counting
 // "big only" means for it (null when it cannot be asked for).
@@ -123,6 +137,9 @@ public interface IChartEditing
     // The whole chart moved along its song, so that its first measure starts at a time of the song
     // (TJA: OFFSET). Every block the same header is in force for moves with it.
     EditResult MoveStart(ChartAnalysis analysis, double time);
+
+    // A new block written after the chart's last (see NewBlock).
+    EditResult InsertBlock(ChartAnalysis analysis, NewBlock block);
 
     // A branch made of one measure outside any branch: the measure becomes the branch's first
     // route and is written again for each of the others, so that every route plays what it did.

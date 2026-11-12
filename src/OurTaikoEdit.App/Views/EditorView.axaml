@@ -96,6 +96,10 @@
       <Grid RowDefinitions="Auto,*,Auto,Auto">
         <!-- The chart's difficulties, as the code's tabs -->
         <Border Classes="bar" Height="34">
+         <Grid ColumnDefinitions="Auto,Auto">
+          <Button Grid.Column="1" Classes="ghost icon" x:Name="NewBlockButton" Command="{Binding NewBlockCommand}" ToolTip.Tip="{l:T NewBlockTip}" VerticalAlignment="Center" Margin="4,0,0,0">
+            <controls:Icon Data="{StaticResource IconPlus}" />
+          </Button>
           <ListBox x:Name="BlockList" Classes="tabs" ItemsSource="{Binding Blocks}" SelectedIndex="{Binding BlockIndex}">
             <ListBox.ItemsPanel>
               <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
@@ -109,6 +113,7 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
+         </Grid>
         </Border>
 
         <ae:TextEditor Grid.Row="1" x:Name="Code" ShowLineNumbers="True" FontFamily="{StaticResource CodeFont}" FontSize="14"

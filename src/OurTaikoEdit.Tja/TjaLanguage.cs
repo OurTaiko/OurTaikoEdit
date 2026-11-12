@@ -157,6 +157,16 @@ public sealed class TjaLanguage : IChartLanguage
         return $"{kind},{condition.Expert.Trim()},{condition.Master.Trim()}{(condition.Less ? ",l" : "")}";
     }
 
+    // The five difficulties, less those the file has a single-player block of.
+    static readonly int[] StartingLevels = { 3, 5, 6, 8, 9 };
+
+    public IReadOnlyList<BlockCourse> NewBlockCourses(ChartAnalysis analysis)
+    {
+        var taken = analysis.Blocks.Where(b => b.Side == "single").Select(b => SongInfo.DifficultyOf(b.Course)).ToHashSet();
+        return Enum.GetValues<Difficulty>().Where(d => d >= Difficulty.Easy && !taken.Contains(d))
+            .Select(d => new BlockCourse(SongInfo.CourseName(d), SongInfo.CourseName(d), StartingLevels[(int)d])).ToList();
+    }
+
     // ---- Editor features, from the library (TjaHover, TjaSignatureHelp, TjaFolding, TjaSummary,
     // TjaQuickFix, TjaRefactor, TjaFormat).
 

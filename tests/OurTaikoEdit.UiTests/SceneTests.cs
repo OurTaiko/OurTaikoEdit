@@ -698,6 +698,7 @@ public class SceneTests : IDisposable
         public Task<bool> ConfirmAsync(string title, string message, string confirm) => Task.FromResult(true);
         public Task<string?> PromptAsync(string title, string message, string value) => Task.FromResult<string?>(answer);
         public Task<string?> BranchConditionAsync(string title, IChartLanguage language, string written) => Task.FromResult<string?>(answer);
+        public Task<NewBlock?> NewBlockAsync(IReadOnlyList<BlockCourse> courses, IReadOnlyList<ChartBlock> blocks, int current) => Task.FromResult<NewBlock?>(null);
         public Task<SaveChoice> AskSaveAsync(string name) => Task.FromResult(SaveChoice.Discard);
         public Task<bool> SettingsAsync(AppSettings settings) => Task.FromResult(false);
     }
@@ -1102,6 +1103,86 @@ public class SceneTests : IDisposable
 
             // One step back.
             code.Undo();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, code.Text);
+        }
+        finally { editor.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ANewDifficultyStartsWithTheShapeOfAnotherAndUndoTakesItBack()
+    {
+        var (window, vm, registry) = Open();
+        var editor = OpenEditor(window, vm, registry);
+        try
+        {
+            var code = Find<TextEditor>(window);
+            string before = code.Text;
+            Assert.Equal(new[] { "Oni ★9", "Hard ★6" }, editor.Blocks.Select(b => b.Name));
+            void Click(Button button) => button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+
+            // The button after the difficulties' tabs asks which, and what to start from.
+            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NewBlockButton");
+            button.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.IsType<NewBlockDialog>(window.OwnedWindows.Last());
+            var course = dialog.FindControl<ComboBox>("CourseBox")!;
+            var level = dialog.FindControl<NumericUpDown>("LevelBox")!;
+            var from = dialog.FindControl<ComboBox>("FromBox")!;
+            var tempo = dialog.FindControl<CheckBox>("TempoBox")!;
+            var branches = dialog.FindControl<CheckBox>("BranchBox")!;
+            var gogo = dialog.FindControl<CheckBox>("GogoBox")!;
+            var panel = dialog.FindControl<StackPanel>("InheritPanel")!;
+
+            // The difficulties the chart has not; the one being edited to start from, all of it.
+            Assert.Equal(new[] { "Easy", "Normal", "Edit" }, course.Items.Cast<string>());
+            Assert.Equal(new[] { "Nothing", "Oni ★9", "Hard ★6" }, from.Items.Cast<string>());
+            Assert.Equal(1, from.SelectedIndex);
+            Assert.True(tempo.IsChecked == true && branches.IsChecked == true && gogo.IsChecked == true);
+            Assert.True(panel.IsEnabled && branches.IsEnabled);
+            // The level follows the difficulty until it is set by hand.
+            Assert.Equal(3, level.Value);
+            course.SelectedIndex = 1;
+            Assert.Equal(5, level.Value);
+            Shot(dialog, "new-difficulty");
+            // A difficulty without branches has none to give; nothing to start from, nothing to tick.
+            from.SelectedIndex = 2;
+            Assert.False(branches.IsEnabled);
+            from.SelectedIndex = 0;
+            Assert.False(panel.IsEnabled);
+            from.SelectedIndex = 1;
+            level.Value = 4;
+            course.SelectedIndex = 0;
+            Assert.Equal(4, level.Value);
+            course.SelectedIndex = 1;
+            Click(dialog.FindControl<Button>("OkButton")!);
+            Dispatcher.UIThread.RunJobs();
+
+            // Written after the last block: Oni's measures, empty, with its tempo change, go-go
+            // time and branch; not its scroll changes, notes or balloons.
+            Assert.Equal(before + "\nCOURSE:Normal\nLEVEL:4\nBALLOON:\n\n#START\n,\n,\n#GOGOSTART\n,\n,\n#GOGOEND\n,\n,\n#BPMCHANGE 180\n,\n,\n"
+                + "#BRANCHSTART p,60,85\n#N\n,\n#E\n,\n#M\n,\n#BRANCHEND\n,\n,\n,\n#END\n", code.Text);
+            // It is the one being edited now, the caret in it.
+            Assert.Equal(new[] { "Oni ★9", "Hard ★6", "Normal ★4" }, editor.Blocks.Select(b => b.Name));
+            Assert.Equal(2, editor.BlockIndex);
+            Assert.Equal("Added Normal ★4.", editor.Message);
+            Assert.False(editor.Analysis.HasErrors);
+            Assert.Empty(editor.Analysis.Chart!.Notes);
+            Assert.True(editor.Analysis.HasBranches);
+            Assert.InRange(code.TextArea.Caret.Line, editor.Analysis.StartLine, editor.Analysis.EndLine);
+            var oni = editor.Language.Analyze(code.Text, 0);
+            Assert.Equal(oni.Measures.Select(m => (m.BranchId, m.Route, Math.Round(m.Time, 4))), editor.Analysis.Measures.Select(m => (m.BranchId, m.Route, Math.Round(m.Time, 4))));
+            Shot(window, "editor-new-difficulty");
+
+            // One step back.
+            code.Undo();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, code.Text);
+
+            // Cancelled: nothing is written.
+            button.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            window.OwnedWindows.Last().Close();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(before, code.Text);
         }

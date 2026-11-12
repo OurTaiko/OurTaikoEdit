@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OurTaikoEdit.App.Views.NewBlockDialog"
+        xmlns:l="using:OurTaikoEdit.App.Localization"
+        Title="{l:T NewBlockTitle}" Width="500" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Classes="footer">
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Classes="accent wide" x:Name="OkButton" Content="{l:T Create}" IsDefault="True" Click="Accept" />
+        <Button Classes="wide" Content="{l:T Cancel}" IsCancel="True" Click="Cancel" />
+      </StackPanel>
+    </Border>
+
+    <StackPanel Margin="20,18,20,20" Spacing="14">
+      <TextBlock Classes="h1" Text="{l:T NewBlockTitle}" />
+
+      <Grid ColumnDefinitions="*,130" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="5">
+        <TextBlock Classes="label" Text="{l:T NewBlockCourse}" />
+        <TextBlock Classes="label" Grid.Column="1" Text="{l:T NewBlockLevel}" />
+        <ComboBox Grid.Row="1" x:Name="CourseBox" HorizontalAlignment="Stretch" />
+        <NumericUpDown Grid.Row="1" Grid.Column="1" x:Name="LevelBox" Minimum="1" Maximum="10" Increment="1" FormatString="0" />
+      </Grid>
+
+      <!-- The difficulty it starts with the shape of, and what of it is carried over -->
+      <StackPanel Classes="field">
+        <TextBlock Classes="label" Text="{l:T InheritFrom}" />
+        <ComboBox x:Name="FromBox" HorizontalAlignment="Stretch" />
+        <StackPanel x:Name="InheritPanel" Spacing="0" Margin="0,2,0,0">
+          <CheckBox x:Name="TempoBox" Content="{l:T InheritTempo}" />
+          <CheckBox x:Name="BranchBox" Content="{l:T InheritBranches}" />
+          <CheckBox x:Name="GogoBox" Content="{l:T InheritGogo}" />
+        </StackPanel>
+        <TextBlock x:Name="InheritHint" Classes="caption" TextWrapping="Wrap" />
+      </StackPanel>
+    </StackPanel>
+  </DockPanel>
+</Window>
