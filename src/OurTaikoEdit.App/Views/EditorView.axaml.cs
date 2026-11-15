@@ -359,7 +359,7 @@ public partial class EditorView : UserControl
         var view = Code.TextArea.TextView;
         if (vm == null || view.GetPositionFloor(e.GetPosition(view) + view.ScrollOffset) is not { } at) return;
         var parts = new List<string>();
-        foreach (var d in vm.Analysis.Diagnostics)
+        foreach (var d in vm.Analysis.Diagnostics.OrderByDescending(d => d.Severity))
         {
             var s = d.Source;
             if (s.Line == at.Line && (s.Length == 0 || at.Column >= s.Column && at.Column <= s.Column + Math.Max(1, s.Length)))

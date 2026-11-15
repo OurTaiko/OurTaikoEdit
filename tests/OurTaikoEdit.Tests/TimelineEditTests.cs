@@ -445,4 +445,13 @@ public class TimelineEditTests
         Assert.Equal(2, StartOf(both, 0), 6);
         Assert.Equal(2, StartOf(both, 1), 6);
     }
+
+    // The routes of a branch are the same measures: numbered alike, and the ones after count on.
+    [Fact]
+    public void MeasuresAreNumberedAsPlayed()
+    {
+        var a = Tja.Analyze(Chart("1,\n#BRANCHSTART p,1,2\n#N\n1,\n1,\n#E\n2,\n2,\n#M\n1,\n2,\n#BRANCHEND\n1,"), 0);
+        Assert.Equal(new[] { 0, 1, 2, 1, 2, 1, 2, 3 }, a.Measures.Select(m => m.PlayedIndex));
+        Assert.Equal(Enumerable.Range(0, 8), a.Measures.Select(m => m.Index));
+    }
 }

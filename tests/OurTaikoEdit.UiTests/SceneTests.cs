@@ -140,6 +140,10 @@ public class SceneTests : IDisposable
         Dispatcher.UIThread.RunJobs();
         Assert.True(problems.IsVisible);
         Assert.Equal(3, editor.Diagnostics.Count);
+        // The list is by severity: errors, then warnings, then information.
+        var ranks = editor.Diagnostics.Select(d => d.IsError ? 0 : d.IsWarning ? 1 : 2).ToList();
+        Assert.Equal(ranks.OrderBy(r => r), ranks);
+        Assert.True(ranks.Distinct().Count() > 1, string.Join(",", ranks));
         Shot(window, "editor-problems");
 
         // At the window's smallest, what the bars hold on their right stays inside it.

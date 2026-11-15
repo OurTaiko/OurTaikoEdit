@@ -34,7 +34,10 @@ public sealed record ChartSlot(SourceSpan Source, string Token, double Time, Cha
 // A measure of the parsed block, on the common part (BranchId -1) or one route of a branch.
 public sealed class MeasureView
 {
+    // In written order, the routes of a branch one after another.
     public int Index { get; init; }
+    // Its number as played, from 0: the routes of a branch count alike.
+    public int PlayedIndex { get; init; }
     public int BranchId { get; init; } = -1;
     public BranchRoute Route { get; init; }
     public double Time { get; init; }

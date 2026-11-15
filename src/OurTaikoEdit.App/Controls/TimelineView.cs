@@ -398,7 +398,7 @@ public sealed class TimelineView : Control
             double x = XOf(m.Time);
             if (x - lastX < 22) continue;
             lastX = x;
-            ctx.DrawText(new FormattedText((m.Index + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, strong, 11, ChartPalette.Text), new Point(x + 7, 0));
+            ctx.DrawText(new FormattedText((m.PlayedIndex + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, strong, 11, ChartPalette.Text), new Point(x + 7, 0));
         }
         ctx.DrawLine(RowLine, new Point(0, RulerHeight), new Point(b.Width, RulerHeight));
     }

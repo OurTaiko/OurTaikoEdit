@@ -289,7 +289,7 @@ public sealed class TjaLanguage : IChartLanguage
             var times = SlotTimes(analysis.Chart!, m, slots.Select(s => s.Time).ToList());
             result.Add(new MeasureView
             {
-                Index = m.Index, BranchId = m.BranchId, Route = m.Route, Time = m.StartTime, EndTime = m.EndTime, Bpm = m.Bpm, Length = m.Length,
+                Index = m.Index, PlayedIndex = m.PlayedIndex, BranchId = m.BranchId, Route = m.Route, Time = m.StartTime, EndTime = m.EndTime, Bpm = m.Bpm, Length = m.Length,
                 Comma = comma.Length > 0 ? span(comma) : default, Tag = m,
                 Slots = slots.Select((s, i) => new ChartSlot(span(s.Span), s.Token, times[i], s.Note)).ToList(),
             });

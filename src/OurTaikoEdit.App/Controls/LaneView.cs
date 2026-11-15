@@ -165,7 +165,7 @@ public sealed class LaneView : Control
         var clock = new FormattedText(Time(now), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, 15, ChartPalette.Text);
         ctx.DrawText(clock, new Point(14, 10));
         double readout = 14 + clock.Width + 18, baseline = 10 + clock.Baseline;
-        foreach (var (label, value) in new[] { ("BPM", bpm.ToString("0.###", CultureInfo.InvariantCulture)), (Loc.F("LaneMeasure", (measure?.Index ?? 0) + 1), "") })
+        foreach (var (label, value) in new[] { ("BPM", bpm.ToString("0.###", CultureInfo.InvariantCulture)), (Loc.F("LaneMeasure", (measure?.PlayedIndex ?? 0) + 1), "") })
         {
             var l = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, 12, ChartPalette.Muted);
             ctx.DrawText(l, new Point(readout, baseline - l.Baseline));

@@ -202,7 +202,8 @@ public sealed partial class EditorViewModel : ViewModelBase
             syncingBlock = false;
         }
         Diagnostics.Clear();
-        foreach (var d in next.Diagnostics) Diagnostics.Add(new DiagnosticItem(d));
+        // Errors first, then warnings, then information; within one, as they come in the text.
+        foreach (var d in next.Diagnostics.OrderByDescending(d => d.Severity)) Diagnostics.Add(new DiagnosticItem(d));
         int errors = next.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
         int warnings = next.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
         OnPropertyChanged(nameof(ProblemListVisible));
