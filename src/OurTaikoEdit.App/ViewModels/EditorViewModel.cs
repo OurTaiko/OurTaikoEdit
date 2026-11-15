@@ -74,8 +74,6 @@ public sealed partial class EditorViewModel : ViewModelBase
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ProblemListVisible))] bool showProblems = true;
     public bool ProblemListVisible => ShowProblems && Diagnostics.Count > 0;
 
-    // The chosen block at a glance (notes, combo, length, hash), when the language gives one.
-    [ObservableProperty] string summary = "";
     // Diagnostics' language: "ui" (the interface's), or English, Chinese or Japanese.
     [ObservableProperty] string messageLanguage;
     public IReadOnlyList<string> MessageLanguages { get; } = new[] { "ui", "en", "zh", "ja" };
@@ -187,7 +185,6 @@ public sealed partial class EditorViewModel : ViewModelBase
         LoadAudio(next.Audio);
         Folds = Language.Folds(text);
         Hints = Language.Hints(text, 1, int.MaxValue).GroupBy(h => h.Line).ToDictionary(g => g.Key, g => string.Join("  ", g.Select(h => h.Label)));
-        Summary = Language.Summaries(text).FirstOrDefault(b => b.Block == next.Block)?.Text ?? "";
         Analysis = next;
         ResolveSelection();
         if (!Blocks.SequenceEqual(next.Blocks))

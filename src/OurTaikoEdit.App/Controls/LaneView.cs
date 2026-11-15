@@ -67,7 +67,7 @@ public sealed class LaneView : Control
 
     void Changed(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Route) or nameof(EditorViewModel.Summary))
+        if (e.PropertyName is nameof(EditorViewModel.Playhead) or nameof(EditorViewModel.Analysis) or nameof(EditorViewModel.Route))
             InvalidateVisual();
     }
 
@@ -178,9 +178,15 @@ public sealed class LaneView : Control
             }
             readout += 13;
         }
-        string summary = editor.Summary.Length > 0 ? editor.Summary
-            : Loc.Plural("NoteCount", chart.Notes.Count(n => !n.IsLong && n.Kind != NoteKind.AdLib && n.Kind != NoteKind.Mine));
-        Label(ctx, $"{chart.Course} ★{chart.Level} · {summary}", new Point(14, b.Height - 24), 11.5, Ui.Faint);
+        // The notes to hit on the shown route: how many the playhead has reached, of all of them.
+        int passed = 0, total = 0;
+        foreach (var n in chart.Notes)
+        {
+            if (n.IsLong || n.Kind is NoteKind.AdLib or NoteKind.Mine || !Shown(chart, n.BranchId, n.Route, route)) continue;
+            total++;
+            if (n.Time <= now) passed++;
+        }
+        Label(ctx, $"{chart.Course} ★{chart.Level} · {passed} / {total}", new Point(14, b.Height - 24), 11.5, Ui.Faint);
     }
 
     // A note's head from the game's sheet, 192 units square about its centre. A balloon's face
