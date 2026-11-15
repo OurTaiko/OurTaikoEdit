@@ -4,6 +4,8 @@
     <AssemblyName>OurTaikoEdit</AssemblyName>
     <RootNamespace>OurTaikoEdit.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The icon of the Windows executable itself (the window's is set in MainWindow.axaml). -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>
