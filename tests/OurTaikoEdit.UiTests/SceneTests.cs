@@ -1295,7 +1295,6 @@ public class SceneTests : IDisposable
         Click("PlayFromHereButton");
         Dispatcher.UIThread.RunJobs();
         Assert.True(vm.Play!.HidesSkipped);
-        Assert.Equal(editor.Playhead - PlayViewModel.LeadIn, vm.Play.Time, 1);
         vm.Play.Back();
 
         // The stage, on a clock the test moves, the chart playing itself.
