@@ -1246,4 +1246,87 @@ public class SceneTests : IDisposable
         }
         finally { editor.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheChartIsPlayedInThePlaySceneOverTheEditorAndEscComesBack()
+    {
+        var (window, vm, registry) = Open();
+        var project = SampleProject(registry);
+        var editor = new EditorViewModel(project, new DialogService(window), () => { }, vm.Settings, scene => vm.Play = scene);
+        vm.Scene = editor;
+        Dispatcher.UIThread.RunJobs();
+        var editorView = Find<EditorView>(window);
+        var code = Find<TextEditor>(window);
+        code.Document.Insert(0, "// kept\n");
+        Dispatcher.UIThread.RunJobs();
+
+        // From the beginning: the play scene comes up over the editor, a little before the first note.
+        void Click(string name) => window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).Command!.Execute(null);
+        Click("PlayFromStartButton");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(editor.Message);
+        Assert.NotNull(vm.Play);
+        Assert.Null(vm.Play!.Session.ForcedBranch);
+        Assert.False(vm.Play.HidesSkipped);
+        var playView = Find<PlayView>(window);
+        Assert.True(playView.IsEffectivelyVisible);
+        Assert.False(editorView.IsEffectivelyVisible);
+
+        // The drum keys reach the play; Esc goes back to the very editor that was left.
+        void Key(PhysicalKey key, Key logical)
+        {
+            window.KeyPressQwerty(key, RawInputModifiers.None);
+            window.KeyReleaseQwerty(key, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+        }
+        var play = vm.Play;
+        Key(PhysicalKey.F, Avalonia.Input.Key.F);
+        Assert.True(play.FlashedAt[0] > double.NegativeInfinity);
+        Key(PhysicalKey.Space, Avalonia.Input.Key.Space);
+        Assert.True(play.Paused);
+        Key(PhysicalKey.Escape, Avalonia.Input.Key.Escape);
+        Assert.Null(vm.Play);
+        Assert.Same(editorView, Find<EditorView>(window));
+        Assert.True(editorView.IsEffectivelyVisible);
+        Assert.StartsWith("// kept", code.Text);
+
+        // From the playhead: what is before it is passed over.
+        editor.Seek(editor.Analysis.Measures[4].Time);
+        Click("PlayFromHereButton");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(vm.Play!.HidesSkipped);
+        Assert.Equal(editor.Playhead - PlayViewModel.LeadIn, vm.Play.Time, 1);
+        vm.Play.Back();
+
+        // The stage, on a clock the test moves, the chart playing itself.
+        double now = 0;
+        var chart = editor.Analysis.Chart!;
+        var (staged, error) = PlayViewModel.Create(chart, "OurTaikoEdit Sample", "--Test chart", null, BranchRoute.Normal, null, 0, true, () => vm.Play = null, () => now);
+        Assert.Null(error);
+        staged!.Auto = true;
+        vm.Play = staged;
+        void RunTo(double time)
+        {
+            while (staged.Time < time && !staged.Finished) { now += 1 / 120.0; staged.Tick(); }
+            Dispatcher.UIThread.RunJobs();
+        }
+        RunTo(chart.Notes[3].Time + 0.02);
+        Shot(window, "play");
+        RunTo(chart.Gogos[0].Time + 0.6);
+        Assert.True(staged.Session.Combo >= 10);
+        Shot(window, "play-gogo");
+        var balloon = chart.Notes.First(n => n.Kind == NoteKind.Balloon);
+        RunTo(balloon.Time + 0.3);
+        Assert.True(staged.Balloon >= 0);
+        Shot(window, "play-balloon");
+        RunTo(chart.Branches[0].Time + 0.4);
+        Shot(window, "play-branch");
+        RunTo(1000);
+        Assert.True(staged.Finished);
+        Assert.Equal(0, staged.Bad);
+        Shot(window, "play-result");
+        Key(PhysicalKey.R, Avalonia.Input.Key.R);
+        Assert.False(staged.Finished);
+        Assert.Equal(0, staged.Session.Good);
+    }
 }

@@ -16,6 +16,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] ViewModelBase scene;
     [ObservableProperty] string title = "OurTaikoEdit";
+    // The play scene, shown over the editor while a chart is being played (the editor stays
+    // underneath as it is: its text, its undo history, its song).
+    [ObservableProperty] PlayViewModel? play;
 
     public MainWindowViewModel(ProjectRegistry registry, IDialogService dialogs, AppSettings? settings = null)
     {
@@ -40,7 +43,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     void Open(ChartProject project)
     {
         registry.MarkOpened(project.Folder);
-        var editor = new EditorViewModel(project, dialogs, ShowProjects, Settings);
+        var editor = new EditorViewModel(project, dialogs, ShowProjects, Settings, scene => Play = scene);
         Scene = editor;
         Title = $"{project.Name} — OurTaikoEdit";
     }
@@ -54,6 +57,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // Whether the window may close: the editor asks about unsaved changes.
     public async Task<bool> CanCloseAsync()
     {
+        Play?.BackCommand.Execute(null);
         if (Scene is not EditorViewModel editor) return true;
         if (!await editor.ConfirmLeaveAsync()) return false;
         editor.Close();

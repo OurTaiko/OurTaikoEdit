@@ -14,6 +14,8 @@
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="Meta+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="F5" Command="{Binding TogglePlayCommand}" />
+    <KeyBinding Gesture="F6" Command="{Binding PlayFromHereCommand}" />
+    <KeyBinding Gesture="Shift+F6" Command="{Binding PlayFromStartCommand}" />
     <KeyBinding Gesture="Shift+Alt+F" Command="{Binding FormatDocumentCommand}" />
   </UserControl.KeyBindings>
 
@@ -56,6 +58,9 @@
         </StackPanel>
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <!-- As wide as what stands right of the play button less the rewind button, so the play
+               button sits in the middle. -->
+          <Panel Width="28" />
           <Button Classes="ghost icon" Command="{Binding RewindCommand}" ToolTip.Tip="{l:T RewindTip}">
             <controls:Icon Data="{StaticResource IconSolidRewind}" Filled="True" />
           </Button>
@@ -65,8 +70,13 @@
               <controls:Icon Data="{StaticResource IconSolidPause}" Filled="True" IsVisible="{Binding IsPlaying}" />
             </Panel>
           </Button>
-          <!-- As wide as the rewind button, so the play button sits in the middle. -->
-          <Panel Width="28" />
+          <!-- The chart played as in the game, in the play scene: from the playhead, from the beginning. -->
+          <Button Classes="ghost icon" x:Name="PlayFromHereButton" Command="{Binding PlayFromHereCommand}" ToolTip.Tip="{l:T PlayHereTip}">
+            <controls:Icon Data="{StaticResource IconGameHere}" />
+          </Button>
+          <Button Classes="ghost icon" x:Name="PlayFromStartButton" Command="{Binding PlayFromStartCommand}" ToolTip.Tip="{l:T PlayStartTip}">
+            <controls:Icon Data="{StaticResource IconGameStart}" />
+          </Button>
         </StackPanel>
 
         <!-- (The audio's status gives way first when the window is narrow.) -->

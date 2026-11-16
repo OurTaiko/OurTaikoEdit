@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Playing a chart: OurTaikoPlay's own judge, score and soul gauge (Game/, copied unchanged;
+       see PROVENANCE.md), so a test play here judges as the game does. -->
+  <PropertyGroup>
+    <!-- The game's files are written without nullable annotations. -->
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../external/TJAParser/dotnet~/OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
+  </ItemGroup>
+</Project>

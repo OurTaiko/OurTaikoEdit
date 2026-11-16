@@ -78,11 +78,37 @@ Format,Format,格式化,整形
 FormatTip,Format the document (Shift+Alt+F); every difficulty's hash stays the same,格式化文档（Shift+Alt+F）；每个难度的哈希值保持不变,ドキュメントを整形（Shift+Alt+F）。各難易度のハッシュは変わりません
 RewindTip,Back to the start,回到开头,先頭に戻る
 PlayTip,"Play / pause (Space in the previews, F5)",播放／暂停（在预览区按空格，或按 F5）,再生／一時停止（プレビュー上で Space、または F5）
+PlayHereTip,"Play from the playhead, as in the game (F6)",从当前位置开始游玩，画面与游戏相同（F6）,再生位置からゲームと同じ画面でプレイ（F6）
+PlayStartTip,"Play from the beginning, as in the game (Shift+F6)",从开头开始游玩，画面与游戏相同（Shift+F6）,最初からゲームと同じ画面でプレイ（Shift+F6）
+NothingToPlay,There are no notes to play,没有可以游玩的音符,プレイできる音符がありません
+CannotPlay,This chart cannot be played here: {0},这张谱面不能在这里游玩：{0},この譜面はここではプレイできません：{0}
 VolumeTip,Song volume,歌曲音量,曲の音量
 Hits,Hits,击打音,打音
 HitsTip,Don and ka sounds as notes pass the judge,音符经过判定点时播放咚、咔的声音,音符が判定枠を通るときにドン・カッの音を鳴らす
 Route,Route,路线,ルート
 Grid,Grid 1/,网格 1/,グリッド 1/
+
+# Play scene,,,
+PlayBack,Editor,编辑器,エディター
+PlayBackTip,Back to the editor (Esc),回到编辑器（Esc）,エディターに戻る（Esc）
+PlayRestart,Restart,重新开始,やり直す
+PlayRestartTip,Play again from the same place (R),从同一位置重新开始（R）,同じ位置からやり直す（R）
+PlayPause,Pause,暂停,一時停止
+PlayResume,Resume,继续,再開
+PlayPauseTip,Pause or resume (Space),暂停或继续（空格）,一時停止／再開（Space）
+PlayAuto,Auto,自动演奏,オート
+PlayAutoTip,The chart plays itself (Tab),由程序自动演奏（Tab）,オートプレイ（Tab）
+PlayKeys,D K ka · F J don,D K 咔 · F J 咚,D K カッ · F J ドン
+PlayPaused,Paused,已暂停,一時停止中
+PlayCleared,Cleared,通关成功,ノルマクリア成功
+PlayFailed,Not cleared,通关失败,ノルマクリア失敗
+PlayScore,Score,分数,スコア
+PlayGood,Good,良,良
+PlayOk,OK,可,可
+PlayBad,Bad,不可,不可
+PlayRolls,Drumroll hits,连打数,連打数
+PlayMaxCombo,Max combo,最大连击,最大コンボ
+PlayGauge,Soul gauge,魂槽,魂ゲージ
 
 # Routes,,,
 RouteNormal,Normal,普通,普通

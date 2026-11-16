@@ -7,5 +7,9 @@
         Title="{Binding Title}"
         Width="1440" Height="900" MinWidth="960" MinHeight="600"
         WindowStartupLocation="CenterScreen">
-  <ContentControl Content="{Binding Scene}" />
+  <!-- The play scene lies over the editor, which is kept as it is while a chart is played. -->
+  <Panel>
+    <ContentControl Content="{Binding Scene}" IsVisible="{Binding Play, Converter={x:Static ObjectConverters.IsNull}}" />
+    <ContentControl Content="{Binding Play}" IsVisible="{Binding Play, Converter={x:Static ObjectConverters.IsNotNull}}" />
+  </Panel>
 </Window>

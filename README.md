@@ -38,7 +38,8 @@ external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.13.0）
 src/OurTaikoEdit.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings），Mod 的接口与加载（Mods/）、导入器的接口（Importing/）
 src/OurTaikoEdit.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑
 src/OurTaikoEdit.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLayer）／WAV，波形，OpenAL Soft 播放，游戏的 21 套打击音（HitSounds/）
-src/OurTaikoEdit.App/       Avalonia 应用：Projects 与编辑两个场景；界面的颜色、图标与控件样式在 Theme/
+src/OurTaikoEdit.Play/      游玩的判定：OurTaikoPlay 的 PlaySession、真打计分、魂槽、分歧条件（Game/ 下原样拷贝，见 PROVENANCE.md）
+src/OurTaikoEdit.App/       Avalonia 应用：Projects 与编辑两个场景，以及盖在编辑场景上的游玩场景；界面的颜色、图标与控件样式在 Theme/
 src/OurTaikoEdit.Mods.ChartImage/  Mod「谱面图片导入」：从谱面图片新建项目（见下文「Mod」）
 tests/OurTaikoEdit.Tests/   语言与项目的单元测试
 tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
@@ -75,6 +76,17 @@ tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 - **代码辅助**（都来自 TJAParser）：悬停提示（含该处诊断）、写指令参数时的参数提示、块／分歧／路线折叠、行尾的小节号·时刻·BPM 提示、右键菜单或 ⌘/Ctrl+. 的快速修复与重构（拆分／合并小节、气球打数写成内联），顶栏的格式化按钮（Shift+Alt+F，保证每块哈希不变）；轨道下方显示所选块的音符数、最大连击、时长、峰值密度与哈希；诊断消息可选英／中／日文（默认与界面相同）。
 - **播放**：读 `WAVE:` 指定的音频（OGG、MP3、WAV），后台解码，时间轴行背后画波形；播放头跟随歌曲位置（`OFFSET` 已含在音符时刻里，所以波形与音符直接对齐），播放头在 0 之前或歌曲之后用时钟走；可调音量，顶栏的 `Hits` 按下时音符经过判定点播放游戏的打击音（设置里可在游戏的 21 套音色中选，默认「太鼓」；文件缺失时退回合成音）；播放头跟的是**听到的位置**：歌曲比播放头提前一个输出延迟播放。输出延迟＝系统报告的设备延迟（macOS 上向 Core Audio 取：设备延迟＋安全偏移＋缓冲＋流延迟，本机约 27 ms；其他系统取不到，算 0）＋设置里的「音频延迟微调」（−200–500 ms，无线耳机之类系统不知道的延迟在这里补）。打击音按歌曲自己的时间走（`HitPlayback`）：歌曲播放时，每个音符的打击音提前 60 ms 交给播放器，由 OpenAL Soft 的 `alSourcePlayAtTimeSOFT` 在歌曲的那一个采样上开始，所以和歌曲一起被听到，也就是在播放头经过音符的时候（做法同 OpenSekai、OurTaikoPlay 的「自动演奏音符音提前一个输出延迟」）。没有这个扩展时，退回到在最接近的混音块上开始。没有音频设备时退回无声时钟。代码里正在演奏的字符会被框出并跟随滚动。
 - 撤销覆盖时间轴编辑（一次放置是一次撤销）。撤销（⌘/Ctrl+Z）、重做（⇧⌘Z、Ctrl+Shift+Z 或 ⌘/Ctrl+Y）、查找（⌘/Ctrl+F，顶栏的放大镜按钮；AvaloniaEdit 自带的搜索面板，可切到替换）在整个编辑场景都有效，焦点在时间轴或轨道上时也一样。读取时按 BOM、严格 UTF-8、再 Shift-JIS 的顺序判断编码，状态栏点编码可改用 Shift-JIS、GB18030、Big5、EUC-KR、UTF-16 重新读取；**保存一律写 UTF-8（无 BOM）**，因为游戏与两站只认 UTF-8——用其他编码读入的文件打开时就标为未保存，状态栏显示「SHIFT_JIS → UTF-8」。
+
+## 游玩场景
+
+播放按钮右边两个按钮：**从当前位置开始游玩**（F6）、**从开头开始游玩**（Shift+F6）。点了就进入游玩场景（`PlayView`＋`PlayStage`），它盖在编辑场景上面，编辑器原样留在下面（代码、撤销历史、歌曲都不动），Esc 回来。
+
+- 画面照 OurTaikoPlay 的单人演奏场景（`Play.Single`）在 1920×1080 的画布上手画，等比缩放到窗口：背景、轨道、判定圈、魂槽（50 格、过关线、满槽彩虹与魂火）、鼓与四个鼓面闪光、连击、分数、良／可／不可、判定数面板、连打与气球计数、go-go 的轨道色与火焰、分歧的路线色与标签、飞向魂槽的音符；各元素的位置、切片、时长都取自游戏的场景与动画。素材在 `Assets/Game/play/`（来源见 `Assets/Game/PROVENANCE.md`）。没有画的：舞者、名牌、连击播报、go-go 烟花、彩球（按气球计数）、结束动画。
+- 判定是游戏自己的（`OurTaikoEdit.Play`）：按课程的判定窗、咚咔分轨、真打计分、魂槽、按条件判定分歧。分歧缺 `#E`／`#M` 的谱面不判定，按编辑器当前的路线演奏。Tower、Dan 等课程游戏的魂槽不认，不能游玩（状态栏会说明）。
+- 按键：D、K 咔，F、J 咚；空格暂停，R 重新开始，Tab 自动演奏，Esc 回编辑器。底部有同样的按钮。
+- 从当前位置开始：从播放头前 2 秒起播，播放头之前的音符直接跳过（不判、不显示）；之前的分歧按编辑器当前的路线算，之后的照常判定。从开头开始：从第一个音符前 2 秒或歌曲开头（取较早的）起播。
+- 时钟与编辑器的播放相同：歌曲听到的位置（已含设备延迟与设置里的微调）；自动演奏的打击音提前交给播放器，落在音符的采样上；自己打的鼓声在按下时立即播放。
+- 谱面结束 2 秒后出结算卡片（分数、良／可／不可、连打数、最大连击、魂槽）。
 
 ## 界面
 

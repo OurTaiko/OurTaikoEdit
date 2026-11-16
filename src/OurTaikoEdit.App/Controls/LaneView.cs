@@ -192,9 +192,9 @@ public sealed class LaneView : Control
     // A note's head from the game's sheet, 192 units square about its centre. A balloon's face
     // is shifted left by 12/128 of its width with its tail joined on the right (draw_balloon); the
     // tail goes while it is being popped. An ad-lib, which the game does not draw, is a faint ring.
-    static void DrawNote(DrawingContext ctx, NoteKind kind, Point c, double s, bool balloonTail)
+    internal static void DrawNote(DrawingContext ctx, NoteKind kind, Point c, double s, bool balloonTail, int expression = 0)
     {
-        if (GameSprites.Note(kind) is not { } frame)
+        if (GameSprites.Note(kind, expression) is not { } frame)
         {
             ctx.DrawEllipse(null, ChartPalette.AdLibRim, c, SmallRadius * s * 0.8, SmallRadius * s * 0.8);
             return;
@@ -211,7 +211,7 @@ public sealed class LaneView : Control
     // A drumroll's body from the head's centre and its tail at the end, turned toward a tail that a
     // vertical SCROLL put off the line, under the head (NoteLaneRenderer: the body is the length
     // plus 1/128 of the note's height, the tail as wide as its sprite's aspect).
-    static void DrawRoll(DrawingContext ctx, bool big, Point head, double length, double rise, double s)
+    internal static void DrawRoll(DrawingContext ctx, bool big, Point head, double length, double rise, double s)
     {
         double size = NoteSize * s, direction = length < 0 ? -1 : 1;
         double span = Math.Sqrt(length * length + rise * rise);
@@ -227,7 +227,7 @@ public sealed class LaneView : Control
 
     // The note's text (NoteMoji) from the game's sheet, 256×48 under the note; a roll's 連打 runs
     // along moji_drumroll_mid to its ーっ!! at the tail.
-    static void DrawMoji(DrawingContext ctx, ChartNote n, Point at, double length, double s)
+    internal static void DrawMoji(DrawingContext ctx, ChartNote n, Point at, double length, double s)
     {
         if (GameSprites.MojiFrame(n.Moji) is not { } frame) return;
         double w = MojiWidth * s, h = MojiHeight * s;

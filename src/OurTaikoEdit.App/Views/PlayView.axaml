@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OurTaikoEdit.App.ViewModels"
+             xmlns:controls="using:OurTaikoEdit.App.Controls"
+             xmlns:l="using:OurTaikoEdit.App.Localization"
+             x:Class="OurTaikoEdit.App.Views.PlayView"
+             x:DataType="vm:PlayViewModel"
+             Focusable="True" Background="Black">
+  <Panel>
+    <!-- The game's play scene, drawn on its 1920×1080 stage and fitted to the window. -->
+    <controls:PlayStage x:Name="Stage" />
+
+    <!-- The play's controls, where the game keeps its key hints: over the footer. None takes the
+         focus, so the drum keys always reach the play. -->
+    <Border x:Name="PlayBar" Classes="playbar" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,14">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button Classes="ghost" x:Name="BackButton" Focusable="False" Command="{Binding BackCommand}" ToolTip.Tip="{l:T PlayBackTip}">
+          <StackPanel>
+            <controls:Icon Data="{StaticResource IconBack}" />
+            <TextBlock Text="{l:T PlayBack}" />
+          </StackPanel>
+        </Button>
+        <Border Classes="vsep" />
+        <Button Classes="ghost" Focusable="False" Command="{Binding RestartCommand}" ToolTip.Tip="{l:T PlayRestartTip}">
+          <StackPanel>
+            <controls:Icon Data="{StaticResource IconSolidRewind}" Filled="True" />
+            <TextBlock Text="{l:T PlayRestart}" />
+          </StackPanel>
+        </Button>
+        <Button Classes="ghost" Focusable="False" Command="{Binding TogglePauseCommand}" ToolTip.Tip="{l:T PlayPauseTip}" IsEnabled="{Binding !Finished}">
+          <StackPanel>
+            <Panel>
+              <controls:Icon Data="{StaticResource IconSolidPause}" Filled="True" IsVisible="{Binding !Paused}" />
+              <controls:Icon Data="{StaticResource IconSolidPlay}" Filled="True" IsVisible="{Binding Paused}" />
+            </Panel>
+            <Panel>
+              <TextBlock Text="{l:T PlayPause}" IsVisible="{Binding !Paused}" />
+              <TextBlock Text="{l:T PlayResume}" IsVisible="{Binding Paused}" />
+            </Panel>
+          </StackPanel>
+        </Button>
+        <ToggleButton Classes="ghost" Focusable="False" IsChecked="{Binding Auto}" ToolTip.Tip="{l:T PlayAutoTip}">
+          <TextBlock Text="{l:T PlayAuto}" />
+        </ToggleButton>
+        <Border Classes="vsep" />
+        <TextBlock Classes="caption" Text="{l:T PlayKeys}" VerticalAlignment="Center" Margin="6,0,10,0" />
+      </StackPanel>
+    </Border>
+
+    <!-- Paused. -->
+    <Border Classes="playcard" IsVisible="{Binding Paused}" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,14">
+      <TextBlock Text="{l:T PlayPaused}" FontSize="20" FontWeight="SemiBold" />
+    </Border>
+
+    <!-- The result, once the chart has ended. -->
+    <Border x:Name="ResultCard" Classes="playcard" IsVisible="{Binding Finished}" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="28,22" MinWidth="320">
+      <StackPanel Spacing="14">
+        <TextBlock Text="{Binding ResultTitle}" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock Text="{Binding Score}" FontSize="34" FontWeight="Bold" HorizontalAlignment="Center" FontFamily="{StaticResource CodeFont}" />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="40">
+          <TextBlock Classes="label" Text="{l:T PlayGood}" />
+          <TextBlock Grid.Column="1" Text="{Binding Good}" HorizontalAlignment="Right" />
+          <TextBlock Grid.Row="1" Classes="label" Text="{l:T PlayOk}" />
+          <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Ok}" HorizontalAlignment="Right" />
+          <TextBlock Grid.Row="2" Classes="label" Text="{l:T PlayBad}" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Bad}" HorizontalAlignment="Right" />
+          <TextBlock Grid.Row="3" Classes="label" Text="{l:T PlayRolls}" />
+          <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Rolls}" HorizontalAlignment="Right" />
+          <TextBlock Grid.Row="4" Classes="label" Text="{l:T PlayMaxCombo}" />
+          <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding MaxCombo}" HorizontalAlignment="Right" />
+          <TextBlock Grid.Row="5" Classes="label" Text="{l:T PlayGauge}" />
+          <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding GaugePercent, StringFormat='{}{0}%'}" HorizontalAlignment="Right" />
+        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,6,0,0">
+          <Button Classes="accent" Focusable="False" Command="{Binding RestartCommand}" Content="{l:T PlayRestart}" />
+          <Button Focusable="False" Command="{Binding BackCommand}" Content="{l:T PlayBack}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</UserControl>

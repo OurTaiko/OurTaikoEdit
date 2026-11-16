@@ -30,6 +30,39 @@ public static class GameSprites
     public static Rect? Note(NoteKind kind)
         => NoteFrames.TryGetValue((int)kind, out var at) ? Cut(NotesHeight, at.X, at.Y, 192, 192) : null;
 
+    // NoteNAlternate (the other mouth) and NoteNAngry frames, for the notes that have them.
+    static readonly Dictionary<int, (double X, double Y)> AlternateFrames = new()
+    {
+        [1] = (192, 2112), [2] = (192, 1920), [3] = (192, 1728), [4] = (192, 1536), [5] = (192, 1344), [6] = (192, 1152),
+        [7] = (192, 960), [12] = (384, 768), [16] = (384, 1536),
+    };
+    static readonly Dictionary<int, (double X, double Y)> AngryFrames = new()
+    {
+        [1] = (384, 2112), [2] = (384, 1920), [5] = (384, 1344), [7] = (384, 960),
+    };
+
+    // The head of a note with the face of a NoteExpression frame (NoteLaneRenderer.HeadSprite):
+    // every note opens its mouth on the same steps; the big notes rest with theirs open, and a
+    // note without an angry face opens its mouth instead.
+    public static Rect? Note(NoteKind kind, int expression)
+    {
+        int k = (int)kind;
+        if (!NoteFrames.TryGetValue(k, out var rest)) return null;
+        var at = rest;
+        if (expression != OurTaiko.NoteExpression.Rest)
+        {
+            bool open = expression != OurTaiko.NoteExpression.Closed;
+            bool restsOpen = kind is NoteKind.BigDon or NoteKind.BigKa or NoteKind.BigRoll or NoteKind.Kadon;
+            if (restsOpen) { if (!open && AlternateFrames.TryGetValue(k, out var shut)) at = shut; }
+            else if (open)
+            {
+                if (expression == OurTaiko.NoteExpression.Angry && AngryFrames.TryGetValue(k, out var angry)) at = angry;
+                else if (AlternateFrames.TryGetValue(k, out var other)) at = other;
+            }
+        }
+        return Cut(NotesHeight, at.X, at.Y, 192, 192);
+    }
+
     public static Rect BalloonTail { get; } = Cut(NotesHeight, 0, 384, 192, 192);
     public static Rect RollBody(bool big) => big ? Cut(NotesHeight, 72, 768, 72, 192) : Cut(NotesHeight, 0, 768, 72, 192);
     public static Rect RollTail(bool big) => big ? Cut(NotesHeight, 0, 0, 120, 192) : Cut(NotesHeight, 0, 192, 80, 192);

@@ -41,6 +41,8 @@ public sealed partial class EditorViewModel : ViewModelBase
 {
     readonly IDialogService dialogs;
     readonly Action back;
+    // Shows the play scene over the editor, or the editor again (null).
+    readonly Action<PlayViewModel?>? showPlay;
     ChartText file;
     readonly DispatcherTimer analyzeTimer, playTimer;
     readonly Stopwatch playClock = new();
@@ -126,8 +128,9 @@ public sealed partial class EditorViewModel : ViewModelBase
     // takes its caret into the new block's chart, at the playhead.
     public event Action? BlockChosen;
 
-    public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null)
+    public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null, Action<PlayViewModel?>? showPlay = null)
     {
+        this.showPlay = showPlay;
         Settings = settings ?? new AppSettings();
         division = Settings.Division;
         volume = Settings.Volume;
@@ -767,6 +770,27 @@ public sealed partial class EditorViewModel : ViewModelBase
         IsPlaying = true;
         if (player != null && Playhead + Latency >= 0 && Playhead + Latency < player.Duration) { player.Seek(Playhead + Latency); player.Play(); }
         playTimer.Start();
+    }
+
+    // The chart played as in the game, in the play scene: from the playhead (the notes before it
+    // are passed over, and the play starts a little before it), or from the beginning. The
+    // editor stays as it is underneath, and lends the play its song.
+    [RelayCommand]
+    void PlayFromHere() => StartPlay(Playhead);
+
+    [RelayCommand]
+    void PlayFromStart() => StartPlay(null);
+
+    void StartPlay(double? from)
+    {
+        EnsureFresh();
+        if (showPlay == null) return;
+        if (Analysis.Chart is not { } chart || chart.Notes.Count == 0) { Message = Loc.T("NothingToPlay"); return; }
+        if (IsPlaying) TogglePlay();
+        var (scene, error) = PlayViewModel.Create(chart, Analysis.Title, chart.Subtitle, from, Route, player, Latency, HitSounds, () => showPlay(null));
+        if (scene == null) { Message = Loc.F("CannotPlay", error); return; }
+        Message = null;
+        showPlay(scene);
     }
 
     [RelayCommand]
