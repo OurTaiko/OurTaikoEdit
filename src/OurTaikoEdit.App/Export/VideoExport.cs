@@ -18,7 +18,7 @@ public sealed record VideoExportOptions(string Output, int Width, int Height, in
 
 // What is exported: the chart as the editor has it, and its sounds.
 public sealed record VideoExportSource(TaikoChart Chart, string Title, string Subtitle, double Playhead, BranchRoute Route,
-    PcmAudio? Song, PcmAudio Don, PcmAudio Ka, double SongVolume, double HitVolume);
+    PcmAudio? Song, PcmAudio Don, PcmAudio Ka, double SongVolume, double HitVolume, PcmAudio? BalloonPop = null, PcmAudio? KusudamaPop = null);
 
 // A preview video of the chart: the play scene (PlayStage) with auto play, as the play scene
 // shows it, drawn frame by frame on the video's own clock rather than the screen's, with the
@@ -91,9 +91,12 @@ public static class VideoExporter
         }
         var don = Resample(source.Don, rate);
         var ka = Resample(source.Ka, rate);
+        float[] none = [];
+        var balloon = source.BalloonPop is { } balloonPop ? Resample(balloonPop, rate) : none;
+        var kusudama = source.KusudamaPop is { } kusudamaPop ? Resample(kusudamaPop, rate) : none;
         foreach (var hit in hits)
         {
-            var sound = hit.Ka ? ka : don;
+            var sound = hit.Pop switch { PopKind.Balloon => balloon, PopKind.Kusudama => kusudama, _ => hit.Ka ? ka : don };
             // As the player has them: a small note's sound is a little quieter than a big one's.
             float gain = (float)((hit.Big ? 1.0 : 0.7) * source.HitVolume);
             long start = (long)Math.Round((hit.At - begin) * rate);
@@ -268,8 +271,11 @@ public static class VideoExporter
 
 public sealed class VideoExportException(string message) : Exception(message);
 
-// A hit sound of the play, at the song time it is heard at.
-public readonly record struct RecordedHit(double At, bool Ka, bool Big);
+// A hit sound of the play, at the song time it is heard at; a pop is a balloon popping or a
+// kusudama breaking (at the volume of a big note).
+public readonly record struct RecordedHit(double At, bool Ka, bool Big, PopKind Pop = PopKind.None);
+
+public enum PopKind { None, Balloon, Kusudama }
 
 // The play's player for a video: no device; the song "plays" on the video's clock, and the hit
 // sounds asked for are written down at the song time they would be heard at.
@@ -287,6 +293,8 @@ sealed class RecordingPlayer(Func<double> clock, double duration) : IAudioPlayer
     public void Seek(double seconds) { }
     public void PlayHit(bool ka, bool big) => Hits.Add(new RecordedHit(clock(), ka, big));
     public void PlayHitAt(double songTime, bool ka, bool big) => Hits.Add(new RecordedHit(songTime, ka, big));
+    public void PlayPop(bool kusudama) => Hits.Add(new RecordedHit(clock(), false, true, kusudama ? PopKind.Kusudama : PopKind.Balloon));
+    public void PlayPopAt(double songTime, bool kusudama) => Hits.Add(new RecordedHit(songTime, false, true, kusudama ? PopKind.Kusudama : PopKind.Balloon));
     public void CancelHits() { }
     public void SetHitSounds(PcmAudio don, PcmAudio ka) { }
     public void Dispose() { }

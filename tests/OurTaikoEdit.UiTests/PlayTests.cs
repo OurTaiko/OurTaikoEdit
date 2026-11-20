@@ -11,6 +11,7 @@ public class PlayTests
     sealed class Player : IAudioPlayer
     {
         public readonly List<(double? At, bool Ka)> Hits = new();
+        public readonly List<(double? At, bool Kusudama)> Pops = new();
         public double Duration => 600;
         public bool IsPlaying { get; set; }
         public double Position { get; set; }
@@ -22,6 +23,8 @@ public class PlayTests
         public void Seek(double seconds) => Position = seconds;
         public void PlayHit(bool ka, bool big) => Hits.Add((null, ka));
         public void PlayHitAt(double songTime, bool ka, bool big) => Hits.Add((songTime, ka));
+        public void PlayPop(bool kusudama) => Pops.Add((null, kusudama));
+        public void PlayPopAt(double songTime, bool kusudama) => Pops.Add((songTime, kusudama));
         public void CancelHits() { }
         public void SetHitSounds(PcmAudio don, PcmAudio ka) { }
         public void Dispose() { }
@@ -30,6 +33,23 @@ public class PlayTests
     // 120 BPM, measures of 2 s from 0: a don at 0, a ka at 0.25, a big don at 0.5, a drumroll from
     // 1 to 2, then a don at 2.5.
     static TaikoChart Chart() => new TjaLanguage().Analyze("BPM:120\nOFFSET:0\nCOURSE:Oni\nLEVEL:8\n#START\n1020300050000000,\n8000100000000000,\n#END\n", 0).Chart!;
+
+    [Fact]
+    public void ABalloonPoppedByHandIsHeardOnceAtTheHitThatPopsIt()
+    {
+        // A balloon of 3 from 0 to 1.
+        var chart = new TjaLanguage().Analyze("BPM:120\nOFFSET:0\nBALLOON:3\nCOURSE:Oni\nLEVEL:8\n#START\n7000000080000000,\n#END\n", 0).Chart!;
+        var rig = new Rig(chart: chart);
+        rig.Play.Auto = false;
+        rig.RunTo(0.1);
+        rig.Play.Hit(ka: false, right: false);
+        rig.Play.Hit(ka: false, right: true);
+        Assert.Empty(rig.Player.Pops);
+        rig.Play.Hit(ka: false, right: false);
+        Assert.Equal(new[] { ((double?)null, false) }, rig.Player.Pops);
+        rig.RunTo(1.5);
+        Assert.Single(rig.Player.Pops);
+    }
 
     // A play on a clock the test moves; the song follows it once it has started.
     sealed class Rig

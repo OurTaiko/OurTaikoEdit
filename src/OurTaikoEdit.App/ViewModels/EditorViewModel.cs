@@ -828,7 +828,9 @@ public sealed partial class EditorViewModel : ViewModelBase
         var (check, error) = PlayViewModel.Create(chart, Analysis.Title, chart.Subtitle, null, Route, null, 0, false, () => { });
         if (check == null) { Message = Loc.F("CannotPlay", error); return; }
         var hitSounds = songHits ?? HitSoundSets.Load(Settings.HitSoundSet);
-        var source = new VideoExportSource(chart, Analysis.Title, chart.Subtitle, Playhead, Route, song, hitSounds.Don, hitSounds.Ka, Volume, Settings.HitVolume);
+        var pops = PopSounds.Load();
+        var source = new VideoExportSource(chart, Analysis.Title, chart.Subtitle, Playhead, Route, song, hitSounds.Don, hitSounds.Ka, Volume, Settings.HitVolume,
+            pops.Balloon, pops.Kusudama);
         try
         {
             bool finished = await dialogs.ProgressAsync(Loc.T("VideoTitle"), Loc.T("VideoPreparing"), (done, total) => Loc.F("VideoRendering", done, total),

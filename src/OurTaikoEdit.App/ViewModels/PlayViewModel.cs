@@ -98,6 +98,10 @@ public sealed partial class PlayViewModel : ViewModelBase
     // Auto play: the strikes whose sounds were given to the player ahead of their judgment.
     int[] aheadStrikes = Array.Empty<int>(), aheadOwed = Array.Empty<int>();
     readonly List<int> aheadOpen = new();
+    // The balloons whose pop auto play has asked for ahead (not to be sounded again when judged).
+    readonly HashSet<int> aheadPopped = new();
+    // The kusudamas whose breaking has been heard.
+    readonly HashSet<Kusudama> brokenSounded = new();
     int aheadHead;
     bool nextAutoRight = true, lastKa;
 
@@ -166,7 +170,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         Session.BranchSelected += OnBranch;
         int count = Chart.Notes.Count;
         aheadStrikes = new int[count]; aheadOwed = new int[count];
-        aheadOpen.Clear(); aheadHead = 0; nextAutoRight = true;
+        aheadOpen.Clear(); aheadPopped.Clear(); brokenSounded.Clear(); aheadHead = 0; nextAutoRight = true;
         Array.Fill(FlashedAt, double.NegativeInfinity);
         Judged = Struck = Judgment.None;
         JudgedAt = StruckAt = GaugeChangedAt = BalloonHitAt = BalloonPoppedAt = RollHitAt = ComboAt = AnnouncedAt = LaneRouteAt = double.NegativeInfinity;
@@ -311,6 +315,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         aheadStrikes[i]++; aheadOwed[i]++;
         player!.PlayHitAt(at, note.IsKa, ChartBig(note));
         if (note.IsKadon) player.PlayHitAt(at, true, true);
+        // The hit that pops a balloon sounds the pop with it (PlayerLane.SoundAhead).
+        if (note.Kind == NoteKind.Balloon && aheadStrikes[i] == note.BalloonHits && aheadPopped.Add(i)) player.PlayPopAt(at, false);
     }
 
     static bool ChartBig(ChartNote note) => note.IsBigNote || note.IsKadon || note.Kind is NoteKind.BigRoll or NoteKind.Kusudama;
@@ -353,11 +359,14 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             Balloon = index; BalloonLeft = Math.Max(0, note.BalloonHits - Session.LongHits[index]); BalloonHitAt = time;
             if (BalloonLeft == 0) BalloonPoppedAt = time;
+            // The pop is heard once, at the hit that pops it, unless auto play asked for it ahead.
+            if (Session.LongHits[index] == note.BalloonHits && !aheadPopped.Remove(index) && HitSounds) player?.PlayPop(false);
         }
         else if (note.Kind == NoteKind.Kusudama && Session.KusudamaOf(index) is { } ball)
         {
             Balloon = index; BalloonLeft = ball.Remaining; BalloonHitAt = time;
             if (ball.IsBroken) BalloonPoppedAt = time;
+            if (ball.IsBroken && ball.BrokenBy == Session && brokenSounded.Add(ball) && HitSounds) player?.PlayPop(true);
         }
         else if (note.IsDrumroll)
         {
@@ -397,6 +406,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         // What auto play had sounded ahead is not owed to a player's own presses, nor the reverse.
         Array.Clear(aheadOwed);
         aheadOpen.Clear();
+        aheadPopped.Clear();
         while (aheadHead < Chart.Notes.Count && Chart.Notes[aheadHead].Time < Time) aheadHead++;
         if (!value) player?.CancelHits();
     }

@@ -29,6 +29,10 @@ public interface IAudioPlayer : IDisposable
     double OutputLatency { get; }
     // The don and ka sounds to play from now on.
     void SetHitSounds(PcmAudio don, PcmAudio ka);
+    // A balloon popping (or a kusudama breaking), at the hit volume: now, or on a time of the song
+    // still to come, as PlayHit and PlayHitAt.
+    void PlayPop(bool kusudama) { }
+    void PlayPopAt(double songTime, bool kusudama) => PlayPop(kusudama);
 }
 
 // OpenAL Soft (bundled for Windows, macOS and Linux): the whole song in one buffer, so seeking and
@@ -41,6 +45,8 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
     readonly Context* context;
     readonly uint buffer, source;
     uint donBuffer, kaBuffer;
+    // The pop sounds (0 where the file could not be read).
+    readonly uint balloonBuffer, kusudamaBuffer;
     readonly uint[] hitSources;
     // The time of the song each hit source was asked to start at; -∞ for one started at once.
     readonly double[] hitTimes;
@@ -51,7 +57,7 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
     readonly delegate* unmanaged[Cdecl]<uint, int, double*, void> getSourceDoubles;
     const int SecOffsetClock = 0x1203;
     // Without them: hits waiting for their time, started from Position as the song gets there.
-    readonly List<(double Time, bool Ka, bool Big)> waiting = new();
+    readonly List<(double Time, uint Buffer, float Gain)> waiting = new();
     readonly Stopwatch sinceReport = new();
     double lastReport = -1;
     double seekTo;
@@ -67,6 +73,9 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         al.SetSourceProperty(source, SourceInteger.Buffer, buffer);
         donBuffer = Upload(HitSounds.Don(44100));
         kaBuffer = Upload(HitSounds.Ka(44100));
+        var pops = PopSounds.Load();
+        if (pops.Balloon != null) balloonBuffer = Upload(pops.Balloon);
+        if (pops.Kusudama != null) kusudamaBuffer = Upload(pops.Kusudama);
         hitSources = Enumerable.Range(0, 8).Select(_ => al.GenSource()).ToArray();
         hitTimes = Enumerable.Repeat(double.NegativeInfinity, hitSources.Length).ToArray();
         if (al.IsExtensionPresent("AL_SOFT_source_start_delay") && al.IsExtensionPresent("AL_SOFT_source_latency"))
@@ -184,20 +193,30 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         kaBuffer = Upload(ka);
     }
 
-    // The next hit source, ready to play a don or a ka.
-    (uint Source, int Index) Ready(bool ka, bool big)
+    float HitGain(bool big) => (big ? 1f : 0.7f) * Math.Clamp(HitVolume, 0, 1);
+    uint HitBuffer(bool ka) => ka ? kaBuffer : donBuffer;
+    uint PopBuffer(bool kusudama) => kusudama ? kusudamaBuffer : balloonBuffer;
+
+    public void PlayHit(bool ka, bool big) => Start(HitBuffer(ka), HitGain(big));
+    public void PlayHitAt(double songTime, bool ka, bool big) => StartAt(songTime, HitBuffer(ka), HitGain(big));
+    public void PlayPop(bool kusudama) => Start(PopBuffer(kusudama), HitGain(true));
+    public void PlayPopAt(double songTime, bool kusudama) => StartAt(songTime, PopBuffer(kusudama), HitGain(true));
+
+    // The next hit source, ready to play a sound.
+    (uint Source, int Index) Ready(uint sound, float gain)
     {
         int i = nextHit++ % hitSources.Length;
         uint s = hitSources[i];
         al.SourceStop(s);
-        al.SetSourceProperty(s, SourceInteger.Buffer, ka ? kaBuffer : donBuffer);
-        al.SetSourceProperty(s, SourceFloat.Gain, (big ? 1f : 0.7f) * Math.Clamp(HitVolume, 0, 1));
+        al.SetSourceProperty(s, SourceInteger.Buffer, sound);
+        al.SetSourceProperty(s, SourceFloat.Gain, gain);
         return (s, i);
     }
 
-    public void PlayHit(bool ka, bool big)
+    void Start(uint sound, float gain)
     {
-        var (s, i) = Ready(ka, big);
+        if (sound == 0) return;
+        var (s, i) = Ready(sound, gain);
         hitTimes[i] = double.NegativeInfinity;
         al.SourcePlay(s);
     }
@@ -206,11 +225,12 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
     // song; the source is started then, to the sample. A source played with alSourcePlay instead
     // starts with the next block the device mixes (11 ms blocks on macOS), where the song is by
     // then, and only once a timer has seen that the time has come.
-    public void PlayHitAt(double songTime, bool ka, bool big)
+    void StartAt(double songTime, uint sound, float gain)
     {
-        if (!IsPlaying) { PlayHit(ka, big); return; }
-        if (playAtTime == null) { waiting.Add((songTime, ka, big)); return; }
-        var (s, i) = Ready(ka, big);
+        if (sound == 0) return;
+        if (!IsPlaying) { Start(sound, gain); return; }
+        if (playAtTime == null) { waiting.Add((songTime, sound, gain)); return; }
+        var (s, i) = Ready(sound, gain);
         double* at = stackalloc double[2];
         getSourceDoubles(source, SecOffsetClock, at);
         hitTimes[i] = songTime;
@@ -226,7 +246,7 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         for (int i = 0; i < waiting.Count; i++)
         {
             if (waiting[i].Time > reported + halfBlock) continue;
-            PlayHit(waiting[i].Ka, waiting[i].Big);
+            Start(waiting[i].Buffer, waiting[i].Gain);
             waiting.RemoveAt(i--);
         }
     }
@@ -249,6 +269,8 @@ public sealed unsafe class OpenAlPlayer : IAudioPlayer
         al.DeleteSource(source);
         foreach (uint s in hitSources) { al.SourceStop(s); al.DeleteSource(s); }
         al.DeleteBuffer(buffer); al.DeleteBuffer(donBuffer); al.DeleteBuffer(kaBuffer);
+        if (balloonBuffer != 0) al.DeleteBuffer(balloonBuffer);
+        if (kusudamaBuffer != 0) al.DeleteBuffer(kusudamaBuffer);
         alc.MakeContextCurrent(null);
         alc.DestroyContext(context);
         alc.CloseDevice(device);

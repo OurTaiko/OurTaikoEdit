@@ -45,6 +45,46 @@ public class VideoExportTests
     }
 
     [Fact]
+    public void ABalloonsPopIsHeardOnceWithTheHitThatPopsItAndAKusudamasBreakingToo()
+    {
+        // A balloon of 5 from 0 to 1, a kusudama of 4 from 2 to 3.
+        var chart = new TjaLanguage().Analyze("TITLE:Pop\nBPM:120\nOFFSET:0\nBALLOON:5,4\nCOURSE:Oni\nLEVEL:8\n#START\n7000000080000000,\n9000000080000000,\n#END\n", 0).Chart!;
+        var source = new VideoExportSource(chart, "Pop", "", 0, BranchRoute.Normal, Silence(6), HitSounds.Don(48000), HitSounds.Ka(48000), 1, 1);
+        var (hits, _, _) = VideoExporter.Rehearse(source, Options());
+        var balloon = hits.Where(h => h.Pop == PopKind.None && h.At >= 0 && h.At < 1).OrderBy(h => h.At).ToList();
+        Assert.Equal(5, balloon.Count);
+        var pop = Assert.Single(hits, h => h.Pop == PopKind.Balloon);
+        Assert.Equal(balloon[^1].At, pop.At, 9);
+        var ball = hits.Where(h => h.Pop == PopKind.None && h.At >= 2 && h.At < 3).OrderBy(h => h.At).ToList();
+        Assert.Equal(4, ball.Count);
+        var broken = Assert.Single(hits, h => h.Pop == PopKind.Kusudama);
+        // Heard when the breaking hit is judged, within a frame of it.
+        Assert.InRange(broken.At, ball[^1].At - 1e-9, ball[^1].At + 1.0 / 30 + 1e-9);
+
+        // Without hit sounds there are no pops either.
+        var (quiet, _, _) = VideoExporter.Rehearse(source, Options() with { HitSounds = false });
+        Assert.DoesNotContain(quiet, h => h.Pop != PopKind.None);
+    }
+
+    [Fact]
+    public void ThePopsAreMixedWithTheirOwnSoundsAndTheGamesAreShipped()
+    {
+        var (balloon, kusudama) = PopSounds.Load();
+        Assert.NotNull(balloon);
+        Assert.NotNull(kusudama);
+        // A pop of a single loud sample, so its place in the mix shows.
+        var mark = new PcmAudio { SampleRate = 48000, Channels = 1, Samples = [0.9f] };
+        var source = Source(Silence(2, 48000)) with { BalloonPop = mark, KusudamaPop = null };
+        var mix = VideoExporter.Mix(source, new[] { new RecordedHit(0.5, false, true, PopKind.Balloon), new RecordedHit(1, false, true, PopKind.Kusudama) },
+            begin: 0, seconds: 2);
+        int at = 48000 / 2;
+        Assert.Equal(0.9f, mix.Samples[at * 2], 3);
+        Assert.Equal(0.9f, mix.Samples[at * 2 + 1], 3);
+        // Nothing else: the pop is not a don, and a missing kusudama sound is silence.
+        Assert.Equal(2, mix.Samples.Count(s => s != 0));
+    }
+
+    [Fact]
     public void TheSoundIsTheSongFromTheVideosStartWithTheHitsOverIt()
     {
         var song = Silence(6, 48000);

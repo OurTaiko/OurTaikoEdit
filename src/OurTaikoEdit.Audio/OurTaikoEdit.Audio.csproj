@@ -12,5 +12,7 @@
   <ItemGroup>
     <!-- The game's hit sounds, next to the program (HitSoundSets). -->
     <None Include="HitSounds\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- A balloon popping and a kusudama breaking (PopSounds). -->
+    <None Include="Effects\*.ogg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
