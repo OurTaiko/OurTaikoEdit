@@ -36,6 +36,11 @@
         <ComboBox Grid.Row="1" Grid.Column="1" x:Name="RangeBox" HorizontalAlignment="Stretch" />
       </Grid>
 
+      <StackPanel Classes="field">
+        <TextBlock Classes="label" Text="{l:T VideoEncoding}" />
+        <ComboBox x:Name="EncodingBox" HorizontalAlignment="Stretch" />
+      </StackPanel>
+
       <CheckBox x:Name="HitsBox" Content="{l:T VideoHitSounds}" />
       <TextBlock x:Name="Hint" Classes="caption" TextWrapping="Wrap" />
 

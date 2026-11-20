@@ -161,4 +161,15 @@ public class SettingsTests : IDisposable
         Assert.Equal(("system", 40.0, 16, 1.0, -200.0), (s.Language, s.FontSize, s.Division, s.Volume, s.LatencyMs));
         Assert.Null(s.Window);
     }
+
+    [Fact]
+    public void TheVideoEncodingIsOneThatExists()
+    {
+        Directory.CreateDirectory(root);
+        Assert.Equal("medium", AppSettings.Load(root).VideoEncoding);
+        File.WriteAllText(Path.Combine(root, "settings.json"), """{ "videoEncoding": "none" }""");
+        Assert.Equal("none", AppSettings.Load(root).VideoEncoding);
+        File.WriteAllText(Path.Combine(root, "settings.json"), """{ "videoEncoding": "warp" }""");
+        Assert.Equal("medium", AppSettings.Load(root).VideoEncoding);
+    }
 }

@@ -325,6 +325,13 @@ VideoFps,Frame rate (fps),帧率（fps）,フレームレート（fps）
 VideoRange,Start,开始位置,開始位置
 VideoFromStart,From the beginning,从开头,最初から
 VideoFromPlayhead,From the playhead,从当前位置,再生位置から
+VideoEncoding,Encoding,编码,エンコード
+VideoEncodingDefault,"{0} (default)",{0}（默认）,{0}（既定）
+VideoEncodingFast,"{0} (faster, larger file)",{0}（更快，文件更大）,{0}（速い・ファイルが大きい）
+VideoEncodingSlow,"{0} (slower, smaller file)",{0}（更慢，文件更小）,{0}（遅い・ファイルが小さい）
+VideoEncodingNone,"None: uncompressed MOV (fastest, very large file)",不编码：无压缩 MOV（最快，文件非常大）,エンコードしない：非圧縮 MOV（最速・ファイルが非常に大きい）
+VideoRawSize,"Uncompressed, this is about {0} GB a minute.",不压缩时每分钟约 {0} GB。,非圧縮では 1 分あたり約 {0} GB になります。
+VideoRawFileType,QuickTime video (uncompressed),QuickTime 视频（无压缩）,QuickTime 動画（非圧縮）
 VideoHitSounds,Hit sounds in the video,视频里包含击打音,動画に打音を入れる
 VideoHint,"The play scene with auto play, as long as the play: from {0} s to two seconds after the last note. Size other than 16:9 is filled with black.",内容是自动演奏的游玩场景，时长与游玩相同：从 {0} 秒到最后一个音符后 2 秒。非 16:9 的画面用黑色补边。,内容はオートプレイのプレイ画面で、長さはプレイと同じです（{0} 秒から最後の音符の 2 秒後まで）。16:9 以外は黒で埋めます。
 VideoOutput,Save to,保存到,保存先

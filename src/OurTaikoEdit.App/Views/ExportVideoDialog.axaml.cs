@@ -39,7 +39,9 @@ public partial class ExportVideoDialog : Window
         }
         WidthBox.Value = settings.VideoWidth;
         HeightBox.Value = settings.VideoHeight;
-        SizeBox.SelectionChanged += (_, _) => CustomSize.IsVisible = SizeBox.SelectedIndex == Sizes.Length;
+        SizeBox.SelectionChanged += (_, _) => { CustomSize.IsVisible = SizeBox.SelectedIndex == Sizes.Length; ShowHint(); };
+        WidthBox.ValueChanged += (_, _) => ShowHint();
+        HeightBox.ValueChanged += (_, _) => ShowHint();
         CustomSize.IsVisible = SizeBox.SelectedIndex == Sizes.Length;
 
         FpsBox.ItemsSource = Rates.Select(r => r.ToString(CultureInfo.InvariantCulture)).Append(Loc.T("VideoCustom")).ToList();
@@ -48,14 +50,18 @@ public partial class ExportVideoDialog : Window
         CustomFps.Minimum = 1;
         CustomFps.Maximum = AppSettings.MaxVideoFps;
         CustomFps.Value = settings.VideoFps;
-        FpsBox.SelectionChanged += (_, _) => CustomFps.IsVisible = FpsBox.SelectedIndex == Rates.Length;
+        FpsBox.SelectionChanged += (_, _) => { CustomFps.IsVisible = FpsBox.SelectedIndex == Rates.Length; ShowHint(); };
+        CustomFps.ValueChanged += (_, _) => ShowHint();
         CustomFps.IsVisible = FpsBox.SelectedIndex == Rates.Length;
 
         RangeBox.ItemsSource = new[] { Loc.T("VideoFromStart"), Loc.T("VideoFromPlayhead") };
         RangeBox.SelectedIndex = 0;
         RangeBox.SelectionChanged += (_, _) => ShowHint();
+        EncodingBox.ItemsSource = VideoEncodings.All.Select(EncodingName).ToList();
+        EncodingBox.SelectedIndex = Math.Max(0, VideoEncodings.All.ToList().IndexOf(VideoEncodings.Normalize(settings.VideoEncoding)));
+        EncodingBox.SelectionChanged += (_, _) => { OutputBox.Text = WithExtension(OutputBox.Text ?? ""); ShowHint(); };
         HitsBox.IsChecked = request.HitSounds;
-        OutputBox.Text = request.SuggestedOutput;
+        OutputBox.Text = WithExtension(request.SuggestedOutput);
         // The one chosen before, else (it is gone) the one found where ffmpeg usually is.
         FfmpegBox.Text = VideoExporter.FindFfmpeg(settings.Ffmpeg) ?? VideoExporter.FindFfmpeg(null) ?? settings.Ffmpeg ?? "";
         ShowHint();
@@ -63,12 +69,42 @@ public partial class ExportVideoDialog : Window
     }
 
     bool FromPlayhead => RangeBox.SelectedIndex == 1;
+    string Encoding => EncodingBox.SelectedIndex >= 0 ? VideoEncodings.All[EncodingBox.SelectedIndex] : VideoEncodings.Default;
+    bool Raw => Encoding == VideoEncodings.None;
+
+    static string EncodingName(string encoding) => encoding switch
+    {
+        VideoEncodings.None => Loc.T("VideoEncodingNone"),
+        VideoEncodings.Default => Loc.F("VideoEncodingDefault", encoding),
+        "ultrafast" or "superfast" or "veryfast" => Loc.F("VideoEncodingFast", encoding),
+        "slow" or "slower" or "veryslow" => Loc.F("VideoEncodingSlow", encoding),
+        _ => encoding,
+    };
+
+    // The path with the extension of the encoding chosen (.mp4, or .mov for frames not encoded);
+    // another extension is kept, one of the two is swapped.
+    string WithExtension(string path)
+    {
+        string want = VideoEncodings.Extension(Encoding);
+        if (path.Length == 0) return path;
+        string ext = Path.GetExtension(path);
+        if (ext.Equals(".mp4", StringComparison.OrdinalIgnoreCase) || ext.Equals(".mov", StringComparison.OrdinalIgnoreCase))
+            return path[..^ext.Length] + want;
+        return path + want;
+    }
 
     void ShowHint()
     {
         if (request == null) return;
         double start = FromPlayhead ? request.Playhead - PlayViewModel.LeadIn : request.Beginning;
         Hint.Text = Loc.F("VideoHint", start.ToString("0.0", CultureInfo.InvariantCulture));
+        if (Raw && settings != null)
+        {
+            // Three bytes a pixel, every frame: say how big that gets.
+            var (width, height, fps) = Chosen();
+            double perMinute = width * (double)height * 3 * fps * 60;
+            Hint.Text += " " + Loc.F("VideoRawSize", (perMinute / 1e9).ToString("0.#", CultureInfo.InvariantCulture));
+        }
     }
 
     void ShowError(string? error)
@@ -92,8 +128,10 @@ public partial class ExportVideoDialog : Window
             Title = Loc.T("VideoOutput"),
             SuggestedFileName = Path.GetFileName(current),
             SuggestedStartLocation = folder,
-            DefaultExtension = "mp4",
-            FileTypeChoices = new[] { new FilePickerFileType(Loc.T("VideoFileType")) { Patterns = new[] { "*.mp4" } } },
+            DefaultExtension = Raw ? "mov" : "mp4",
+            FileTypeChoices = new[] { Raw
+                ? new FilePickerFileType(Loc.T("VideoRawFileType")) { Patterns = new[] { "*.mov" } }
+                : new FilePickerFileType(Loc.T("VideoFileType")) { Patterns = new[] { "*.mp4" } } },
         });
         if (file?.TryGetLocalPath() is { } path) OutputBox.Text = path;
     }
@@ -113,7 +151,7 @@ public partial class ExportVideoDialog : Window
         if (settings == null || request == null) { Close(null); return; }
         string output = OutputBox.Text?.Trim() ?? "";
         if (output.Length == 0 || !Path.IsPathRooted(output)) { ShowError(Loc.T("VideoNeedOutput")); return; }
-        if (!output.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)) output += ".mp4";
+        output = WithExtension(output);
         string? dir = Path.GetDirectoryName(output);
         if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) { ShowError(Loc.T("VideoNeedOutput")); return; }
         string typed = FfmpegBox.Text?.Trim() ?? "";
@@ -121,14 +159,19 @@ public partial class ExportVideoDialog : Window
         // The ffmpeg chosen by hand is remembered; one found on its own is looked for again next time.
         settings.Ffmpeg = typed.Length > 0 && typed != VideoExporter.FindFfmpeg(null) ? typed : null;
 
+        var (width, height, fps) = Chosen();
+        Close(new VideoExportOptions(output, width, height, fps, FromPlayhead, HitsBox.IsChecked == true, ffmpeg, Encoding));
+    }
+
+    (int Width, int Height, int Fps) Chosen()
+    {
         int width, height;
         if (SizeBox.SelectedIndex >= 0 && SizeBox.SelectedIndex < Sizes.Length) (width, height, _) = Sizes[SizeBox.SelectedIndex];
         else { width = (int)(WidthBox.Value ?? 1920); height = (int)(HeightBox.Value ?? 1080); }
         width = Math.Clamp(width, AppSettings.MinVideoSide, AppSettings.MaxVideoSide) & ~1;
         height = Math.Clamp(height, AppSettings.MinVideoSide, AppSettings.MaxVideoSide) & ~1;
         int fps = FpsBox.SelectedIndex >= 0 && FpsBox.SelectedIndex < Rates.Length ? Rates[FpsBox.SelectedIndex] : (int)(CustomFps.Value ?? 60);
-        fps = Math.Clamp(fps, 1, AppSettings.MaxVideoFps);
-        Close(new VideoExportOptions(output, width, height, fps, FromPlayhead, HitsBox.IsChecked == true, ffmpeg));
+        return (width, height, Math.Clamp(fps, 1, AppSettings.MaxVideoFps));
     }
 
     void Cancel(object? sender, RoutedEventArgs e) => Close(null);

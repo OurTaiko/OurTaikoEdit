@@ -140,6 +140,38 @@ public class VideoExportTests
     }
 
     [AvaloniaFact]
+    public async Task EachEncodingIsWrittenAndNoneKeepsTheFramesAsTheyAre()
+    {
+        string? ffmpeg = VideoExporter.FindFfmpeg(null);
+        Assert.SkipWhen(ffmpeg == null, "ffmpeg is not installed");
+        string probe = Path.Combine(Path.GetDirectoryName(ffmpeg!)!, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
+        Assert.SkipWhen(!File.Exists(probe), "ffprobe is not installed");
+        string folder = Path.Combine(Path.GetTempPath(), "ourtaikoedit-video-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            foreach (var (encoding, video, audio) in new[] { ("ultrafast", "h264", "aac"), ("veryslow", "h264", "aac"), (VideoEncodings.None, "rawvideo", "pcm_s16le") })
+            {
+                string output = Path.Combine(folder, encoding + VideoEncodings.Extension(encoding));
+                var options = Options(output, fps: 24) with { Ffmpeg = ffmpeg!, Width = 320, Height = 180, Encoding = encoding };
+                await VideoExporter.ExportAsync(Source(Silence(6)), options, null, CancellationToken.None);
+                string said = Run(probe, "-v", "error", "-show_entries", "stream=codec_name,pix_fmt,nb_frames", "-of", "default=noprint_wrappers=1", output);
+                Assert.Contains("codec_name=" + video, said);
+                Assert.Contains("codec_name=" + audio, said);
+                if (encoding == VideoEncodings.None)
+                {
+                    Assert.EndsWith(".mov", output);
+                    Assert.Contains("pix_fmt=rgb24", said);
+                    // Every frame whole: three bytes a pixel.
+                    int frames = int.Parse(said.Split('\n').First(l => l.StartsWith("nb_frames=")).Split('=')[1], CultureInfo.InvariantCulture);
+                    Assert.True(new FileInfo(output).Length >= (long)frames * 320 * 180 * 3);
+                }
+            }
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public async Task ACancelledVideoLeavesNoFile()
     {
         string? ffmpeg = VideoExporter.FindFfmpeg(null);
@@ -167,12 +199,35 @@ public class VideoExportTests
         Assert.True(custom.IsVisible);
         Assert.Equal(48, custom.Value);
         Assert.Equal("/tmp/Song (Oni).mp4", dialog.FindControl<Avalonia.Controls.TextBox>("OutputBox")!.Text);
+        // The encoding starts at the default.
+        var encoding = dialog.FindControl<Avalonia.Controls.ComboBox>("EncodingBox")!;
+        Assert.Equal(VideoEncodings.Default, VideoEncodings.All[encoding.SelectedIndex]);
         // An ffmpeg chosen before that is gone gives way to one found; none at all is said at once.
         Assert.True(dialog.FindControl<Avalonia.Controls.TextBlock>("Error")!.IsVisible == (VideoExporter.FindFfmpeg(null) == null));
         string shots = Environment.GetEnvironmentVariable("OURTAIKOEDIT_SCREENSHOTS") is { Length: > 0 } dir ? dir : Path.Combine(AppContext.BaseDirectory, "screenshots");
         Directory.CreateDirectory(shots);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         dialog.CaptureRenderedFrame()?.Save(Path.Combine(shots, "video-dialog.png"));
+        dialog.Close();
+    }
+
+    [AvaloniaFact]
+    public void NotEncodingMakesAMovAndSaysHowLargeItGets()
+    {
+        var settings = new OurTaikoEdit.Core.Settings.AppSettings { VideoWidth = 1920, VideoHeight = 1080, VideoFps = 60, VideoEncoding = "veryfast" };
+        var dialog = new OurTaikoEdit.App.Views.ExportVideoDialog(settings, new OurTaikoEdit.App.ViewModels.VideoExportRequest("/tmp/Song (Oni).mp4", 30, -2, true));
+        dialog.Show();
+        var encoding = dialog.FindControl<Avalonia.Controls.ComboBox>("EncodingBox")!;
+        var output = dialog.FindControl<Avalonia.Controls.TextBox>("OutputBox")!;
+        var hint = dialog.FindControl<Avalonia.Controls.TextBlock>("Hint")!;
+        Assert.Equal("veryfast", VideoEncodings.All[encoding.SelectedIndex]);
+        Assert.DoesNotContain("GB", hint.Text);
+        encoding.SelectedIndex = VideoEncodings.All.ToList().IndexOf(VideoEncodings.None);
+        Assert.Equal("/tmp/Song (Oni).mov", output.Text);
+        // 1920 × 1080 × 3 bytes × 60 frames × 60 s.
+        Assert.Contains(OurTaikoEdit.Core.Localization.Loc.F("VideoRawSize", "22.4"), hint.Text);
+        encoding.SelectedIndex = VideoEncodings.All.ToList().IndexOf("slow");
+        Assert.Equal("/tmp/Song (Oni).mp4", output.Text);
         dialog.Close();
     }
 
@@ -194,7 +249,7 @@ public class VideoExportTests
             var owner = new Window { Width = 800, Height = 600 };
             owner.Show();
             string output = Path.Combine(root, "sample.mp4");
-            var dialogs = new Choices(new OurTaikoEdit.App.Views.DialogService(owner), new VideoExportOptions(output, 320, 180, 24, true, true, ffmpeg!));
+            var dialogs = new Choices(new OurTaikoEdit.App.Views.DialogService(owner), new VideoExportOptions(output, 320, 180, 24, true, true, ffmpeg!, "fast"));
             var settings = new OurTaikoEdit.Core.Settings.AppSettings();
             var editor = new OurTaikoEdit.App.ViewModels.EditorViewModel(registry.OpenFolder(folder), dialogs, () => { }, settings);
             editor.Seek(10);
@@ -205,7 +260,7 @@ public class VideoExportTests
             Assert.Equal(10, dialogs.Asked!.Playhead, 6);
             Assert.EndsWith(".mp4", dialogs.Asked.SuggestedOutput);
             // The choices are kept for the next video.
-            Assert.Equal((320, 180, 24), (settings.VideoWidth, settings.VideoHeight, settings.VideoFps));
+            Assert.Equal((320, 180, 24, "fast"), (settings.VideoWidth, settings.VideoHeight, settings.VideoFps, settings.VideoEncoding));
             owner.Close();
         }
         finally { Directory.Delete(root, true); }

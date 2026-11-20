@@ -12,6 +12,10 @@ public sealed class AppSettings
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     public const int MinVideoSide = 64, MaxVideoSide = 7680, MaxVideoFps = 240;
+    // How a video is encoded: x264's presets, fastest first, or "none" (the frames as they are).
+    public const string DefaultVideoEncoding = "medium", NoVideoEncoding = "none";
+    public static readonly string[] VideoEncodings =
+        { "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", NoVideoEncoding };
 
     public static readonly IReadOnlyList<int> Divisions = new[] { 4, 8, 12, 16, 24, 32, 48, 64, 96, 192 };
 
@@ -38,10 +42,12 @@ public sealed class AppSettings
     [JsonPropertyName("latencyMs")] public double LatencyMs { get; set; }
 
     // The last preview video exported (the export dialog's choices): its size in pixels, its
-    // frames a second, and the ffmpeg it was encoded with (empty: looked for where it usually is).
+    // frames a second, how it was encoded, and the ffmpeg that did it (empty: looked for where it
+    // usually is).
     [JsonPropertyName("videoWidth")] public int VideoWidth { get; set; } = 1920;
     [JsonPropertyName("videoHeight")] public int VideoHeight { get; set; } = 1080;
     [JsonPropertyName("videoFps")] public int VideoFps { get; set; } = 60;
+    [JsonPropertyName("videoEncoding")] public string VideoEncoding { get; set; } = DefaultVideoEncoding;
     [JsonPropertyName("ffmpeg")] public string? Ffmpeg { get; set; }
 
     // The ids of mods that are found but not loaded (ModRegistry).
@@ -94,6 +100,7 @@ public sealed class AppSettings
         VideoWidth = Math.Clamp(VideoWidth, MinVideoSide, MaxVideoSide) & ~1;
         VideoHeight = Math.Clamp(VideoHeight, MinVideoSide, MaxVideoSide) & ~1;
         VideoFps = Math.Clamp(VideoFps, 1, MaxVideoFps);
+        if (!VideoEncodings.Contains(VideoEncoding)) VideoEncoding = DefaultVideoEncoding;
         DisabledMods = (DisabledMods ?? new()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (Window is { } w && !(w.Width >= 400 && w.Height >= 300 && double.IsFinite(w.Width) && double.IsFinite(w.Height))) Window = null;
 

@@ -823,6 +823,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         Settings.VideoWidth = options.Width;
         Settings.VideoHeight = options.Height;
         Settings.VideoFps = options.Fps;
+        Settings.VideoEncoding = options.Encoding;
         Settings.Save();
         // Checked against the play scene first: a course it cannot judge is said at once.
         var (check, error) = PlayViewModel.Create(chart, Analysis.Title, chart.Subtitle, null, Route, null, 0, false, () => { });

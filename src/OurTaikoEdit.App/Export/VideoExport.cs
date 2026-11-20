@@ -8,13 +8,27 @@ using OurTaiko;
 using OurTaikoEdit.App.Controls;
 using OurTaikoEdit.App.ViewModels;
 using OurTaikoEdit.Audio;
+using OurTaikoEdit.Core.Settings;
 
 namespace OurTaikoEdit.App.Export;
 
 // What the export dialog asks for: where the video goes, its size and frames a second, whether
 // it starts at the playhead (as "play from here" does) or the beginning, whether the hit sounds
-// are heard, and the ffmpeg that encodes it.
-public sealed record VideoExportOptions(string Output, int Width, int Height, int Fps, bool FromPlayhead, bool HitSounds, string Ffmpeg);
+// are heard, the ffmpeg that writes it, and how it is encoded: an x264 preset (VideoEncodings), or
+// "none" for the frames as they are (an uncompressed MOV).
+public sealed record VideoExportOptions(string Output, int Width, int Height, int Fps, bool FromPlayhead, bool HitSounds, string Ffmpeg,
+    string Encoding = VideoEncodings.Default);
+
+// x264's presets, fastest first, and "none" (AppSettings.VideoEncodings). Slower ones make a
+// smaller file of the same quality.
+public static class VideoEncodings
+{
+    public const string Default = AppSettings.DefaultVideoEncoding, None = AppSettings.NoVideoEncoding;
+    public static IReadOnlyList<string> All => AppSettings.VideoEncodings;
+    public static string Normalize(string? encoding) => All.Contains(encoding) ? encoding! : Default;
+    // The file's extension for an encoding: an MP4, or a MOV for frames not encoded.
+    public static string Extension(string encoding) => encoding == None ? ".mov" : ".mp4";
+}
 
 // What is exported: the chart as the editor has it, and its sounds.
 public sealed record VideoExportSource(TaikoChart Chart, string Title, string Subtitle, double Playhead, BranchRoute Route,
@@ -185,7 +199,9 @@ public static class VideoExporter
         stage.Arrange(new Rect(size));
         using var target = new RenderTargetBitmap(new PixelSize(width, height));
         string pixelFormat = target.Format == PixelFormats.Rgba8888 ? "rgba" : "bgra";
-        string codec = await VideoCodecAsync(options.Ffmpeg);
+        string encoding = VideoEncodings.Normalize(options.Encoding);
+        bool raw = encoding == VideoEncodings.None;
+        string codec = raw ? "rawvideo" : await VideoCodecAsync(options.Ffmpeg);
 
         var info = new ProcessStartInfo(options.Ffmpeg)
         {
@@ -199,10 +215,12 @@ public static class VideoExporter
             "-i", audio,
             "-map", "0:v", "-map", "1:a",
         }) info.ArgumentList.Add(arg);
-        foreach (string arg in codec == "libx264"
-            ? new[] { "-c:v", "libx264", "-preset", "medium", "-crf", "18" }
-            : new[] { "-c:v", codec, "-q:v", "2" }) info.ArgumentList.Add(arg);
-        foreach (string arg in new[] { "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", options.Output })
+        // Not encoded: QuickTime's uncompressed RGB ("raw ") and 16-bit PCM, which editors read.
+        string[] video = raw ? new[] { "-c:v", "rawvideo", "-pix_fmt", "rgb24" }
+            : codec == "libx264" ? new[] { "-c:v", "libx264", "-preset", encoding, "-crf", "18", "-pix_fmt", "yuv420p" }
+            : new[] { "-c:v", codec, "-q:v", "2", "-pix_fmt", "yuv420p" };
+        string[] sound = raw ? new[] { "-c:a", "pcm_s16le" } : new[] { "-c:a", "aac", "-b:a", "192k" };
+        foreach (string arg in video.Concat(sound).Concat(new[] { "-shortest", "-movflags", "+faststart", options.Output }))
             info.ArgumentList.Add(arg);
 
         using var ffmpeg = Process.Start(info) ?? throw new VideoExportException("ffmpeg did not start.");
@@ -210,8 +228,13 @@ public static class VideoExporter
         _ = ffmpeg.StandardOutput.ReadToEndAsync();
         var input = ffmpeg.StandardInput.BaseStream;
         int stride = width * 4;
-        var pixels = new byte[stride * height];
-        var pinned = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        // Two frames' pixels: one is drawn while ffmpeg reads the other through the pipe (the
+        // pipe takes a frame only as fast as ffmpeg reads it, and drawing waiting for that was
+        // a quarter of the time).
+        var pixels = new[] { new byte[stride * height], new byte[stride * height] };
+        var pinned = pixels.Select(b => GCHandle.Alloc(b, GCHandleType.Pinned)).ToArray();
+        Task writing = Task.CompletedTask;
+        var sinceAnswered = Stopwatch.StartNew();
         bool done = false;
         try
         {
@@ -221,13 +244,22 @@ public static class VideoExporter
                 p.SetVideoTime((double)frame / options.Fps);
                 p.Play.Tick();
                 target.Render(stage);
-                target.CopyPixels(new PixelRect(0, 0, width, height), pinned.AddrOfPinnedObject(), pixels.Length, stride);
-                try { await input.WriteAsync(pixels, cancel); }
+                int b = frame % 2;
+                // The buffer drawn into two frames ago has been written by now.
+                try { await writing; }
                 catch (IOException) { break; } // ffmpeg stopped: what it says is told below.
+                target.CopyPixels(new PixelRect(0, 0, width, height), pinned[b].AddrOfPinnedObject(), pixels[b].Length, stride);
+                writing = input.WriteAsync(pixels[b], cancel).AsTask();
                 progress?.Report((frame + 1, frames));
-                // The window is answered between frames (the frames are drawn on its thread).
-                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                // The window is answered between frames (the frames are drawn on its thread),
+                // about once a screen frame.
+                if (sinceAnswered.ElapsedMilliseconds >= 15)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                    sinceAnswered.Restart();
+                }
             }
+            try { await writing; } catch (IOException) { }
             try { input.Close(); } catch (IOException) { }
             await ffmpeg.WaitForExitAsync(cancel);
             if (ffmpeg.ExitCode != 0)
@@ -240,12 +272,14 @@ public static class VideoExporter
         }
         finally
         {
-            pinned.Free();
             if (!done)
             {
                 try { if (!ffmpeg.HasExited) ffmpeg.Kill(); ffmpeg.WaitForExit(2000); } catch (InvalidOperationException) { }
+                // A write still going holds a buffer: it ends once ffmpeg is gone.
+                try { await writing; } catch (Exception e) when (e is IOException or OperationCanceledException or ObjectDisposedException) { }
                 try { File.Delete(options.Output); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
+            foreach (var handle in pinned) handle.Free();
         }
     }
 
