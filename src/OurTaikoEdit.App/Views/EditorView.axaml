@@ -60,7 +60,7 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- As wide as what stands right of the play button less the rewind button, so the play
                button sits in the middle. -->
-          <Panel Width="28" />
+          <Panel Width="56" />
           <Button Classes="ghost icon" Command="{Binding RewindCommand}" ToolTip.Tip="{l:T RewindTip}">
             <controls:Icon Data="{StaticResource IconSolidRewind}" Filled="True" />
           </Button>
@@ -76,6 +76,10 @@
           </Button>
           <Button Classes="ghost icon" x:Name="PlayFromStartButton" Command="{Binding PlayFromStartCommand}" ToolTip.Tip="{l:T PlayStartTip}">
             <controls:Icon Data="{StaticResource IconGameStart}" />
+          </Button>
+          <!-- A preview video of the chart, played by auto play as in the play scene. -->
+          <Button Classes="ghost icon" x:Name="ExportVideoButton" Command="{Binding ExportVideoCommand}" ToolTip.Tip="{l:T ExportVideoTip}">
+            <controls:Icon Data="{StaticResource IconVideo}" />
           </Button>
         </StackPanel>
 

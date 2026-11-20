@@ -11,6 +11,8 @@ public sealed class AppSettings
 {
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
+    public const int MinVideoSide = 64, MaxVideoSide = 7680, MaxVideoFps = 240;
+
     public static readonly IReadOnlyList<int> Divisions = new[] { 4, 8, 12, 16, 24, 32, 48, 64, 96, 192 };
 
     // "system", "en", "zh" or "ja".
@@ -34,6 +36,13 @@ public sealed class AppSettings
     // elsewhere this is the whole of it): more for a device that is later than it says, less for
     // one that is earlier.
     [JsonPropertyName("latencyMs")] public double LatencyMs { get; set; }
+
+    // The last preview video exported (the export dialog's choices): its size in pixels, its
+    // frames a second, and the ffmpeg it was encoded with (empty: looked for where it usually is).
+    [JsonPropertyName("videoWidth")] public int VideoWidth { get; set; } = 1920;
+    [JsonPropertyName("videoHeight")] public int VideoHeight { get; set; } = 1080;
+    [JsonPropertyName("videoFps")] public int VideoFps { get; set; } = 60;
+    [JsonPropertyName("ffmpeg")] public string? Ffmpeg { get; set; }
 
     // The ids of mods that are found but not loaded (ModRegistry).
     [JsonPropertyName("disabledMods")] public List<string> DisabledMods { get; set; } = new();
@@ -81,6 +90,10 @@ public sealed class AppSettings
         HitVolume = Unit(HitVolume, 0.8);
         if (HitSoundSet < 0) HitSoundSet = 0;
         LatencyMs = double.IsFinite(LatencyMs) ? Math.Clamp(Math.Round(LatencyMs), -200, 500) : 0;
+        // Video encoders want an even size.
+        VideoWidth = Math.Clamp(VideoWidth, MinVideoSide, MaxVideoSide) & ~1;
+        VideoHeight = Math.Clamp(VideoHeight, MinVideoSide, MaxVideoSide) & ~1;
+        VideoFps = Math.Clamp(VideoFps, 1, MaxVideoFps);
         DisabledMods = (DisabledMods ?? new()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (Window is { } w && !(w.Width >= 400 && w.Height >= 300 && double.IsFinite(w.Width) && double.IsFinite(w.Height))) Window = null;
 

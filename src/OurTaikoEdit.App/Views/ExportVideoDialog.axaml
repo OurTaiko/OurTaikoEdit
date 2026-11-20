@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OurTaikoEdit.App.Views.ExportVideoDialog"
+        xmlns:l="using:OurTaikoEdit.App.Localization"
+        Title="{l:T VideoTitle}" Width="520" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Classes="footer">
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Classes="accent wide" x:Name="OkButton" Content="{l:T VideoExport}" IsDefault="True" Click="Accept" />
+        <Button Classes="wide" Content="{l:T Cancel}" IsCancel="True" Click="Cancel" />
+      </StackPanel>
+    </Border>
+
+    <StackPanel Margin="20,18,20,20" Spacing="14">
+      <TextBlock Classes="h1" Text="{l:T VideoTitle}" />
+
+      <!-- Size: a preset or any (even) size -->
+      <StackPanel Classes="field">
+        <TextBlock Classes="label" Text="{l:T VideoResolution}" />
+        <ComboBox x:Name="SizeBox" HorizontalAlignment="Stretch" />
+        <Grid x:Name="CustomSize" ColumnDefinitions="*,Auto,*" ColumnSpacing="8" IsVisible="False">
+          <NumericUpDown x:Name="WidthBox" Increment="2" FormatString="0" ToolTip.Tip="{l:T VideoWidth}" />
+          <TextBlock Grid.Column="1" Text="×" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Column="2" x:Name="HeightBox" Increment="2" FormatString="0" ToolTip.Tip="{l:T VideoHeight}" />
+        </Grid>
+      </StackPanel>
+
+      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="5">
+        <TextBlock Classes="label" Text="{l:T VideoFps}" />
+        <TextBlock Classes="label" Grid.Column="1" Text="{l:T VideoRange}" />
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <ComboBox x:Name="FpsBox" HorizontalAlignment="Stretch" />
+          <NumericUpDown Grid.Column="1" x:Name="CustomFps" Width="110" Increment="1" FormatString="0" IsVisible="False" />
+        </Grid>
+        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="RangeBox" HorizontalAlignment="Stretch" />
+      </Grid>
+
+      <CheckBox x:Name="HitsBox" Content="{l:T VideoHitSounds}" />
+      <TextBlock x:Name="Hint" Classes="caption" TextWrapping="Wrap" />
+
+      <StackPanel Classes="field">
+        <TextBlock Classes="label" Text="{l:T VideoOutput}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox x:Name="OutputBox" />
+          <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseOutput" />
+        </Grid>
+      </StackPanel>
+
+      <StackPanel Classes="field">
+        <TextBlock Classes="label" Text="{l:T VideoFfmpeg}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox x:Name="FfmpegBox" PlaceholderText="{l:T VideoFfmpegPlaceholder}" />
+          <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseFfmpeg" />
+        </Grid>
+      </StackPanel>
+
+      <TextBlock x:Name="Error" Classes="error" TextWrapping="Wrap" IsVisible="False" />
+    </StackPanel>
+  </DockPanel>
+</Window>

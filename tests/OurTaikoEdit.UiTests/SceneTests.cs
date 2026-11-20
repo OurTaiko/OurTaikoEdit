@@ -705,6 +705,8 @@ public class SceneTests : IDisposable
         public Task<NewBlock?> NewBlockAsync(OurTaikoEdit.Core.Languages.IChartLanguage language, IReadOnlyList<BlockCourse> courses, IReadOnlyList<ChartBlock> blocks, int current) => Task.FromResult<NewBlock?>(null);
         public Task<SaveChoice> AskSaveAsync(string name) => Task.FromResult(SaveChoice.Discard);
         public Task<bool> SettingsAsync(AppSettings settings) => Task.FromResult(false);
+        public Task<OurTaikoEdit.App.Export.VideoExportOptions?> ExportVideoAsync(AppSettings settings, VideoExportRequest request) => Task.FromResult<OurTaikoEdit.App.Export.VideoExportOptions?>(null);
+        public Task<bool> ProgressAsync(string title, string waiting, Func<int, int, string> describe, Func<IProgress<(int Done, int Total)>, CancellationToken, Task> work) => Task.FromResult(false);
     }
 
     [AvaloniaFact]

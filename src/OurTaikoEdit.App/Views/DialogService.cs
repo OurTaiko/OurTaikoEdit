@@ -63,6 +63,50 @@ public sealed class DialogService(Window owner) : IDialogService
         => Ask(Loc.F("SaveQuestion", name), Loc.T("SaveLost"),
             (Loc.T("Save"), SaveChoice.Save), (Loc.T("DontSave"), SaveChoice.Discard), (Loc.T("Cancel"), SaveChoice.Cancel));
 
+    public Task<OurTaikoEdit.App.Export.VideoExportOptions?> ExportVideoAsync(AppSettings settings, VideoExportRequest request)
+        => new ExportVideoDialog(settings, request).ShowDialog<OurTaikoEdit.App.Export.VideoExportOptions?>(owner);
+
+    public async Task<bool> ProgressAsync(string title, string waiting, Func<int, int, string> describe, Func<IProgress<(int Done, int Total)>, CancellationToken, Task> work)
+    {
+        using var stop = new CancellationTokenSource();
+        var heading = new TextBlock { Text = title, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        heading.Classes.Add("h1");
+        var said = new TextBlock { Text = waiting };
+        said.Classes.Add("muted");
+        var bar = new ProgressBar { Minimum = 0, Maximum = 1, IsIndeterminate = true };
+        var cancel = Button(Loc.T("Cancel"), accent: false);
+        cancel.IsCancel = true;
+        cancel.Click += (_, _) => stop.Cancel();
+        var window = new Window
+        {
+            Title = title, Width = 420, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = Layout(new Control[] { heading, said, bar }, cancel),
+        };
+        bool running = true;
+        // Closing the window stops the work; the window goes once the work has.
+        window.Closing += (_, e) => { if (running) { e.Cancel = true; stop.Cancel(); } };
+        var progress = new Progress<(int Done, int Total)>(p =>
+        {
+            bar.IsIndeterminate = false;
+            bar.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
+            said.Text = describe(p.Done, p.Total);
+        });
+        var shown = window.ShowDialog(owner);
+        try
+        {
+            await work(progress, stop.Token);
+            return true;
+        }
+        catch (OperationCanceledException) { return false; }
+        finally
+        {
+            running = false;
+            window.Close();
+            await shown;
+        }
+    }
+
     public async Task<bool> SettingsAsync(AppSettings settings)
         => await new SettingsDialog(settings).ShowDialog<bool>(owner);
 

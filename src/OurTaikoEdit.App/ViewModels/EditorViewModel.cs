@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Threading;
+using OurTaikoEdit.App.Export;
 using OurTaikoEdit.Audio;
 using OurTaikoEdit.Core.Languages;
 using OurTaikoEdit.Core.Localization;
@@ -90,6 +91,10 @@ public sealed partial class EditorViewModel : ViewModelBase
     // playhead then runs on a silent clock), and what the toolbar says about it.
     public static Func<PcmAudio, IAudioPlayer?> OpenPlayer { get; set; } = OpenAlPlayer.Open;
     IAudioPlayer? player;
+    // The song and hit sounds as decoded (for a video: they are mixed without the player).
+    PcmAudio? song;
+    (PcmAudio Don, PcmAudio Ka)? songHits;
+    bool audioLoading;
     string? audioPath;
     int audioLoad;
     [ObservableProperty] Waveform? waveform;
@@ -703,12 +708,14 @@ public sealed partial class EditorViewModel : ViewModelBase
         string? path = audio == null ? null : Path.GetFullPath(Path.Combine(Project.Folder, audio));
         if (path == audioPath) return;
         audioPath = path;
+        audioLoading = false;
         int load = ++audioLoad;
         StopAudio();
         Waveform = null;
         if (path == null) { SetAudioStatus(() => Loc.T("NoAudioWave")); return; }
         if (!File.Exists(path)) { SetAudioStatus(() => Loc.F("FileMissing", audio)); return; }
         SetAudioStatus(() => Loc.F("AudioLoading", Path.GetFileName(path)));
+        audioLoading = true;
         int hitSet = loadedHitSet = Settings.HitSoundSet;
         Task.Run(() =>
         {
@@ -717,9 +724,12 @@ public sealed partial class EditorViewModel : ViewModelBase
         }).ContinueWith(t => Dispatcher.UIThread.Post(() =>
         {
             if (load != audioLoad) return;
+            audioLoading = false;
             if (t.IsFaulted) { string error = t.Exception!.InnerException?.Message ?? ""; SetAudioStatus(() => $"{Path.GetFileName(path)}: {error}"); return; }
             var (pcm, wave, hits) = t.Result;
             Waveform = wave;
+            song = pcm;
+            songHits = hits;
             player = OpenPlayer(pcm);
             if (player != null) { player.Volume = (float)Volume; player.HitVolume = (float)Settings.HitVolume; player.SetHitSounds(hits.Don, hits.Ka); }
             var length = TimeSpan.FromSeconds(pcm.Duration);
@@ -732,6 +742,8 @@ public sealed partial class EditorViewModel : ViewModelBase
     {
         player?.Dispose();
         player = null;
+        song = null;
+        songHits = null;
     }
 
     partial void OnHitSoundsChanged(bool value) => Settings.HitSounds = value;
@@ -791,6 +803,42 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (scene == null) { Message = Loc.F("CannotPlay", error); return; }
         Message = null;
         showPlay(scene);
+    }
+
+    // A preview video of the chart: the play scene with auto play, drawn frame by frame at the
+    // size and frame rate chosen, with the song and the hit sounds (Export/VideoExport).
+    [RelayCommand]
+    async Task ExportVideo()
+    {
+        EnsureFresh();
+        if (Analysis.Chart is not { } chart || chart.Notes.Count == 0) { Message = Loc.T("NothingToPlay"); return; }
+        if (audioLoading) { Message = Loc.T("VideoNoAudioYet"); return; }
+        if (IsPlaying) TogglePlay();
+        string folder = Project.Folder;
+        string name = string.Join("_", (string.IsNullOrWhiteSpace(Analysis.Title) ? Project.Name : Analysis.Title).Split(Path.GetInvalidFileNameChars()));
+        var request = new VideoExportRequest(Path.Combine(folder, $"{name} ({chart.Course}).mp4"), Playhead,
+            Math.Min(0, chart.Notes[0].Time - PlayViewModel.LeadIn), HitSounds);
+        var options = await dialogs.ExportVideoAsync(Settings, request);
+        if (options == null) return;
+        Settings.VideoWidth = options.Width;
+        Settings.VideoHeight = options.Height;
+        Settings.VideoFps = options.Fps;
+        Settings.Save();
+        // Checked against the play scene first: a course it cannot judge is said at once.
+        var (check, error) = PlayViewModel.Create(chart, Analysis.Title, chart.Subtitle, null, Route, null, 0, false, () => { });
+        if (check == null) { Message = Loc.F("CannotPlay", error); return; }
+        var hitSounds = songHits ?? HitSoundSets.Load(Settings.HitSoundSet);
+        var source = new VideoExportSource(chart, Analysis.Title, chart.Subtitle, Playhead, Route, song, hitSounds.Don, hitSounds.Ka, Volume, Settings.HitVolume);
+        try
+        {
+            bool finished = await dialogs.ProgressAsync(Loc.T("VideoTitle"), Loc.T("VideoPreparing"), (done, total) => Loc.F("VideoRendering", done, total),
+                (progress, cancel) => VideoExporter.ExportAsync(source, options, progress, cancel));
+            Message = finished ? Loc.F("VideoDone", options.Output) : Loc.T("VideoCancelled");
+        }
+        catch (Exception e) when (e is VideoExportException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            Message = Loc.F("VideoFailed", e.Message);
+        }
     }
 
     [RelayCommand]
