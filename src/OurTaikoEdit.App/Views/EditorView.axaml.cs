@@ -36,9 +36,14 @@ public partial class EditorView : UserControl
     // playhead is moving the caret (so the caret must not move the playhead back).
     bool caretDriving, playheadDriving;
 
+    // Below this width the bar's words, the project's name and the volume slider give way, so that
+    // its buttons (Save first) stay on it: a small window, or the editor inside a website's page.
+    public const double NarrowBar = 1080;
+
     public EditorView()
     {
         InitializeComponent();
+        SizeChanged += (_, e) => FitBar(e.NewSize.Width);
         var view = Code.TextArea.TextView;
         hints = new HintRenderer(Code.FontFamily);
         view.BackgroundRenderers.Add(diagnostics);
@@ -471,5 +476,12 @@ public partial class EditorView : UserControl
         foreach (var item in result.Items) completion.CompletionList.CompletionData.Add(new CompletionData(item));
         completion.Closed += (_, _) => completion = null;
         completion.Show();
+    }
+
+    void FitBar(double width)
+    {
+        bool wide = width >= NarrowBar;
+        foreach (Control control in new Control[] { BackLabel, NameSlash, ProjectName, SaveLabel, PlaySpacer, VolumeIcon, VolumeSlider, HitsLabel })
+            control.IsVisible = wide;
     }
 }

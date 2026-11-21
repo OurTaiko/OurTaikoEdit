@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Avalonia;
 using Avalonia.Browser;
@@ -13,6 +15,7 @@ static class Program
 {
     static async Task Main(string[] args)
     {
+        UseThePagesLanguage();
         Sounds.Unpack();
         ModRegistry.Load(new OurTaikoEdit.Mods.ChartImage.ChartImageMod());
         App.App.PickedFiles = new BrowserFiles();
@@ -28,6 +31,28 @@ static class Program
         await builder.StartBrowserAppAsync("out");
         Interop.Loaded();
         _ = Interop.PersistAsync();
+    }
+
+    // The interface language "system" is the page's: ?lang= (the website gives its own) or else the
+    // browser's (.NET in a browser starts with no culture of its own, which shows English).
+    static void UseThePagesLanguage()
+    {
+        var global = JSHost.GlobalThis;
+        string search = global.GetPropertyAsJSObject("location")?.GetPropertyAsString("search") ?? "";
+        string? lang = search.TrimStart('?').Split('&')
+            .Select(p => p.Split('=', 2))
+            .Where(p => p.Length == 2 && p[0] == "lang")
+            .Select(p => Uri.UnescapeDataString(p[1]))
+            .FirstOrDefault();
+        lang ??= global.GetPropertyAsJSObject("navigator")?.GetPropertyAsString("language");
+        if (string.IsNullOrWhiteSpace(lang)) return;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(lang);
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+        }
+        catch (CultureNotFoundException) { }
     }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App.App>();

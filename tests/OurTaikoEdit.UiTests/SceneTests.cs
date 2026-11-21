@@ -160,6 +160,23 @@ public class SceneTests : IDisposable
         }
         Shot(window, "editor-narrow");
 
+        // As narrow as the editor gets inside a website's page: the bar's words give way and Save
+        // stays on it, with what follows it. (The desktop window stops at 960; a page does not.)
+        double min = window.MinWidth;
+        window.MinWidth = 0;
+        window.Width = 760;
+        Dispatcher.UIThread.RunJobs();
+        foreach (var button in window.GetVisualDescendants().OfType<Button>().Where(b => b.Command == editor.SaveCommand || b.Command == editor.OpenSettingsCommand))
+        {
+            var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), window)!.Value;
+            Assert.InRange(right.X, 0, 760);
+        }
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Save" && t.IsEffectivelyVisible);
+        Shot(window, "editor-narrower");
+        window.MinWidth = min;
+        window.Width = 960;
+        Dispatcher.UIThread.RunJobs();
+
         // A chart with one route has no route to choose.
         var plain = new EditorViewModel(registry.CreateProject(root, "Plain", ChartLanguages.Find("tja")!, null), new DialogService(window), () => { }, vm.Settings);
         vm.Scene = plain;
