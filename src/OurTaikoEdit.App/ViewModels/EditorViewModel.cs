@@ -843,7 +843,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         var hitSounds = songHits ?? HitSoundSets.Load(Settings.HitSoundSet);
         var pops = PopSounds.Load();
         var source = new VideoExportSource(chart, Analysis.Title, chart.Subtitle, Playhead, Route, song, hitSounds.Don, hitSounds.Ka, Volume, Settings.HitVolume,
-            pops.Balloon, pops.Kusudama);
+            pops.Balloon, pops.Kusudama) { ChartText = Analysis.Text, ChartBlock = Analysis.Block };
         try
         {
             bool finished = await dialogs.ProgressAsync(Loc.T("VideoTitle"), Loc.T("VideoPreparing"), (done, total) => Loc.F("VideoRendering", done, total),

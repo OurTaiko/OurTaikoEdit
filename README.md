@@ -121,12 +121,17 @@ tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 
 游玩按钮右边的摄像机按钮：把谱面的自动演奏导出成 MP4（`Export/VideoExport.cs`、`Views/ExportVideoDialog`）。
 
-- 可选：分辨率（4K、1440p、1080p、900p、720p、480p 或自定义，宽高取偶数，64–7680）、帧率（24、25、30、50、60、120 或自定义 1–240）、从开头或从当前位置开始、编码、是否带击打音、保存位置、ffmpeg 的位置。上次的分辨率、帧率与编码记在设置里（`videoWidth`、`videoHeight`、`videoFps`、`videoEncoding`；手选的 ffmpeg 记在 `ffmpeg`）。
+- 可选：分辨率（4K、1440p、1080p、900p、720p、480p 或自定义，宽高取偶数，64–7680）、帧率（24、25、30、50、60、120 或自定义 1–240）、从开头或从当前位置开始、编码、并行画帧（自动、1＝不并行、2…核数）、是否带击打音、保存位置、ffmpeg 的位置。上次的分辨率、帧率、编码与并行画帧记在设置里（`videoWidth`、`videoHeight`、`videoFps`、`videoEncoding`、`videoWorkers`＝0 为自动；手选的 ffmpeg 记在 `ffmpeg`）。
 - 画面是游玩场景（`PlayStage`）的自动演奏，按视频自己的时钟逐帧画（第 k 帧＝起点＋k/帧率），不受屏幕刷新率影响；长度与游玩相同：从开始处前 2 秒到谱面结束后 2 秒。非 16:9 的尺寸两边补黑。
 - 声音：先不画图把同一场演奏跑一遍，记下自动演奏的每个打击音（落在音符的歌曲时刻上，与游玩场景提前交给播放器的是同一套），再把歌曲（编辑器的音量）与打击音（设置里的击打音色与音量，小音符 0.7 倍）、气球吹爆与彩球打破的音效混成立体声。
 - 编码交给 **ffmpeg**（不随应用打包）：在 PATH、`/opt/homebrew/bin`、`/usr/local/bin` 等处找，找不到要在对话框里指定。有 libx264 时用 H.264（CRF 18，速度档 x264 的 `ultrafast`…`veryslow` 可选，默认 `medium`；越快文件越大，画质相同），没有时用 MPEG-4（速度档不起作用）；音频 AAC 192k。选「不编码」时写成无压缩的 MOV（QuickTime 的未压缩 RGB 与 16 位 PCM，剪辑软件能直接读），扩展名随之改成 `.mov`，对话框会提示每分钟大约多少 GB（1080p60 约 22 GB）。导出时有进度窗口，可取消；取消或失败不留下文件。
-- 画一帧与 ffmpeg 读上一帧同时进行（两块像素缓冲交替）；界面线程约每 15 ms 让出一次。画面只能在界面线程上画（Avalonia 的限制），所以不能多核并行画帧。
-- 本机（Apple M5，Release）2 分半的歌 1080p60：`medium` 约 56 秒（123 MB），`veryfast` 约 45 秒（136 MB）。每帧画面约 3 ms，其余是编码。
+- 画一帧与 ffmpeg 读上一帧同时进行（两块像素缓冲交替）；要编码时帧在应用里多核转成 YUV 4:2:0（BT.709，视频范围，`Export/Yuv420.cs`）再交给 ffmpeg，文件标明 BT.709。界面线程约每 15 ms 让出一次。macOS 上导出期间告诉系统这是用户在等的工作（`BusyActivity`），窗口不在前台也不被 App Nap 降速。
+- 逐帧绘制在 `VideoFrames`：可以从任意一帧开始画（先只推进演奏到那一帧），画出的帧与一次画完的逐字节相同（测试 `FramesDrawnFromAnyFrameOnAreTheFramesDrawnInOneGo`）。
+- **并行画帧**（两边同一个设置）：Avalonia 只能在界面线程上画，一个进程一个，所以要多核画帧就得有几份应用。`VideoExporter.DrawElsewhere` 由宿主设置：
+  - 桌面 `Export/ProcessFrames.cs`：以 `--draw-frames` 再启动本程序几份（无窗口，Avalonia 无界面平台＋Skia），标准输入给谱面（`FrameRequest` 的 JSON）与「draw 起始 帧数」，标准输出回每帧的像素；本进程按每 4 帧一块分给空闲的子进程，按序交给 ffmpeg（YUV 转换照旧），最多领先子进程数×8 帧。
+  - 网页 `ParallelFrames.cs`：几个 Web Worker（`frame-worker.js`，从 blob 起，以便应用文件来自 distrib／镜像时也能起）各自启动同一份 .NET，不跑 `Main`，在内存里画（`FrameWorker.cs`，CJK 字体由页面传过去）；页面（`video.js` 的 `parallel`）每 3 帧一块分给空闲的 Worker，按序交给 WebCodecs，最多领先 Worker 数×6 帧。
+  - 数量（`VideoWorkers`）：「自动」＝核数减 2，最多 4，且按内存估算（每份约 150 MB＋每个 1080p 画面 110 MB，不超过内存的四分之一；网页按浏览器报的，没报按 1 GB），对话框里写出自动是几；也可手选 1（不并行）到核数。不到 2 就在本进程画。子进程／Worker 没能起来、还没交出一帧时，改回本进程画。
+- 本机（Apple M5，Release）2 分 12 秒的歌（the EmpErroR）1080p60：桌面 `medium` 约 42–48 秒、`veryfast` 约 38 秒；网页单线程约 208 秒，4 个 Worker 约 84 秒（画帧加编码 80 秒）。
 
 ## 界面
 

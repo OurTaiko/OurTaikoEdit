@@ -23,6 +23,8 @@ static class Program
         OurTaikoEdit.Core.Transcoding.TranscodeFormat.Wasm = true;
         OurTaikoEdit.App.ViewModels.TranscodeViewModel.BuiltIn = new WasmFfmpeg();
         OurTaikoEdit.App.Export.VideoExporter.CreateSink = () => new WebCodecsSink();
+        OurTaikoEdit.App.Export.VideoExporter.DrawElsewhere = ParallelFrames.RunAsync;
+        OurTaikoEdit.App.Export.VideoWorkers.Machine = ParallelFrames.Machine;
         await CjkFont.LoadAsync();
         App.App.Starting = CjkFont.Register;
         var builder = BuildAvaloniaApp().WithInterFont();

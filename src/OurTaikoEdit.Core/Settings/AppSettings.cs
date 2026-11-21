@@ -48,6 +48,8 @@ public sealed class AppSettings
     [JsonPropertyName("videoHeight")] public int VideoHeight { get; set; } = 1080;
     [JsonPropertyName("videoFps")] public int VideoFps { get; set; } = 60;
     [JsonPropertyName("videoEncoding")] public string VideoEncoding { get; set; } = DefaultVideoEncoding;
+    // How many draw a video's frames at once (0: as many as suit the computer and the size).
+    [JsonPropertyName("videoWorkers")] public int VideoWorkers { get; set; }
     [JsonPropertyName("ffmpeg")] public string? Ffmpeg { get; set; }
 
     // The transcoder's last format, and the folder its files go to (empty: beside each file).
@@ -105,6 +107,7 @@ public sealed class AppSettings
         VideoHeight = Math.Clamp(VideoHeight, MinVideoSide, MaxVideoSide) & ~1;
         VideoFps = Math.Clamp(VideoFps, 1, MaxVideoFps);
         if (!VideoEncodings.Contains(VideoEncoding)) VideoEncoding = DefaultVideoEncoding;
+        VideoWorkers = Math.Clamp(VideoWorkers, 0, 16);
         if (!Transcoding.TranscodeFormat.All.Any(f => f.Id == TranscodeFormat)) TranscodeFormat = "ogg";
         if (string.IsNullOrWhiteSpace(TranscodeFolder)) TranscodeFolder = null;
         DisabledMods = (DisabledMods ?? new()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

@@ -15,7 +15,8 @@ public class VideoExportTests
 {
     // 120 BPM, measures of 2 s from 0: a don at 0, a ka at 0.25, a big don at 0.5, a drumroll from
     // 1 to 2, then a don at 2.5.
-    static TaikoChart Chart() => new TjaLanguage().Analyze("TITLE:Video\nBPM:120\nOFFSET:0\nCOURSE:Oni\nLEVEL:8\n#START\n1020300050000000,\n8000100000000000,\n#END\n", 0).Chart!;
+    const string Tja = "TITLE:Video\nBPM:120\nOFFSET:0\nCOURSE:Oni\nLEVEL:8\n#START\n1020300050000000,\n8000100000000000,\n#END\n";
+    static TaikoChart Chart() => new TjaLanguage().Analyze(Tja, 0).Chart!;
 
     static VideoExportSource Source(PcmAudio? song) => new(Chart(), "Video", "", 0, BranchRoute.Normal, song,
         HitSounds.Don(48000), HitSounds.Ka(48000), 1, 1);
@@ -23,6 +24,135 @@ public class VideoExportTests
     static PcmAudio Silence(double seconds, int rate = 44100) => new() { SampleRate = rate, Channels = 2, Samples = new float[(int)(seconds * rate) * 2] };
 
     static VideoExportOptions Options(string output = "", int fps = 30) => new(output, 640, 360, fps, false, true, "");
+
+    // A piece of the video drawn on its own (the play run up to it, not drawn) is the same frames as
+    // drawn in one go: what lets pieces be drawn in parallel (Web Workers).
+    [AvaloniaFact]
+    public void FramesDrawnFromAnyFrameOnAreTheFramesDrawnInOneGo()
+    {
+        string? tja = Environment.GetEnvironmentVariable("FRAMES_TJA");
+        var source = tja == null ? Source(Silence(6))
+            : Source(Silence(200)) with { Chart = new TjaLanguage().Analyze(File.ReadAllText(tja), 0).Chart! };
+        var options = Options(fps: 30) with { Width = 320, Height = 180 };
+        int frames = VideoExporter.Rehearse(source, options).Frames;
+        int size = 320 * 180 * 4;
+        var all = new List<byte[]>();
+        using (var drawn = new VideoFrames(source, options, 320, 180))
+            for (int f = 0; f < frames; f++)
+            {
+                var pixels = new byte[size];
+                unsafe { fixed (byte* p = pixels) drawn.Draw((IntPtr)p, size); }
+                all.Add(pixels);
+            }
+        // Drawn, and moving.
+        Assert.Contains(all[frames / 2], v => v != 0);
+        Assert.False(all[0].AsSpan().SequenceEqual(all[frames / 2]));
+        // Pieces starting at the start, before the first note, on notes, in the drumroll, at the end.
+        int step = Math.Max(1, frames / 37);
+        for (int first = 0; first < frames; first += step)
+        {
+            using var piece = new VideoFrames(source, options, 320, 180);
+            piece.SkipTo(first);
+            for (int f = first; f < Math.Min(frames, first + 3); f++)
+            {
+                var pixels = new byte[size];
+                unsafe { fixed (byte* p = pixels) piece.Draw((IntPtr)p, size); }
+                Assert.True(pixels.AsSpan().SequenceEqual(all[f]), $"frame {f} (a piece from {first}) differs");
+            }
+        }
+    }
+
+    // A sink keeping the frames it is given.
+    sealed class KeptFrames : VideoSink
+    {
+        public List<byte[]> Frames { get; } = new();
+        public override Task StartAsync(VideoExportOptions options, int width, int height, bool rgba, string audio, CancellationToken cancel) => Task.CompletedTask;
+        public override Task<bool> WriteAsync(byte[] pixels, int frame, CancellationToken cancel)
+        {
+            Assert.Equal(Frames.Count, frame);
+            Frames.Add(pixels.ToArray());
+            return Task.FromResult(true);
+        }
+        public override Task FinishAsync(CancellationToken cancel) => Task.CompletedTask;
+        public override Task AbortAsync() => Task.CompletedTask;
+    }
+
+    // Frames drawn by copies of the app (child processes, ProcessFrames), three at once, come back in
+    // order and are the frames drawn here in one go.
+    [AvaloniaFact]
+    public async Task FramesDrawnByCopiesOfTheAppAreTheFramesDrawnHere()
+    {
+        var source = Source(Silence(6)) with { ChartText = Tja, ChartBlock = 0 };
+        var options = Options(fps: 30) with { Width = 320, Height = 180, Workers = 3 };
+        int frames = VideoExporter.Rehearse(source, options).Frames;
+        int size = 320 * 180 * 4;
+        var here = new List<byte[]>();
+        bool rgba;
+        using (var drawn = new VideoFrames(source, options, 320, 180))
+        {
+            rgba = drawn.Rgba;
+            for (int f = 0; f < frames; f++)
+            {
+                var pixels = new byte[size];
+                unsafe { fixed (byte* p = pixels) drawn.Draw((IntPtr)p, size); }
+                here.Add(pixels);
+            }
+        }
+        var command = ProcessFrames.Command;
+        ProcessFrames.Command = () => new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "OurTaikoEdit.exe" : "OurTaikoEdit"));
+        try
+        {
+            var sink = new KeptFrames();
+            var reports = new List<(int, int)>();
+            bool done = await ProcessFrames.RunAsync(new FrameJob(source, options, 320, 180, frames, rgba, sink, new SyncProgress(reports), CancellationToken.None));
+            Assert.True(done);
+            Assert.Equal(frames, sink.Frames.Count);
+            for (int f = 0; f < frames; f++) Assert.True(sink.Frames[f].AsSpan().SequenceEqual(here[f]), $"frame {f} differs");
+            Assert.Equal((frames, frames), reports[^1]);
+        }
+        finally
+        {
+            ProcessFrames.Command = command;
+        }
+    }
+
+    // One worker is drawing here: the copies are not started.
+    [AvaloniaFact]
+    public async Task OneWorkerDrawsHere()
+    {
+        var source = Source(Silence(6)) with { ChartText = Tja, ChartBlock = 0 };
+        var job = new FrameJob(source, Options() with { Workers = 1 }, 640, 360, 10, true, new KeptFrames(), null, CancellationToken.None);
+        Assert.False(await ProcessFrames.RunAsync(job));
+    }
+
+    // The automatic number: two cores left free, at most 4, within a quarter of the memory.
+    [Fact]
+    public void TheAutomaticNumberOfWorkersSuitsTheComputerAndTheSize()
+    {
+        var machine = VideoWorkers.Machine;
+        try
+        {
+            VideoWorkers.Machine = () => (10, 16384);
+            Assert.Equal(4, VideoWorkers.Auto(1920, 1080));
+            VideoWorkers.Machine = () => (4, 16384);
+            Assert.Equal(2, VideoWorkers.Auto(1920, 1080));
+            VideoWorkers.Machine = () => (2, 16384);
+            Assert.Equal(1, VideoWorkers.Auto(1920, 1080));
+            // 1 GB when the memory is not known: 256 MB, one 1080p worker's worth.
+            VideoWorkers.Machine = () => (10, 0);
+            Assert.Equal(1, VideoWorkers.Auto(1920, 1080));
+            Assert.Equal(1, VideoWorkers.Auto(640, 360));
+            VideoWorkers.Machine = () => (10, 4096);
+            Assert.Equal(3, VideoWorkers.Auto(1920, 1080));
+            Assert.Equal(1, VideoWorkers.Auto(3840, 2160));
+            Assert.Equal(5, VideoWorkers.Resolve(5, 1920, 1080));
+            Assert.Equal(3, VideoWorkers.Resolve(0, 1920, 1080));
+        }
+        finally
+        {
+            VideoWorkers.Machine = machine;
+        }
+    }
 
     // macOS is told of an export while it lasts (App Nap off), and told again when it ends; on other
     // systems nothing happens. Either way beginning and ending (twice) is harmless.
@@ -192,6 +322,43 @@ public class VideoExportTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             VideoExporter.ExportAsync(Source(Silence(6)), Options(output) with { Ffmpeg = ffmpeg! }, progress, stop.Token));
         Assert.False(File.Exists(output));
+    }
+
+    // Parallel drawing: Automatic says its number for the size chosen; a number chosen before is kept.
+    [AvaloniaFact]
+    public void TheDialogOffersParallelDrawingAutomaticForItsSize()
+    {
+        var machine = VideoWorkers.Machine;
+        try
+        {
+            VideoWorkers.Machine = () => (10, 4096);
+            var settings = new OurTaikoEdit.Core.Settings.AppSettings { VideoWidth = 1920, VideoHeight = 1080, VideoWorkers = 0 };
+            var dialog = new OurTaikoEdit.App.Views.ExportVideoDialog(settings, new OurTaikoEdit.App.ViewModels.VideoExportRequest("/tmp/Song (Oni).mp4", 0, -2, true));
+            dialog.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var workers = dialog.FindControl<Avalonia.Controls.ComboBox>("WorkersBox")!;
+            var items = workers.ItemsSource!.Cast<string>().ToList();
+            Assert.Equal(0, workers.SelectedIndex);
+            Assert.Equal(11, items.Count);   // Automatic, then 1 to the 10 cores
+            Assert.Contains("3", items[0]);   // 1080p in 4 GB: 3
+            // 4K: one.
+            dialog.FindControl<Avalonia.Controls.ComboBox>("SizeBox")!.SelectedIndex = 0;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Contains("1", workers.ItemsSource!.Cast<string>().First());
+            Assert.Equal(0, workers.SelectedIndex);
+            dialog.Close();
+
+            settings.VideoWorkers = 6;
+            dialog = new OurTaikoEdit.App.Views.ExportVideoDialog(settings, new OurTaikoEdit.App.ViewModels.VideoExportRequest("/tmp/Song (Oni).mp4", 0, -2, true));
+            dialog.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(6, dialog.FindControl<Avalonia.Controls.ComboBox>("WorkersBox")!.SelectedIndex);
+            dialog.Close();
+        }
+        finally
+        {
+            VideoWorkers.Machine = machine;
+        }
     }
 
     [AvaloniaFact]

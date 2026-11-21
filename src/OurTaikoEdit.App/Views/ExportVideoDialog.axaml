@@ -41,6 +41,12 @@
         <ComboBox x:Name="EncodingBox" HorizontalAlignment="Stretch" />
       </StackPanel>
 
+      <!-- How many draw the frames at once (VideoWorkers): Auto, 1, 2… -->
+      <StackPanel Classes="field">
+        <TextBlock Classes="label" Text="{l:T VideoWorkers}" />
+        <ComboBox x:Name="WorkersBox" HorizontalAlignment="Stretch" ToolTip.Tip="{l:T VideoWorkersTip}" />
+      </StackPanel>
+
       <CheckBox x:Name="HitsBox" Content="{l:T VideoHitSounds}" />
       <TextBlock x:Name="Hint" Classes="caption" TextWrapping="Wrap" />
 

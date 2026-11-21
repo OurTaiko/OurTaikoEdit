@@ -10,6 +10,8 @@ namespace OurTaikoEdit.Browser;
 sealed partial class WebCodecsSink : VideoSink
 {
     int id = -1;
+    // The encoder in video.js, for frames drawn elsewhere (ParallelFrames).
+    internal int Id => id;
     VideoExportOptions? options;
     string audio = "";
 

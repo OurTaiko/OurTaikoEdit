@@ -336,6 +336,10 @@ VideoEncodingNone,"None: uncompressed MOV (fastest, very large file)",不编码�
 VideoRawSize,"Uncompressed, this is about {0} GB a minute.",不压缩时每分钟约 {0} GB。,非圧縮では 1 分あたり約 {0} GB になります。
 VideoRawFileType,QuickTime video (uncompressed),QuickTime 视频（无压缩）,QuickTime 動画（非圧縮）
 VideoHitSounds,Hit sounds in the video,视频里包含击打音,動画に打音を入れる
+VideoWorkers,Parallel drawing,并行画帧,並列描画
+VideoWorkersAuto,"Automatic ({0})",自动（{0}）,自動（{0}）
+VideoWorkersOne,1 (not parallel),1（不并行）,1（並列なし）
+VideoWorkersTip,"How many copies of the app draw the frames at once, while this one encodes them. Each uses memory (about 260 MB at 1080p); Automatic leaves two cores free and uses at most 4.",同时画帧的应用副本数量，本应用负责编码。每个都占内存（1080p 约 260 MB）；自动会留出两个核心，最多用 4 个。,フレームを同時に描くアプリの複製の数（このアプリはエンコードを担当）。それぞれメモリを使います（1080p で約 260 MB）。自動はコアを 2 つ残し、最大 4 つ使います。
 VideoHint,"The play scene with auto play, as long as the play: from {0} s to two seconds after the last note. Size other than 16:9 is filled with black.",内容是自动演奏的游玩场景，时长与游玩相同：从 {0} 秒到最后一个音符后 2 秒。非 16:9 的画面用黑色补边。,内容はオートプレイのプレイ画面で、長さはプレイと同じです（{0} 秒から最後の音符の 2 秒後まで）。16:9 以外は黒で埋めます。
 VideoOutput,Save to,保存到,保存先
 VideoFfmpeg,ffmpeg,ffmpeg,ffmpeg

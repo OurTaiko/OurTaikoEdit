@@ -14,10 +14,11 @@ namespace OurTaikoEdit.App.Export;
 
 // What the export dialog asks for: where the video goes, its size and frames a second, whether
 // it starts at the playhead (as "play from here" does) or the beginning, whether the hit sounds
-// are heard, the ffmpeg that writes it, and how it is encoded: an x264 preset (VideoEncodings), or
-// "none" for the frames as they are (an uncompressed MOV).
+// are heard, the ffmpeg that writes it, how it is encoded: an x264 preset (VideoEncodings), or
+// "none" for the frames as they are (an uncompressed MOV), and how many draw the frames at once
+// (VideoWorkers; 1: drawn here).
 public sealed record VideoExportOptions(string Output, int Width, int Height, int Fps, bool FromPlayhead, bool HitSounds, string Ffmpeg,
-    string Encoding = VideoEncodings.Default);
+    string Encoding = VideoEncodings.Default, int Workers = 1);
 
 // x264's presets, fastest first, and "none" (AppSettings.VideoEncodings). Slower ones make a
 // smaller file of the same quality.
@@ -32,7 +33,13 @@ public static class VideoEncodings
 
 // What is exported: the chart as the editor has it, and its sounds.
 public sealed record VideoExportSource(TaikoChart Chart, string Title, string Subtitle, double Playhead, BranchRoute Route,
-    PcmAudio? Song, PcmAudio Don, PcmAudio Ka, double SongVolume, double HitVolume, PcmAudio? BalloonPop = null, PcmAudio? KusudamaPop = null);
+    PcmAudio? Song, PcmAudio Don, PcmAudio Ka, double SongVolume, double HitVolume, PcmAudio? BalloonPop = null, PcmAudio? KusudamaPop = null)
+{
+    // The chart as written, and its block (course), for a drawer that reads it anew (a Web Worker);
+    // null when not known.
+    public string? ChartText { get; init; }
+    public int ChartBlock { get; init; }
+}
 
 // A preview video of the chart: the play scene (PlayStage) with auto play, as the play scene
 // shows it, drawn frame by frame on the video's own clock rather than the screen's, with the
@@ -44,7 +51,7 @@ public sealed record VideoExportSource(TaikoChart Chart, string Title, string Su
 public static class VideoExporter
 {
     // The time a play started for the video stands at, and the frame times it is run on.
-    sealed class OfflinePlay
+    internal sealed class OfflinePlay
     {
         public required PlayViewModel Play { get; init; }
         public required RecordingPlayer Player { get; init; }
@@ -52,7 +59,7 @@ public static class VideoExporter
         public required double Begin { get; init; }
     }
 
-    static OfflinePlay Start(VideoExportSource source, VideoExportOptions options)
+    internal static OfflinePlay Start(VideoExportSource source, VideoExportOptions options)
     {
         double now = 0, begin = 0;
         double songLength = source.Song?.Duration ?? double.MaxValue;
@@ -180,18 +187,29 @@ public static class VideoExporter
     // Where the frames go: ffmpeg on the desktop; a browser's own encoder there (set by its host).
     public static Func<VideoSink> CreateSink { get; set; } = () => new FfmpegSink();
 
+    // Frames drawn elsewhere (a browser's Web Workers) and handed to the sink there: true when they
+    // were (all of them, in order), false to draw them here. Set by the host.
+    public static Func<FrameJob, Task<bool>>? DrawElsewhere { get; set; }
+
+
     static async Task EncodeAsync(VideoExportSource source, VideoExportOptions options, int width, int height, int frames, string audio,
         IProgress<(int Frame, int Frames)>? progress, CancellationToken cancel)
     {
-        var p = Start(source, options);
-        var stage = new PlayStage { DataContext = p.Play };
-        var size = new Size(width, height);
-        stage.Measure(size);
-        stage.Arrange(new Rect(size));
-        using var target = new RenderTargetBitmap(new PixelSize(width, height));
-        bool rgba = target.Format == PixelFormats.Rgba8888;
+        using var drawn = new VideoFrames(source, options, width, height);
+        bool rgba = drawn.Rgba;
         var sink = CreateSink();
         await sink.StartAsync(options, width, height, rgba, audio, cancel);
+        if (DrawElsewhere is { } elsewhere)
+        {
+            bool drawnThere;
+            try { drawnThere = await elsewhere(new FrameJob(source, options, width, height, frames, rgba, sink, progress, cancel)); }
+            catch { await sink.AbortAsync(); throw; }
+            if (drawnThere)
+            {
+                await sink.FinishAsync(cancel);
+                return;
+            }
+        }
         int stride = width * 4;
         // Two frames' pixels: one is drawn while the sink takes the other (ffmpeg reads it through
         // its pipe only so fast, and drawing waiting for that was a quarter of the time).
@@ -204,11 +222,8 @@ public static class VideoExporter
             for (int frame = 0; frame < frames; frame++)
             {
                 cancel.ThrowIfCancellationRequested();
-                p.SetVideoTime((double)frame / options.Fps);
-                p.Play.Tick();
-                target.Render(stage);
                 int b = frame % 2;
-                target.CopyPixels(new PixelRect(0, 0, width, height), pinned[b].AddrOfPinnedObject(), pixels[b].Length, stride);
+                drawn.Draw(pinned[b].AddrOfPinnedObject(), pixels[b].Length);
                 // False: the encoder stopped (what it says is told by FinishAsync).
                 if (!await sink.WriteAsync(pixels[b], frame, cancel)) break;
                 progress?.Report((frame + 1, frames));
@@ -255,6 +270,62 @@ public static class VideoExporter
 }
 
 public sealed class VideoExportException(string message) : Exception(message);
+
+// The frames of a video for a drawer elsewhere (VideoExporter.DrawElsewhere): what to draw, the
+// sink, started, that they go to, and whether it takes them as RGBA (else BGRA).
+public sealed record FrameJob(VideoExportSource Source, VideoExportOptions Options, int Width, int Height, int Frames, bool Rgba, VideoSink Sink,
+    IProgress<(int Frame, int Frames)>? Progress, CancellationToken Cancel);
+
+// The video's frames, drawn one after another from any frame on: the play is run up to that frame
+// without drawing (its state is the play's alone, and running it costs next to nothing), so pieces
+// of the video can be drawn apart (each in a Web Worker of its own, in a browser) and be the same
+// frames as drawn in one go. On the UI thread (Avalonia draws there).
+public sealed class VideoFrames : IDisposable
+{
+    readonly VideoExporter.OfflinePlay play;
+    readonly PlayStage stage;
+    readonly RenderTargetBitmap target;
+    readonly int fps, width, height;
+
+    public VideoFrames(VideoExportSource source, VideoExportOptions options, int width, int height)
+    {
+        play = VideoExporter.Start(source, options);
+        (fps, this.width, this.height) = (options.Fps, width, height);
+        stage = new PlayStage { DataContext = play.Play };
+        var size = new Size(width, height);
+        stage.Measure(size);
+        stage.Arrange(new Rect(size));
+        target = new RenderTargetBitmap(new PixelSize(width, height));
+    }
+
+    // Whether the pixels are RGBA (else BGRA).
+    public bool Rgba => target.Format == PixelFormats.Rgba8888;
+    // The frame Draw draws next.
+    public int Next { get; private set; }
+
+    void Advance()
+    {
+        play.SetVideoTime((double)Next / fps);
+        play.Play.Tick();
+        Next++;
+    }
+
+    // The play run on to `frame` (not back), nothing drawn.
+    public void SkipTo(int frame)
+    {
+        while (Next < frame) Advance();
+    }
+
+    // The next frame drawn into `pixels` (width × height × 4 bytes).
+    public void Draw(IntPtr pixels, int length)
+    {
+        Advance();
+        target.Render(stage);
+        target.CopyPixels(new PixelRect(0, 0, width, height), pixels, length, width * 4);
+    }
+
+    public void Dispose() => target.Dispose();
+}
 
 // A hit sound of the play, at the song time it is heard at; a pop is a balloon popping or a
 // kusudama breaking (at the volume of a big note).

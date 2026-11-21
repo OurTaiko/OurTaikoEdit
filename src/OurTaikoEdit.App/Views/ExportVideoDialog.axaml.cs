@@ -39,9 +39,9 @@ public partial class ExportVideoDialog : Dialog
         }
         WidthBox.Value = settings.VideoWidth;
         HeightBox.Value = settings.VideoHeight;
-        SizeBox.SelectionChanged += (_, _) => { CustomSize.IsVisible = SizeBox.SelectedIndex == Sizes.Length; ShowHint(); };
-        WidthBox.ValueChanged += (_, _) => ShowHint();
-        HeightBox.ValueChanged += (_, _) => ShowHint();
+        SizeBox.SelectionChanged += (_, _) => { CustomSize.IsVisible = SizeBox.SelectedIndex == Sizes.Length; ShowHint(); ShowWorkers(); };
+        WidthBox.ValueChanged += (_, _) => { ShowHint(); ShowWorkers(); };
+        HeightBox.ValueChanged += (_, _) => { ShowHint(); ShowWorkers(); };
         CustomSize.IsVisible = SizeBox.SelectedIndex == Sizes.Length;
 
         FpsBox.ItemsSource = Rates.Select(r => r.ToString(CultureInfo.InvariantCulture)).Append(Loc.T("VideoCustom")).ToList();
@@ -60,6 +60,9 @@ public partial class ExportVideoDialog : Dialog
         EncodingBox.ItemsSource = VideoEncodings.All.Select(EncodingName).ToList();
         EncodingBox.SelectedIndex = Math.Max(0, VideoEncodings.All.ToList().IndexOf(VideoEncodings.Normalize(settings.VideoEncoding)));
         EncodingBox.SelectionChanged += (_, _) => { OutputBox.Text = WithExtension(OutputBox.Text ?? ""); ShowHint(); };
+        // Auto (0), then 1, 2… as many as the computer has cores.
+        ShowWorkers();
+        WorkersBox.SelectedIndex = Math.Clamp(settings.VideoWorkers, 0, VideoWorkers.Choices);
         HitsBox.IsChecked = request.HitSounds;
         OutputBox.Text = WithExtension(request.SuggestedOutput);
         // The one chosen before, else (it is gone) the one found where ffmpeg usually is.
@@ -80,6 +83,22 @@ public partial class ExportVideoDialog : Dialog
     CancellationTokenSource? download;
 
     bool FromPlayhead => RangeBox.SelectedIndex == 1;
+
+    // The choices, Auto saying how many it is for the size chosen (the choice is kept).
+    void ShowWorkers()
+    {
+        if (settings == null) return;
+        var (width, height, _) = Chosen();
+        int selected = WorkersBox.SelectedIndex;
+        WorkersBox.ItemsSource = Enumerable.Range(1, VideoWorkers.Choices)
+            .Select(n => n == 1 ? Loc.T("VideoWorkersOne") : n.ToString(CultureInfo.InvariantCulture))
+            .Prepend(Loc.F("VideoWorkersAuto", VideoWorkers.Auto(width, height)))
+            .ToList();
+        if (selected >= 0) WorkersBox.SelectedIndex = selected;
+    }
+
+    // Auto is 0; else the number.
+    int WorkersChosen => Math.Max(0, WorkersBox.SelectedIndex);
 
     // No ffmpeg: said, with the app's own to download where there is one for this platform.
     void NoFfmpeg()
@@ -219,7 +238,9 @@ public partial class ExportVideoDialog : Dialog
         settings.Ffmpeg = typed.Length > 0 && typed != VideoExporter.FindFfmpeg(null, Tools) ? typed : null;
 
         var (width, height, fps) = Chosen();
-        Close(new VideoExportOptions(output, width, height, fps, FromPlayhead, HitsBox.IsChecked == true, ffmpeg, Encoding));
+        settings.VideoWorkers = WorkersChosen;
+        Close(new VideoExportOptions(output, width, height, fps, FromPlayhead, HitsBox.IsChecked == true, ffmpeg, Encoding,
+            VideoWorkers.Resolve(WorkersChosen, width, height)));
     }
 
     (int Width, int Height, int Fps) Chosen()

@@ -20,6 +20,10 @@ static class CjkFont
 
     public static bool HasFont => font != null;
 
+    // The font's bytes, for a Web Worker (FrameWorker), which is given them rather than fetching anew.
+    public static byte[]? Bytes => font;
+    public static void Use(byte[]? bytes) => font = bytes;
+
     public static async Task LoadAsync()
     {
         string page = JSHost.GlobalThis.GetPropertyAsJSObject("document")!.GetPropertyAsString("baseURI")!;

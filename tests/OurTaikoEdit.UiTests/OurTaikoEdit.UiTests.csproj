@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Headless UI tests: the real windows rendered with Skia, screenshots saved for review. -->
   <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
     <!-- Avalonia.Headless.XUnit 12 is built on xunit v3, whose test projects are executables. -->
     <OutputType>Exe</OutputType>
