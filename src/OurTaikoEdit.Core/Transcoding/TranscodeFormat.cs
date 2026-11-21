@@ -7,7 +7,28 @@ public sealed record TranscodeFormat(string Id, string Label, string Extension, 
     IReadOnlyList<string> AudioCodecs, IReadOnlyList<string> AudioCopyFrom,
     IReadOnlyList<string> VideoCodecs, IReadOnlyList<string> VideoCopyFrom)
 {
-    public static IReadOnlyList<TranscodeFormat> All { get; } = new TranscodeFormat[]
+    // ffmpeg.wasm (a browser) rather than a native ffmpeg: its libopus breaks on stereo and VP9 is
+    // too slow there (the transcoder's findings), so Opus is ffmpeg's own encoder and WebM is VP8.
+    public static bool Wasm { get; set; }
+
+    public static IReadOnlyList<TranscodeFormat> All => Wasm ? WasmFormats : NativeFormats;
+
+    static readonly TranscodeFormat[] WasmFormats =
+    {
+        Audio("mp3", "MP3", "mp3", new[] { "libmp3lame" }, new[] { "mp3" }),
+        Audio("m4a", "M4A (AAC)", "m4a", new[] { "aac" }, new[] { "aac" }),
+        Audio("opus", "Opus", "opus", new[] { "opus" }, new[] { "opus" }),
+        Audio("ogg", "OGG (Vorbis)", "ogg", new[] { "libvorbis" }, new[] { "vorbis" }),
+        Audio("flac", "FLAC", "flac", new[] { "flac" }, new[] { "flac" }),
+        Audio("wav", "WAV", "wav", new[] { "pcm" }, Array.Empty<string>()),
+        Audio("alac", "ALAC (m4a)", "m4a", new[] { "alac" }, new[] { "alac" }),
+        new("mp4", "MP4 (H.264)", "mp4", true, new[] { "aac", "libmp3lame" }, new[] { "aac", "mp3" }, new[] { "libx264" }, new[] { "h264", "hevc" }),
+        new("webm", "WebM (VP8)", "webm", true, new[] { "opus", "libvorbis" }, new[] { "opus", "vorbis" }, new[] { "libvpx" }, new[] { "vp8", "vp9" }),
+        new("mkv", "MKV", "mkv", true, new[] { "aac", "opus", "flac", "libmp3lame" }, new[] { "*" }, new[] { "libx264", "libvpx" }, new[] { "*" }),
+        new("mov", "MOV", "mov", true, new[] { "aac", "alac" }, new[] { "aac", "alac" }, new[] { "libx264" }, new[] { "h264", "hevc", "prores" }),
+    };
+
+    static readonly TranscodeFormat[] NativeFormats =
     {
         Audio("mp3", "MP3", "mp3", new[] { "libmp3lame" }, new[] { "mp3" }),
         Audio("m4a", "M4A (AAC)", "m4a", new[] { "aac" }, new[] { "aac" }),
@@ -38,7 +59,7 @@ public static class Codecs
     {
         "libmp3lame" => "MP3 (LAME)",
         "aac" => "AAC",
-        "libopus" => "Opus",
+        "libopus" or "opus" => "Opus",
         "libvorbis" => "Vorbis",
         "flac" => "FLAC",
         "pcm" => "PCM",
@@ -53,12 +74,12 @@ public static class Codecs
     {
         "libmp3lame" => new[] { 64, 96, 128, 160, 192, 224, 256, 320 },
         "aac" => new[] { 64, 96, 128, 160, 192, 256, 320 },
-        "libopus" => new[] { 32, 48, 64, 96, 128, 160, 192, 256 },
+        "libopus" or "opus" => new[] { 32, 48, 64, 96, 128, 160, 192, 256 },
         "libvorbis" => new[] { 64, 96, 128, 160, 192, 256, 320 },
         _ => null,
     };
 
-    public static int DefaultBitrate(string codec) => codec switch { "libopus" => 128, "libvorbis" => 160, _ => 192 };
+    public static int DefaultBitrate(string codec) => codec switch { "libopus" or "opus" => 128, "libvorbis" => 160, _ => 192 };
 
     public static IReadOnlyList<(int Value, string Label)>? Qualities(string codec) => codec switch
     {

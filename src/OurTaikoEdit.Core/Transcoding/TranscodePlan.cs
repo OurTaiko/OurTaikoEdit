@@ -100,8 +100,9 @@ public static class TranscodePlan
                     case "libx264":
                         args.AddRange(new[] { "-crf", I(crf), "-preset", Codecs.Presets.Contains(options.Preset) ? options.Preset : "medium", "-pix_fmt", "yuv420p" });
                         break;
+                    // In a browser at its fastest (as the transcoder did): it is many times slower there.
                     case "libvpx":
-                        args.AddRange(new[] { "-crf", I(crf), "-b:v", "2M", "-deadline", "good", "-cpu-used", "4" });
+                        args.AddRange(new[] { "-crf", I(crf), "-b:v", "2M", "-deadline", TranscodeFormat.Wasm ? "realtime" : "good", "-cpu-used", TranscodeFormat.Wasm ? "8" : "4" });
                         break;
                     case "libvpx-vp9":
                         args.AddRange(new[] { "-crf", I(crf), "-b:v", "0", "-deadline", "good", "-cpu-used", "4", "-row-mt", "1", "-pix_fmt", "yuv420p" });
@@ -130,9 +131,19 @@ public static class TranscodePlan
                     args.AddRange(new[] { "-b:a", I(options.Bitrate is { } b && rates.Contains(b) ? b : Codecs.DefaultBitrate(c)) + "k" });
                 if (c == "flac") args.AddRange(new[] { "-compression_level", I(Math.Clamp(options.FlacLevel, 0, 12)) });
                 if (c == "libmp3lame" && !format.IsVideo) args.AddRange(new[] { "-id3v2_version", "3" });
-                // Opus is always 48 kHz (ffmpeg resamples to it on its own).
-                if (options.SampleRate is { } rate && c != "libopus") args.AddRange(new[] { "-ar", I(rate) });
-                if (options.Channels is { } ch) args.AddRange(new[] { "-ac", I(ch) });
+                // Opus is always 48 kHz (libopus resamples to it on its own; ffmpeg's own encoder,
+                // experimental, must be told, and takes at most two channels).
+                if (c == "opus")
+                {
+                    args.AddRange(new[] { "-strict", "-2", "-ar", "48000" });
+                    int? ch = options.Channels ?? (d.Source.Channels > 2 ? 2 : null);
+                    if (ch is { } n) args.AddRange(new[] { "-ac", I(Math.Min(n, 2)) });
+                }
+                else
+                {
+                    if (options.SampleRate is { } rate && c != "libopus") args.AddRange(new[] { "-ar", I(rate) });
+                    if (options.Channels is { } ch) args.AddRange(new[] { "-ac", I(ch) });
+                }
                 var filters = new List<string>();
                 if (options.VolumeDb != 0) filters.Add($"volume={N(options.VolumeDb)}dB");
                 // loudnorm works at 192 kHz and leaves it so: back to the rate asked for (or the
@@ -140,7 +151,7 @@ public static class TranscodePlan
                 // take in one: split into frames of 4096 (the last one not padded).
                 if (options.Normalize)
                 {
-                    int back = c == "libopus" ? 48000 : options.SampleRate ?? d.Source.SampleRate ?? 48000;
+                    int back = c is "libopus" or "opus" ? 48000 : options.SampleRate ?? d.Source.SampleRate ?? 48000;
                     filters.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
                     filters.Add($"aresample={I(back)}");
                     filters.Add("asetnsamples=n=4096:p=0");

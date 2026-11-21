@@ -81,6 +81,50 @@ public sealed partial class ProjectsViewModel : ViewModelBase
         open(item.Project);
     }
 
+    // In a browser projects live in the page's own storage: they come in and go out as zips.
+    public bool InBrowser { get; } = OperatingSystem.IsBrowser();
+    // Folders cannot be picked in every browser (Firefox, Safari); the view says where they can.
+    [ObservableProperty] bool canOpenFolder = true;
+
+    [RelayCommand]
+    async Task ImportZip()
+    {
+        if (await dialogs.PickFileAsync(Loc.T("ImportZipTitle"), Loc.T("ZipFilter"), "*.zip") is not { } zip) return;
+        try
+        {
+            string folder = Path.Combine(settings.ProjectsFolderOrDefault, Path.GetFileNameWithoutExtension(zip));
+            for (int n = 2; Directory.Exists(folder); n++) folder = Path.Combine(settings.ProjectsFolderOrDefault, $"{Path.GetFileNameWithoutExtension(zip)} ({n})");
+            System.IO.Compression.ZipFile.ExtractToDirectory(zip, folder);
+            // A zip of the folder itself (one folder inside): its contents are the project.
+            if (!File.Exists(Path.Combine(folder, ChartProject.FileName)) && Directory.GetFiles(folder).Length == 0 && Directory.GetDirectories(folder) is [var inner])
+                folder = inner;
+            open(registry.OpenFolder(folder));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            await dialogs.MessageAsync(Loc.T("CouldNotOpenFolder"), e.Message);
+        }
+    }
+
+    [RelayCommand]
+    async Task ExportZip(ProjectItemViewModel? item)
+    {
+        item ??= Selected;
+        if (item == null || !Directory.Exists(item.Folder)) return;
+        try
+        {
+            string zip = Path.Combine(Path.GetTempPath(), "export", item.Name + ".zip");
+            Directory.CreateDirectory(Path.GetDirectoryName(zip)!);
+            if (File.Exists(zip)) File.Delete(zip);
+            System.IO.Compression.ZipFile.CreateFromDirectory(item.Folder, zip);
+            await dialogs.OfferAsync(zip);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            await dialogs.MessageAsync(Loc.T("ExportZipFailed"), e.Message);
+        }
+    }
+
     // Audio and video converted with ffmpeg.
     [RelayCommand]
     void Transcode() => transcode?.Invoke();
@@ -119,7 +163,7 @@ public sealed class ProjectItemViewModel
     {
         get
         {
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string home = AppPaths.Folder(Environment.SpecialFolder.UserProfile);
             return home.Length > 1 && Folder.StartsWith(home + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? "~" + Folder[home.Length..] : Folder;
         }
     }

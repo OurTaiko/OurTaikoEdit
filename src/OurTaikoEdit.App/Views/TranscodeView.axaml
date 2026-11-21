@@ -41,7 +41,7 @@
           <TextBlock Classes="caption" Text="{Binding FfmpegText}" VerticalAlignment="Center" MaxWidth="420" TextTrimming="PathSegmentEllipsis"
                      ToolTip.Tip="{Binding FfmpegText}" />
           <Button Classes="ghost" Content="{Binding OfferText}" IsVisible="{Binding HasOffer}" Command="{Binding DownloadFfmpegCommand}" />
-          <Button Classes="ghost icon" ToolTip.Tip="{l:T FfmpegManage}">
+          <Button Classes="ghost icon" ToolTip.Tip="{l:T FfmpegManage}" IsVisible="{Binding CanManageFfmpeg}">
             <c:Icon Data="{StaticResource IconSettings}" />
             <Button.Flyout>
               <MenuFlyout>
@@ -273,7 +273,7 @@
             </StackPanel>
           </Border>
 
-          <Border Classes="group">
+          <Border Classes="group" IsVisible="{Binding CanChooseOutput}">
             <StackPanel Classes="field">
               <TextBlock Classes="label" Text="{l:T TranscodeOutput}" />
               <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">

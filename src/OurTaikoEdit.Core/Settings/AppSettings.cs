@@ -68,7 +68,7 @@ public sealed class AppSettings
     public event Action? Changed;
 
     public static string DefaultProjectsFolder
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "OurTaikoEdit");
+        => Path.Combine(Projects.AppPaths.Folder(Environment.SpecialFolder.MyDocuments), "OurTaikoEdit");
 
     public string ProjectsFolderOrDefault => string.IsNullOrWhiteSpace(ProjectsFolder) ? DefaultProjectsFolder : ProjectsFolder;
 

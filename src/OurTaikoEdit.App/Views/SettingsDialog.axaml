@@ -1,10 +1,10 @@
-<Window xmlns="https://github.com/avaloniaui"
+<v:Dialog xmlns="https://github.com/avaloniaui"
+        xmlns:v="using:OurTaikoEdit.App.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="using:OurTaikoEdit.App.Localization"
         x:Class="OurTaikoEdit.App.Views.SettingsDialog"
-        Title="{l:T Settings}" Width="580" SizeToContent="Height" CanResize="False"
-        WindowStartupLocation="CenterOwner">
-  <Window.Styles>
+        Title="{l:T Settings}" Width="580">
+  <v:Dialog.Styles>
     <Style Selector="Grid.form > TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -17,7 +17,7 @@
       <Setter Property="Margin" Value="0,-4,0,2" />
       <Setter Property="Background" Value="{StaticResource LineBrush}" />
     </Style>
-  </Window.Styles>
+  </v:Dialog.Styles>
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Classes="footer">
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
@@ -41,8 +41,8 @@
           <TextBlock Grid.Row="1" Text="{l:T MessageLanguage}" TextWrapping="Wrap" />
           <ComboBox Grid.Row="1" Grid.Column="1" x:Name="MessageBox" HorizontalAlignment="Stretch" />
           <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" TextWrapping="Wrap" Text="{l:T MessageLanguageHint}" />
-          <TextBlock Grid.Row="3" Text="{l:T ProjectsFolder}" />
-          <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBlock Grid.Row="3" Text="{l:T ProjectsFolder}" x:Name="FolderLabel" />
+          <Grid Grid.Row="3" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" x:Name="FolderRow">
             <TextBox x:Name="FolderBox" />
             <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseFolder" VerticalAlignment="Stretch" />
           </Grid>
@@ -95,4 +95,4 @@
       </StackPanel>
     </StackPanel>
   </DockPanel>
-</Window>
+</v:Dialog>

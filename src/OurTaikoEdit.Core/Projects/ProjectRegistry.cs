@@ -30,7 +30,7 @@ public sealed class ProjectRegistry
     // Lazy: the move below must happen only when the app asks for its folder, not whenever the type
     // is first touched (tests create registries in temporary folders).
     static readonly Lazy<string> defaultDataFolder
-        = new(() => DataFolderIn(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)));
+        = new(() => DataFolderIn(AppPaths.Folder(Environment.SpecialFolder.ApplicationData)));
 
     public static string DefaultDataFolder => defaultDataFolder.Value;
 

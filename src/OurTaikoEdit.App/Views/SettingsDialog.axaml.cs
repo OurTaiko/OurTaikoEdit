@@ -11,7 +11,7 @@ namespace OurTaikoEdit.App.Views;
 
 // The settings, edited on a copy: OK saves them and every view takes them over; Cancel leaves
 // them as they were. Closes with true when they were saved.
-public partial class SettingsDialog : Window
+public partial class SettingsDialog : Dialog
 {
     static readonly string[] LanguageValues = { "system", "en", "zh", "ja" };
     static readonly string[] MessageValues = { "ui", "en", "zh", "ja" };
@@ -86,7 +86,9 @@ public partial class SettingsDialog : Window
             none.Classes.Add("muted");
             ModsPanel.Children.Add(none);
         }
-        ModsHint.Text = s.DataFolder == null ? "" : Loc.F("ModsHint", ModRegistry.UserFolder(s.DataFolder));
+        // A browser keeps projects in its own storage and loads only the mods built in.
+        if (OperatingSystem.IsBrowser()) FolderLabel.IsVisible = FolderRow.IsVisible = false;
+        ModsHint.Text = s.DataFolder == null || OperatingSystem.IsBrowser() ? "" : Loc.F("ModsHint", ModRegistry.UserFolder(s.DataFolder));
         ModsHint.IsVisible = ModsHint.Text.Length > 0;
     }
 

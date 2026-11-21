@@ -20,6 +20,8 @@ public interface IDialogService
     Task<string?> PickFileAsync(string title, string filterName, params string[] patterns);
     // Any number of files of any type; none when cancelled.
     Task<IReadOnlyList<string>> PickFilesAsync(string title);
+    // A file the app made, handed to the person (a browser downloads it; the desktop has it already).
+    Task OfferAsync(string file);
     Task<NewProjectRequest?> NewProjectAsync(string location);
     Task MessageAsync(string title, string message);
     Task<bool> ConfirmAsync(string title, string message, string confirm);

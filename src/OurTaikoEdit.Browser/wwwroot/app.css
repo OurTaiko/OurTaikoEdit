@@ -1,0 +1,6 @@
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #1B1615; color: #F3E9DC; }
+#out { position: absolute; inset: 0; }
+.splash { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font: 15px system-ui, sans-serif; color: #B7A89D; gap: 14px; }
+.splash .logo { width: 44px; height: 44px; border-radius: 50%; border: 4px solid #F65040; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }

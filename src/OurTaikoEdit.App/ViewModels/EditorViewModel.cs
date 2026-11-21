@@ -843,6 +843,7 @@ public sealed partial class EditorViewModel : ViewModelBase
             bool finished = await dialogs.ProgressAsync(Loc.T("VideoTitle"), Loc.T("VideoPreparing"), (done, total) => Loc.F("VideoRendering", done, total),
                 (progress, cancel) => VideoExporter.ExportAsync(source, options, progress, cancel));
             Message = finished ? Loc.F("VideoDone", options.Output) : Loc.T("VideoCancelled");
+            if (finished) await dialogs.OfferAsync(options.Output);
         }
         catch (Exception e) when (e is VideoExportException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
         {

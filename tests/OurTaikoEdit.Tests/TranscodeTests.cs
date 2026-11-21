@@ -45,6 +45,45 @@ public class TranscodeTests : IDisposable
         Assert.Equal("apac", info.Audio[1].Codec);
     }
 
+    // What `ffmpeg -i` says (ffmpeg.wasm has no ffprobe).
+    [Fact]
+    public void FfmpegsOwnDescriptionIsRead()
+    {
+        const string log = """
+            Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'in0.mp4':
+              Duration: 00:02:05.50, start: 0.000000, bitrate: 4000 kb/s
+              Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 3800 kb/s, 59.94 fps, 59.94 tbr, 60k tbn (default)
+              Stream #0:1[0x2](jpn): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 192 kb/s (default)
+              Stream #0:2[0x3](und): Audio: none (apac / 0x63617061), 48000 Hz, 4 channels
+              Stream #0:3[0x4](und): Video: mjpeg (Baseline), yuvj420p(pc), 600x600, 90k tbr, 90k tbn (attached pic)
+            At least one output file must be specified
+            """;
+        var info = MediaInfo.FromFfmpegLog(log);
+        Assert.Equal("mov,mp4,m4a,3gp,3g2,mj2", info.Container);
+        Assert.Equal(125.5, info.Duration);
+        Assert.Equal(4000000, info.BitRate);
+        Assert.Equal(new VideoTrack("h264", 1920, 1080, 59.94), info.Video);
+        Assert.Equal(new AudioTrack("aac", false, "jpn", 48000, 2, "stereo", 192000, true), info.Audio[0]);
+        Assert.Equal(new AudioTrack("apac", true, "", 48000, 4, "4 channels", null, false), info.Audio[1]);
+    }
+
+    // ffmpeg.wasm: Opus is ffmpeg's own encoder (48 kHz, at most two channels), WebM is VP8 at its fastest.
+    [Fact]
+    public void TheBrowsersFfmpegGetsItsOwnEncoders()
+    {
+        TranscodeFormat.Wasm = true;
+        try
+        {
+            var surround = new MediaInfo("x", 10, null, new[] { new AudioTrack("aac", false, "", 48000, 6, "5.1", null, true) }, null);
+            string opus = string.Join(" ", TranscodePlan.Arguments(surround, new TranscodeOptions { Format = "opus" }, Trim.Whole, "in", "out"));
+            Assert.Contains("-c:a opus -b:a 128k -strict -2 -ar 48000 -ac 2", opus);
+            string webm = string.Join(" ", TranscodePlan.Arguments(Video, new TranscodeOptions { Format = "webm" }, Trim.Whole, "in", "out"));
+            Assert.Contains("-c:v libvpx -crf 10 -b:v 2M -deadline realtime -cpu-used 8", webm);
+            Assert.DoesNotContain(TranscodeFormat.All, f => f.VideoCodecs.Contains("libvpx-vp9") || f.AudioCodecs.Contains("libopus"));
+        }
+        finally { TranscodeFormat.Wasm = false; }
+    }
+
     [Fact]
     public void ATrackThatFitsIsCopiedUnlessSomethingChangesIt()
     {

@@ -30,6 +30,30 @@ dotnet test OurTaikoEdit.slnx
 build/package.sh osx-arm64 dist/osx
 ```
 
+## 网页版（`src/OurTaikoEdit.Browser`）
+
+同一个应用（`OurTaikoEdit.App`）跑在 Avalonia.Browser（WebAssembly）上，功能与桌面版相同，换掉的只有依赖平台的部分：
+
+| 桌面 | 网页 |
+|---|---|
+| 项目＝电脑上的文件夹 | 项目在浏览器自己的存储里：`main.js` 把 HOME（`/home/web_user`）挂到 IndexedDB（Emscripten IDBFS），定时与离开页面时写回；项目列表上有「导入 .zip」与每个项目的「下载」。「打开文件夹」只在能选文件夹的浏览器（Chromium）里出现，选中的文件夹被复制进来 |
+| 对话框是窗口 | 对话框盖在页面上（`Views/Dialog.cs` 的 `OverlayDialogHost`；桌面用 `WindowDialogHost`，两者显示同一个 `Dialog` 控件） |
+| 选中的文件就地读写 | 复制进 `/tmp/picked`（`BrowserFiles`），做出的文件（视频、转换结果、项目 zip）下载给用户（`IDialogService.OfferAsync`） |
+| OpenAL 播放 | Web Audio（`wwwroot/audio.js`、`WebAudioPlayer`），歌曲与打击音都按 AudioContext 的时钟排 |
+| ffmpeg 程序（转码） | ffmpeg.wasm（`ffmpeg-bridge.js`、`WasmFfmpeg`）：内核 @ffmpeg/core 0.12.10 首次用到时从 jsDelivr 取（约 31 MB），加载器 `wwwroot/ffmpeg/` 两个小文件放在本站；Opus 用 ffmpeg 自带编码器、WebM 是 VP8（`TranscodeFormat.Wasm`） |
+| ffmpeg 编码视频 | 浏览器的 H.264 编码器（WebCodecs，`video.js`、`WebCodecsSink`），ffmpeg.wasm 只负责配上 AAC 声音、封装 MP4；没有 x264 档位和「不编码」 |
+| 系统的中日文字体 | 启动前从 jsDelivr（google/fonts 固定提交）取 Noto Sans SC（约 9 MB）作回退字体（`CjkFont`） |
+| Mods 文件夹 | 只有内置的 Mod（编进来的「谱面图片导入」） |
+
+需要 .NET 的 `wasm-tools` 工作负载（`sudo dotnet workload install wasm-tools`）。网页版不在 `OurTaikoEdit.slnx` 里（CI 机器没有这个工作负载）。
+
+```bash
+dotnet run --project src/OurTaikoEdit.Browser                 # http://localhost:5280
+dotnet publish src/OurTaikoEdit.Browser -c Release -o dist/web   # 静态网站：dist/web/wwwroot
+```
+
+发布用的是完全裁剪；`OurTaikoEdit.Core` 整个保留（界面文字的索引器与设置 JSON 靠反射）。压缩后的 WebAssembly 约 9 MB。
+
 ## 目录
 
 ```
@@ -41,6 +65,7 @@ src/OurTaikoEdit.Audio/     歌曲音频：解码 OGG（NVorbis）／MP3（NLaye
 src/OurTaikoEdit.Play/      游玩的判定：OurTaikoPlay 的 PlaySession、真打计分、魂槽、分歧条件（Game/ 下原样拷贝，见 PROVENANCE.md）
 src/OurTaikoEdit.App/       Avalonia 应用：Projects 与编辑两个场景，以及盖在编辑场景上的游玩场景；界面的颜色、图标与控件样式在 Theme/
 src/OurTaikoEdit.Mods.ChartImage/  Mod「谱面图片导入」：从谱面图片新建项目（见下文「Mod」）
+src/OurTaikoEdit.Browser/   网页版的宿主（见上文「网页版」）：入口、浏览器存储、Web Audio、ffmpeg.wasm、WebCodecs、字体
 tests/OurTaikoEdit.Tests/   语言与项目的单元测试
 tests/OurTaikoEdit.UiTests/ Headless UI 测试与截图
 ```

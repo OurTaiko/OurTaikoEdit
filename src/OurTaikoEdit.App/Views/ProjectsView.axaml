@@ -61,7 +61,13 @@
       <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,18">
         <TextBlock Text="{l:T Projects}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Button Command="{Binding OpenFolderCommand}">
+          <Button Command="{Binding ImportZipCommand}" IsVisible="{Binding InBrowser}" ToolTip.Tip="{l:T ImportZipTip}">
+            <StackPanel Classes="content">
+              <c:Icon Data="{StaticResource IconFolder}" />
+              <TextBlock Text="{l:T ImportZip}" />
+            </StackPanel>
+          </Button>
+          <Button Command="{Binding OpenFolderCommand}" IsVisible="{Binding CanOpenFolder}">
             <StackPanel Classes="content">
               <c:Icon Data="{StaticResource IconFolder}" />
               <TextBlock Text="{l:T OpenFolderMenu}" />
@@ -117,6 +123,9 @@
               </StackPanel>
               <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                 <TextBlock Classes="caption" Text="{Binding LastOpened}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <Button Classes="ghost" Content="{l:T ExportZip}" ToolTip.Tip="{l:T ExportZipTip}"
+                        IsVisible="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).InBrowser}"
+                        Command="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).ExportZipCommand}" CommandParameter="{Binding}" />
                 <Button Content="{l:T Open}"
                         Command="{Binding $parent[ListBox].((vm:ProjectsViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" />
                 <Button Classes="ghost icon" ToolTip.Tip="{l:T RemoveTitle}"

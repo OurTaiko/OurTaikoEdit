@@ -1,9 +1,9 @@
-<Window xmlns="https://github.com/avaloniaui"
+<v:Dialog xmlns="https://github.com/avaloniaui"
+        xmlns:v="using:OurTaikoEdit.App.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OurTaikoEdit.App.Views.NewProjectDialog"
         xmlns:l="using:OurTaikoEdit.App.Localization"
-        Title="{l:T NewProject}" Width="520" SizeToContent="Height" CanResize="False"
-        WindowStartupLocation="CenterOwner">
+        Title="{l:T NewProject}" Width="520">
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Classes="footer">
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
@@ -27,7 +27,7 @@
         <TextBlock Classes="label" Text="{l:T Location}" />
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
           <TextBox x:Name="LocationBox" />
-          <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseLocation" VerticalAlignment="Stretch" />
+          <Button Grid.Column="1" x:Name="BrowseLocationButton" Content="{l:T Browse}" Click="BrowseLocation" VerticalAlignment="Stretch" />
         </Grid>
         <TextBlock x:Name="FolderText" Classes="caption" TextWrapping="Wrap" IsVisible="False" />
       </StackPanel>
@@ -62,4 +62,4 @@
       <TextBlock x:Name="ErrorText" Classes="error" TextWrapping="Wrap" IsVisible="False" />
     </StackPanel>
   </DockPanel>
-</Window>
+</v:Dialog>

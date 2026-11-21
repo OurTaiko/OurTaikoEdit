@@ -7,7 +7,7 @@ using OurTaikoEdit.Core.Localization;
 namespace OurTaikoEdit.App.Views;
 
 // A new difficulty can start empty, inherit an existing block's shape, or import a source file.
-public partial class NewBlockDialog : Window
+public partial class NewBlockDialog : Dialog
 {
     readonly IReadOnlyList<BlockCourse> courses = Array.Empty<BlockCourse>();
     readonly IReadOnlyList<ChartBlock> blocks = Array.Empty<ChartBlock>();
@@ -78,7 +78,7 @@ public partial class NewBlockDialog : Window
     async void BrowseSource(object? sender, RoutedEventArgs e)
     {
         if (Importer is not { } importer) return;
-        var dialogs = new DialogService(this);
+        if (Dialogs is not { } dialogs) return;
         if (await dialogs.PickFileAsync(Loc.T("ChooseSource"), importer.DisplayName, importer.Patterns.ToArray()) is { } file)
             SourceFileBox.Text = file;
     }

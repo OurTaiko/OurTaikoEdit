@@ -11,7 +11,7 @@ namespace OurTaikoEdit.App.Views;
 // a file one of the mods' importers reads), the chart type and the audio. A chart that is
 // imported is read here, when Create is pressed, so that a file that cannot be read is said in
 // the dialog while it can still be changed.
-public partial class NewProjectDialog : Window
+public partial class NewProjectDialog : Dialog
 {
     readonly IDialogService? dialogs;
     readonly List<IChartLanguage> languages = ChartLanguages.All.ToList();
@@ -35,6 +35,8 @@ public partial class NewProjectDialog : Window
         ShowSource();
         NameBox.TextChanged += (_, _) => ShowFolder();
         LocationBox.TextChanged += (_, _) => ShowFolder();
+        // A browser keeps projects in its own storage: there is no folder of the computer to pick.
+        if (OperatingSystem.IsBrowser()) BrowseLocationButton.IsVisible = false;
         Opened += (_, _) => NameBox.Focus();
     }
 

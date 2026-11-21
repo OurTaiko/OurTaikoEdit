@@ -11,7 +11,7 @@ namespace OurTaikoEdit.App.Views;
 
 // The preview video's size, frame rate, start, sounds, file and ffmpeg. Starts from the last
 // video's choices (kept in the settings by the editor once the video is asked for).
-public partial class ExportVideoDialog : Window
+public partial class ExportVideoDialog : Dialog
 {
     static readonly (int Width, int Height, string Name)[] Sizes =
     {
@@ -65,7 +65,15 @@ public partial class ExportVideoDialog : Window
         // The one chosen before, else (it is gone) the one found where ffmpeg usually is.
         FfmpegBox.Text = VideoExporter.FindFfmpeg(settings.Ffmpeg) ?? VideoExporter.FindFfmpeg(null, Tools) ?? settings.Ffmpeg ?? "";
         ShowHint();
-        if (VideoExporter.FindFfmpeg(FfmpegBox.Text) == null) NoFfmpeg();
+        // A browser encodes with its own encoder and ffmpeg.wasm, and downloads the video: no
+        // ffmpeg, no x264 preset, no folder to choose.
+        if (OperatingSystem.IsBrowser())
+        {
+            FfmpegPanel.IsVisible = EncodingPanel.IsVisible = BrowseOutputButton.IsVisible = false;
+            EncodingBox.SelectedIndex = Math.Max(0, VideoEncodings.All.ToList().IndexOf(VideoEncodings.Default));
+            OutputBox.Text = WithExtension(request.SuggestedOutput);
+        }
+        else if (VideoExporter.FindFfmpeg(FfmpegBox.Text) == null) NoFfmpeg();
     }
 
     OurTaikoEdit.Core.Ffmpeg.FfmpegTools? Tools => request?.Tools;
@@ -188,7 +196,7 @@ public partial class ExportVideoDialog : Window
 
     async void BrowseFfmpeg(object? sender, RoutedEventArgs e)
     {
-        var dialogs = new DialogService(this);
+        if (Dialogs is not { } dialogs) return;
         if (await dialogs.PickFileAsync(Loc.T("VideoFfmpeg"), "ffmpeg", OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg") is { } file)
         {
             FfmpegBox.Text = file;
@@ -205,7 +213,8 @@ public partial class ExportVideoDialog : Window
         string? dir = Path.GetDirectoryName(output);
         if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) { ShowError(Loc.T("VideoNeedOutput")); return; }
         string typed = FfmpegBox.Text?.Trim() ?? "";
-        if (VideoExporter.FindFfmpeg(typed.Length > 0 ? typed : null, Tools) is not { } ffmpeg) { NoFfmpeg(); return; }
+        string? ffmpeg = OperatingSystem.IsBrowser() ? "" : VideoExporter.FindFfmpeg(typed.Length > 0 ? typed : null, Tools);
+        if (ffmpeg == null) { NoFfmpeg(); return; }
         // The ffmpeg chosen by hand is remembered; one found on its own is looked for again next time.
         settings.Ffmpeg = typed.Length > 0 && typed != VideoExporter.FindFfmpeg(null, Tools) ? typed : null;
 

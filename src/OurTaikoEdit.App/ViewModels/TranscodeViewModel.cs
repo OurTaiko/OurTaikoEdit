@@ -109,8 +109,15 @@ public sealed partial class TranscodeViewModel : ViewModelBase
     [ObservableProperty] string downloadText = "";
     [ObservableProperty] string? downloadError;
     [ObservableProperty] ToolsManifest? offer;
-    public bool HasFfmpeg => Ffmpeg != null;
-    public bool NeedsFfmpeg => Ffmpeg == null;
+    // An ffmpeg that comes with the app where there is no program to run (ffmpeg.wasm in a browser):
+    // always there, nothing to download or choose.
+    public static IFfmpegEngine? BuiltIn { get; set; }
+    IFfmpegEngine? Engine => BuiltIn ?? (Ffmpeg is { } f ? new ProcessFfmpeg(f) : null);
+    public bool HasFfmpeg => Engine != null;
+    public bool NeedsFfmpeg => Engine == null;
+    public bool CanManageFfmpeg => BuiltIn == null;
+    // Where the files go is the desktop's to choose; a browser downloads them.
+    public bool CanChooseOutput { get; } = !OperatingSystem.IsBrowser();
     public bool CanDownload => tools.Rid != null && !IsDownloading;
     public bool HasDownloaded => tools.Installed != null;
     public bool HasOffer => Offer != null && HasFfmpeg && !IsDownloading;
@@ -206,7 +213,8 @@ public sealed partial class TranscodeViewModel : ViewModelBase
         pcmDepth = PcmDepths[0];
         sampleRate = SampleRates[0];
         channels = ChannelChoices[0];
-        preset = Presets.First(p => p.Value == "medium");
+        // x264 in a browser is many times slower: a faster preset to start from.
+        preset = Presets.First(p => p.Value == (TranscodeFormat.Wasm ? "veryfast" : "medium"));
         height = Heights[0];
         fps = FrameRates[0];
         outputFolder = settings.TranscodeFolder ?? "";
@@ -228,9 +236,10 @@ public sealed partial class TranscodeViewModel : ViewModelBase
 
     void RefreshFfmpeg()
     {
-        Ffmpeg = tools.Find(settings.Ffmpeg);
+        Ffmpeg = BuiltIn == null ? tools.Find(settings.Ffmpeg) : null;
         FfmpegText = Ffmpeg switch
         {
+            null when BuiltIn != null => Loc.T("FfmpegBuiltIn"),
             null => Loc.T("FfmpegMissing"),
             { Origin: FfmpegOrigin.Downloaded } => Loc.F("FfmpegDownloaded", tools.Installed?.Version),
             { Origin: FfmpegOrigin.Chosen } f => Loc.F("FfmpegChosen", f.Ffmpeg),
@@ -261,7 +270,7 @@ public sealed partial class TranscodeViewModel : ViewModelBase
     // asked when another ffmpeg is in use).
     async Task CheckOfferAsync()
     {
-        if (tools.Rid == null || Ffmpeg is { Origin: not FfmpegOrigin.Downloaded }) return;
+        if (BuiltIn != null || tools.Rid == null || Ffmpeg is { Origin: not FfmpegOrigin.Downloaded }) return;
         try
         {
             var manifest = await tools.FetchManifestAsync();
@@ -362,16 +371,16 @@ public sealed partial class TranscodeViewModel : ViewModelBase
 
     async Task ProbeAsync(TranscodeItem item)
     {
-        if (Ffmpeg?.Ffprobe is not { } ffprobe)
+        if (Engine is not { } engine)
         {
             item.Status = TranscodeStatus.Unreadable;
-            item.Error = Ffmpeg == null ? Loc.T("FfmpegMissing") : Loc.T("FfprobeMissing");
+            item.Error = Loc.T("FfmpegMissing");
             item.Description = "";
             return;
         }
         try
         {
-            var info = await FfmpegRunner.ProbeAsync(ffprobe, item.Path);
+            var info = await engine.ProbeAsync(item.Path);
             item.Info = info;
             item.Description = Describe(info, item.Path);
             item.Status = info.Audio.Count == 0 && info.Video == null ? TranscodeStatus.Unreadable : TranscodeStatus.Ready;
@@ -623,7 +632,7 @@ public sealed partial class TranscodeViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStart))]
     async Task Start()
     {
-        if (Ffmpeg is not { } ffmpeg) return;
+        if (Engine is not { } engine) return;
         StopPreview();
         settings.Save();
         var options = Options;
@@ -654,11 +663,14 @@ public sealed partial class TranscodeViewModel : ViewModelBase
                 {
                     Directory.CreateDirectory(System.IO.Path.GetDirectoryName(output)!);
                     var args = TranscodePlan.Arguments(item.Info!, options, trim, item.Path, output);
-                    await FfmpegRunner.ConvertAsync(ffmpeg.Ffmpeg, args, output, length, new Progress<double>(p => item.Progress = p), run.Token);
+                    await engine.ConvertAsync(args, output, length, new Progress<double>(p => item.Progress = p), run.Token);
                     item.Output = output;
                     item.Status = TranscodeStatus.Done;
                     done++;
-                    converted?.Invoke(output);
+                    // Used where it was asked for (the editor's song); otherwise handed over (a browser
+                    // downloads it; on the desktop it is where it was asked to go already).
+                    if (converted != null) converted(output);
+                    else await dialogs.OfferAsync(output);
                 }
                 catch (OperationCanceledException) { item.Status = TranscodeStatus.Cancelled; }
                 catch (Exception e) when (e is TranscodeException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
@@ -712,7 +724,7 @@ public sealed partial class TranscodeViewModel : ViewModelBase
         Waveform = null;
         PreviewPosition = item?.TrimStart ?? 0;
         PreviewText = "";
-        if (item?.Info is not { } info || Ffmpeg is not { } ffmpeg) return;
+        if (item?.Info is not { } info || Engine is not { } engine) return;
         var d = TranscodePlan.Decide(info, Options);
         if (d.Source == null) { PreviewText = Loc.T("PlanNoUsableAudio"); return; }
         PreviewLoading = true;
@@ -720,7 +732,7 @@ public sealed partial class TranscodeViewModel : ViewModelBase
         try
         {
             const int rate = 44100;
-            var samples = await FfmpegRunner.DecodeAsync(ffmpeg.Ffmpeg, item.Path, d.AudioIndex, rate, 2);
+            var samples = await engine.DecodeAsync(item.Path, d.AudioIndex, rate, 2);
             if (load != previewLoad) return;
             var audio = new PcmAudio { SampleRate = rate, Channels = 2, Samples = samples };
             var wave = await Task.Run(() => new Waveform(audio, Math.Max(0.005, audio.Duration / 4000)));
@@ -751,7 +763,7 @@ public sealed partial class TranscodeViewModel : ViewModelBase
     {
         if (IsPreviewPlaying) { StopPreview(); return; }
         if (previewAudio == null || Selected == null) return;
-        player ??= OpenAlPlayer.Open(previewAudio);
+        player ??= EditorViewModel.OpenPlayer(previewAudio);
         if (player == null) { PreviewText = Loc.T("NoAudioDevice").Trim(); return; }
         player.Volume = (float)settings.Volume;
         double end = Selected.Trim.End ?? previewAudio.Duration;

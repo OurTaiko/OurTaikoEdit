@@ -7,31 +7,76 @@ using OurTaikoEdit.Core.Settings;
 
 namespace OurTaikoEdit.App.Views;
 
-public sealed class DialogService(Window owner) : IDialogService
+// How a file or folder the person picked becomes a path the app reads and writes: on the desktop
+// the picked one itself; in a browser a copy in the app's own storage (BrowserFiles).
+public interface IPickedFiles
 {
+    Task<string?> FolderAsync(IStorageFolder folder);
+    Task<string?> FileAsync(IStorageFile file);
+    // A file the app made (a video, a converted song, a project's zip), handed to the person: nothing
+    // to do on the desktop, where it is already where they chose; a browser downloads it.
+    Task OfferAsync(string file);
+}
+
+public sealed class LocalFiles : IPickedFiles
+{
+    public Task<string?> FolderAsync(IStorageFolder folder) => Task.FromResult(folder.TryGetLocalPath());
+    public Task<string?> FileAsync(IStorageFile file) => Task.FromResult(file.TryGetLocalPath());
+    public Task OfferAsync(string file) => Task.CompletedTask;
+}
+
+public sealed class DialogService : IDialogService
+{
+    readonly Func<TopLevel?> top;
+    readonly IDialogHost host;
+    readonly IPickedFiles files;
+
+    // The desktop: dialogs in windows over the owner.
+    public DialogService(Window owner) : this(() => owner, new WindowDialogHost(owner), new LocalFiles()) { }
+
+    public DialogService(Func<TopLevel?> top, IDialogHost host, IPickedFiles files)
+    {
+        this.top = top;
+        this.host = host;
+        this.files = files;
+    }
+
+    IStorageProvider Storage => top()?.StorageProvider ?? throw new InvalidOperationException("Nothing to show a picker in.");
+
+    Task<T?> Show<T>(Dialog dialog)
+    {
+        dialog.Dialogs = this;
+        return host.ShowAsync<T>(dialog);
+    }
+
     public async Task<string?> PickFolderAsync(string title)
     {
-        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
-        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+        var folders = await Storage.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
+        return folders.Count > 0 ? await files.FolderAsync(folders[0]) : null;
     }
 
     public async Task<string?> PickFileAsync(string title, string filterName, params string[] patterns)
     {
-        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        var picked = await Storage.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = title, AllowMultiple = false,
             FileTypeFilter = new[] { new FilePickerFileType(filterName) { Patterns = patterns }, FilePickerFileTypes.All },
         });
-        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        return picked.Count > 0 ? await files.FileAsync(picked[0]) : null;
     }
 
     public async Task<IReadOnlyList<string>> PickFilesAsync(string title)
     {
-        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = title, AllowMultiple = true });
-        return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+        var picked = await Storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = title, AllowMultiple = true });
+        var paths = new List<string>();
+        foreach (var file in picked)
+            if (await files.FileAsync(file) is { } path) paths.Add(path);
+        return paths;
     }
 
-    public Task<NewProjectRequest?> NewProjectAsync(string location) => new NewProjectDialog(this, location).ShowDialog<NewProjectRequest?>(owner);
+    public Task OfferAsync(string file) => files.OfferAsync(file);
+
+    public Task<NewProjectRequest?> NewProjectAsync(string location) => Show<NewProjectRequest>(new NewProjectDialog(this, location));
 
     public Task MessageAsync(string title, string message) => Ask(title, message, (Loc.T("Ok"), true));
 
@@ -41,36 +86,30 @@ public sealed class DialogService(Window owner) : IDialogService
     public async Task<string?> PromptAsync(string title, string message, string value)
     {
         var box = new TextBox { Text = value, MinWidth = 260 };
-        var window = new Window
-        {
-            Title = title, Width = 380, SizeToContent = SizeToContent.Height, CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
-        string? result = null;
+        var dialog = new Dialog { Title = title, Width = 380 };
         var ok = Button(Loc.T("Ok"), accent: true);
         ok.IsDefault = true;
-        ok.Click += (_, _) => { result = box.Text; window.Close(); };
+        ok.Click += (_, _) => dialog.Close(box.Text);
         var cancel = Button(Loc.T("Cancel"), accent: false);
         cancel.IsCancel = true;
-        cancel.Click += (_, _) => window.Close();
-        window.Content = Layout(new Control[] { new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, box }, ok, cancel);
-        window.Opened += (_, _) => { box.Focus(); box.SelectAll(); };
-        await window.ShowDialog(owner);
-        return result;
+        cancel.Click += (_, _) => dialog.Close();
+        dialog.Content = Layout(new Control[] { new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, box }, ok, cancel);
+        dialog.Opened += (_, _) => { box.Focus(); box.SelectAll(); };
+        return await Show<string>(dialog);
     }
 
     public Task<string?> BranchConditionAsync(string title, OurTaikoEdit.Core.Languages.IChartLanguage language, string written)
-        => new BranchDialog(title, language, written).ShowDialog<string?>(owner);
+        => Show<string>(new BranchDialog(title, language, written));
 
     public Task<OurTaikoEdit.Core.Languages.NewBlock?> NewBlockAsync(OurTaikoEdit.Core.Languages.IChartLanguage language, IReadOnlyList<OurTaikoEdit.Core.Languages.BlockCourse> courses, IReadOnlyList<OurTaikoEdit.Core.Languages.ChartBlock> blocks, int current)
-        => new NewBlockDialog(language, courses, blocks, current).ShowDialog<OurTaikoEdit.Core.Languages.NewBlock?>(owner);
+        => Show<OurTaikoEdit.Core.Languages.NewBlock>(new NewBlockDialog(language, courses, blocks, current));
 
     public Task<SaveChoice> AskSaveAsync(string name)
         => Ask(Loc.F("SaveQuestion", name), Loc.T("SaveLost"),
             (Loc.T("Save"), SaveChoice.Save), (Loc.T("DontSave"), SaveChoice.Discard), (Loc.T("Cancel"), SaveChoice.Cancel));
 
     public Task<OurTaikoEdit.App.Export.VideoExportOptions?> ExportVideoAsync(AppSettings settings, VideoExportRequest request)
-        => new ExportVideoDialog(settings, request).ShowDialog<OurTaikoEdit.App.Export.VideoExportOptions?>(owner);
+        => Show<OurTaikoEdit.App.Export.VideoExportOptions>(new ExportVideoDialog(settings, request));
 
     public async Task<bool> ProgressAsync(string title, string waiting, Func<int, int, string> describe, Func<IProgress<(int Done, int Total)>, CancellationToken, Task> work)
     {
@@ -83,22 +122,17 @@ public sealed class DialogService(Window owner) : IDialogService
         var cancel = Button(Loc.T("Cancel"), accent: false);
         cancel.IsCancel = true;
         cancel.Click += (_, _) => stop.Cancel();
-        var window = new Window
-        {
-            Title = title, Width = 420, SizeToContent = SizeToContent.Height, CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = Layout(new Control[] { heading, said, bar }, cancel),
-        };
+        var dialog = new Dialog { Title = title, Width = 420, Content = Layout(new Control[] { heading, said, bar }, cancel) };
         bool running = true;
-        // Closing the window stops the work; the window goes once the work has.
-        window.Closing += (_, e) => { if (running) { e.Cancel = true; stop.Cancel(); } };
+        // Closing it stops the work; it goes once the work has.
+        dialog.AllowClose = () => { if (running) stop.Cancel(); return !running; };
         var progress = new Progress<(int Done, int Total)>(p =>
         {
             bar.IsIndeterminate = false;
             bar.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
             said.Text = describe(p.Done, p.Total);
         });
-        var shown = window.ShowDialog(owner);
+        var shown = Show<object>(dialog);
         try
         {
             await work(progress, stop.Token);
@@ -108,40 +142,33 @@ public sealed class DialogService(Window owner) : IDialogService
         finally
         {
             running = false;
-            window.Close();
+            dialog.Close();
             await shown;
         }
     }
 
-    public async Task<bool> SettingsAsync(AppSettings settings)
-        => await new SettingsDialog(settings).ShowDialog<bool>(owner);
+    public async Task<bool> SettingsAsync(AppSettings settings) => await Show<bool>(new SettingsDialog(settings));
 
-    // A small modal window with a message and a row of buttons; closing it picks the last one.
+    // A small dialog with a message and a row of buttons; closing it otherwise picks the last one.
     async Task<T> Ask<T>(string title, string message, params (string Label, T Value)[] buttons)
     {
-        var window = new Window
-        {
-            Title = title, Width = 420, SizeToContent = SizeToContent.Height, CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
+        var dialog = new Dialog { Title = title, Width = 420 };
         var row = new List<Button>();
-        T result = buttons[^1].Value;
         for (int i = 0; i < buttons.Length; i++)
         {
             var (label, value) = buttons[i];
             var button = Button(label, accent: i == 0);
             button.IsDefault = i == 0;
             button.IsCancel = i == buttons.Length - 1;
-            button.Click += (_, _) => { result = value; window.Close(); };
+            button.Click += (_, _) => dialog.Close(value);
             row.Add(button);
         }
         var heading = new TextBlock { Text = title, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         heading.Classes.Add("h1");
         var body = new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         body.Classes.Add("muted");
-        window.Content = Layout(new Control[] { heading, body }, row.ToArray());
-        await window.ShowDialog(owner);
-        return result;
+        dialog.Content = Layout(new Control[] { heading, body }, row.ToArray());
+        return await host.ShowAsync(dialog) is T chosen ? chosen : buttons[^1].Value;
     }
 
     static Button Button(string label, bool accent)

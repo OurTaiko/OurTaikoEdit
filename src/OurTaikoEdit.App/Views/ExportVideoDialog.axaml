@@ -1,9 +1,9 @@
-<Window xmlns="https://github.com/avaloniaui"
+<v:Dialog xmlns="https://github.com/avaloniaui"
+        xmlns:v="using:OurTaikoEdit.App.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OurTaikoEdit.App.Views.ExportVideoDialog"
         xmlns:l="using:OurTaikoEdit.App.Localization"
-        Title="{l:T VideoTitle}" Width="520" SizeToContent="Height" CanResize="False"
-        WindowStartupLocation="CenterOwner">
+        Title="{l:T VideoTitle}" Width="520">
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Classes="footer">
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
@@ -36,7 +36,7 @@
         <ComboBox Grid.Row="1" Grid.Column="1" x:Name="RangeBox" HorizontalAlignment="Stretch" />
       </Grid>
 
-      <StackPanel Classes="field">
+      <StackPanel Classes="field" x:Name="EncodingPanel">
         <TextBlock Classes="label" Text="{l:T VideoEncoding}" />
         <ComboBox x:Name="EncodingBox" HorizontalAlignment="Stretch" />
       </StackPanel>
@@ -48,11 +48,11 @@
         <TextBlock Classes="label" Text="{l:T VideoOutput}" />
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
           <TextBox x:Name="OutputBox" />
-          <Button Grid.Column="1" Content="{l:T Browse}" Click="BrowseOutput" />
+          <Button Grid.Column="1" x:Name="BrowseOutputButton" Content="{l:T Browse}" Click="BrowseOutput" />
         </Grid>
       </StackPanel>
 
-      <StackPanel Classes="field">
+      <StackPanel Classes="field" x:Name="FfmpegPanel">
         <TextBlock Classes="label" Text="{l:T VideoFfmpeg}" />
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
           <TextBox x:Name="FfmpegBox" PlaceholderText="{l:T VideoFfmpegPlaceholder}" />
@@ -68,4 +68,4 @@
       </StackPanel>
     </StackPanel>
   </DockPanel>
-</Window>
+</v:Dialog>

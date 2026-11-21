@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OurTaikoEdit.App.ViewModels"
+             x:Class="OurTaikoEdit.App.Views.MainView"
+             x:DataType="vm:MainWindowViewModel">
+  <!-- The app's one view: in the desktop window, or the whole page in a browser. The play scene
+       lies over the editor, which is kept as it is while a chart is played; so does the transcoder,
+       over the project list or the editor. Dialogs shown in the page (DialogLayer) lie over all. -->
+  <Panel>
+    <ContentControl Content="{Binding Scene}">
+      <ContentControl.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Play" Converter="{x:Static ObjectConverters.IsNull}" />
+          <Binding Path="Transcode" Converter="{x:Static ObjectConverters.IsNull}" />
+        </MultiBinding>
+      </ContentControl.IsVisible>
+    </ContentControl>
+    <ContentControl Content="{Binding Transcode}" IsVisible="{Binding Transcode, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    <ContentControl Content="{Binding Play}" IsVisible="{Binding Play, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    <Panel x:Name="DialogLayer" />
+  </Panel>
+</UserControl>

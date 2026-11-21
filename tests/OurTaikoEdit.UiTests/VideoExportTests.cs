@@ -278,6 +278,7 @@ public class VideoExportTests
         public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
         public Task<string?> PickFileAsync(string title, string filterName, params string[] patterns) => Task.FromResult<string?>(null);
         public Task<IReadOnlyList<string>> PickFilesAsync(string title) => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        public Task OfferAsync(string file) => Task.CompletedTask;
         public Task<OurTaikoEdit.App.ViewModels.NewProjectRequest?> NewProjectAsync(string location) => Task.FromResult<OurTaikoEdit.App.ViewModels.NewProjectRequest?>(null);
         public Task MessageAsync(string title, string message) => Task.CompletedTask;
         public Task<bool> ConfirmAsync(string title, string message, string confirm) => Task.FromResult(true);

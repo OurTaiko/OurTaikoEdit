@@ -13,6 +13,12 @@ public partial class ProjectsView : UserControl
         List.KeyDown += (_, e) => { if (e.Key == Key.Enter) OpenSelected(); };
     }
 
+    protected override void OnAttachedToVisualTree(Avalonia.VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (DataContext is ProjectsViewModel vm && TopLevel.GetTopLevel(this) is { } top) vm.CanOpenFolder = top.StorageProvider.CanPickFolder;
+    }
+
     void OpenSelected()
     {
         if (DataContext is ProjectsViewModel vm && vm.Selected != null) vm.OpenCommand.Execute(vm.Selected);

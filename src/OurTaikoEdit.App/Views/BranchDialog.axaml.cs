@@ -8,7 +8,7 @@ namespace OurTaikoEdit.App.Views;
 // A branch's condition: what it is decided by, chosen from the language's kinds with what each
 // counts, and the two thresholds each in a box of its own. Closes with the condition as the
 // language writes it, or null.
-public partial class BranchDialog : Window
+public partial class BranchDialog : Dialog
 {
     readonly IChartLanguage? language;
     readonly IReadOnlyList<BranchConditionKind> kinds = Array.Empty<BranchConditionKind>();

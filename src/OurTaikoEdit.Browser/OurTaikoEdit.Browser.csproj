@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <!-- OurTaikoEdit in a web browser: the same app (OurTaikoEdit.App) on Avalonia.Browser, with the
+       browser's own storage, sound, ffmpeg (ffmpeg.wasm) and video encoder (WebCodecs). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-browser</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>OurTaikoEdit.Browser</RootNamespace>
+    <!-- OurTaikoEdit.App is the desktop executable; here it is used as a library. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+    <!-- The app reads and writes its JSON (settings, projects) by reflection, as on the desktop. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- The home folder is kept in IndexedDB (IDBFS, mounted by main.js). -->
+    <EmccExtraLDFlags>$(EmccExtraLDFlags) -lidbfs.js</EmccExtraLDFlags>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmccExportedRuntimeMethod Include="FS" />
+  </ItemGroup>
+  <!-- Reached by reflection and so kept whole when published (trimmed): the words' indexer the
+       views bind to (Loc, l:T) and the settings and project files' JSON. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="OurTaikoEdit.Core" />
+  </ItemGroup>
+  <!-- The game's hit sounds and the pop sounds, which the desktop has next to the program: built in,
+       and written into the app's file system at start (Sounds.cs). -->
+  <ItemGroup>
+    <EmbeddedResource Include="../OurTaikoEdit.Audio/HitSounds/**/*" LogicalName="sounds/HitSounds/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../OurTaikoEdit.Audio/Effects/*.ogg" LogicalName="sounds/Effects/%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Browser" Version="12.1.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OurTaikoEdit.App/OurTaikoEdit.App.csproj" />
+    <!-- The mods the desktop app loads from its Mods folder are built in here. -->
+    <ProjectReference Include="../OurTaikoEdit.Mods.ChartImage/OurTaikoEdit.Mods.ChartImage.csproj" />
+  </ItemGroup>
+</Project>

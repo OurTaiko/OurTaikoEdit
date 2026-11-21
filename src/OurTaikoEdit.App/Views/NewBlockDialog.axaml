@@ -1,9 +1,9 @@
-<Window xmlns="https://github.com/avaloniaui"
+<v:Dialog xmlns="https://github.com/avaloniaui"
+        xmlns:v="using:OurTaikoEdit.App.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OurTaikoEdit.App.Views.NewBlockDialog"
         xmlns:l="using:OurTaikoEdit.App.Localization"
-        Title="{l:T NewBlockTitle}" Width="500" SizeToContent="Height" CanResize="False"
-        WindowStartupLocation="CenterOwner">
+        Title="{l:T NewBlockTitle}" Width="500">
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Classes="footer">
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
@@ -40,4 +40,4 @@
       </StackPanel>
     </StackPanel>
   </DockPanel>
-</Window>
+</v:Dialog>

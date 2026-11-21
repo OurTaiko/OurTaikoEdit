@@ -69,6 +69,8 @@ public class SceneTests : IDisposable
         window.CaptureRenderedFrame()?.Save(Path.Combine(Shots, name + ".png"));
     }
 
+    static void Shot(Dialog dialog, string name) => Shot(dialog.Window(), name);
+
     static T Find<T>(Window window) where T : Visual => window.GetVisualDescendants().OfType<T>().First();
 
     [AvaloniaFact]
@@ -117,7 +119,7 @@ public class SceneTests : IDisposable
         // The question asked before unsaved changes are left behind.
         _ = new DialogService(window).AskSaveAsync("Sample");
         Dispatcher.UIThread.RunJobs();
-        var ask = window.OwnedWindows.Last();
+        var ask = window.OwnedDialogs().Last();
         Assert.Equal(new[] { "Save", "Don't Save", "Cancel" }, ask.GetVisualDescendants().OfType<Button>().Select(b => b.Content as string));
         Shot(ask, "dialog-save");
         ask.Close();
@@ -201,7 +203,7 @@ public class SceneTests : IDisposable
             var dialog = new SettingsDialog(vm.Settings);
             dialog.Show();
             Dispatcher.UIThread.RunJobs();
-            Shot(dialog, "settings-zh");
+            Shot(dialog.Window(), "settings-zh");
             dialog.Close();
 
             vm.Scene = new ProjectsViewModel(registry, new DialogService(window), _ => { }, vm.Settings);
@@ -261,7 +263,7 @@ public class SceneTests : IDisposable
         Dispatcher.UIThread.RunJobs();
     }
 
-    static List<string> Texts(Window window) => window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+    static List<string> Texts(Visual window) => window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
 
     [AvaloniaFact]
     public void TheEditorShowsCodeLaneAndTimeline()
@@ -698,6 +700,7 @@ public class SceneTests : IDisposable
         public Task<string?> PickFolderAsync(string title) => Task.FromResult<string?>(null);
         public Task<string?> PickFileAsync(string title, string filterName, params string[] patterns) => Task.FromResult<string?>(null);
         public Task<IReadOnlyList<string>> PickFilesAsync(string title) => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        public Task OfferAsync(string file) => Task.CompletedTask;
         public Task<NewProjectRequest?> NewProjectAsync(string location) => Task.FromResult<NewProjectRequest?>(null);
         public Task MessageAsync(string title, string message) => Task.CompletedTask;
         public Task<bool> ConfirmAsync(string title, string message, string confirm) => Task.FromResult(true);
@@ -836,7 +839,7 @@ public class SceneTests : IDisposable
         var master = dialog.FindControl<TextBox>("MasterBox")!;
         var written = dialog.FindControl<TextBlock>("WrittenText")!;
         var error = dialog.FindControl<TextBlock>("ErrorText")!;
-        void Ok(Window w) => w.FindControl<Button>("OkButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        void Ok(Control w) => w.FindControl<Button>("OkButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
         // What was written, taken apart: the kind with what it counts, a box for each threshold.
         Assert.Equal(9, kind.ItemCount);
@@ -971,7 +974,7 @@ public class SceneTests : IDisposable
         var projects = Assert.IsType<ProjectsViewModel>(vm.Scene);
         projects.NewProjectCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
-        var dialog = Assert.IsType<NewProjectDialog>(window.OwnedWindows.Last());
+        var dialog = Assert.IsType<NewProjectDialog>(window.OwnedDialogs().Last());
         var source = dialog.FindControl<ComboBox>("SourceBox")!;
         var filePanel = dialog.FindControl<StackPanel>("SourceFilePanel")!;
         var file = dialog.FindControl<TextBox>("SourceFileBox")!;
@@ -1005,7 +1008,7 @@ public class SceneTests : IDisposable
         Dispatcher.UIThread.RunJobs();
         Assert.True(error.IsVisible);
         Assert.Contains("not a PNG", error.Text);
-        Assert.Contains(dialog, window.OwnedWindows);
+        Assert.Contains(dialog, window.OwnedDialogs());
         Shot(dialog, "new-project-image-refused");
 
         // The image itself. Its file names a project that has no name yet.
@@ -1020,10 +1023,10 @@ public class SceneTests : IDisposable
         Shot(dialog, "new-project-image");
         Create();
         Dispatcher.UIThread.RunJobs();
-        Assert.DoesNotContain(dialog, window.OwnedWindows);
+        Assert.DoesNotContain(dialog, window.OwnedDialogs());
 
         // What was read and what an image does not say, before the editor opens on the chart.
-        var report = window.OwnedWindows.Last();
+        var report = window.OwnedDialogs().Last();
         Assert.Contains(Texts(report), t => t == "Chart imported");
         Assert.Contains(Texts(report), t => t.Contains("107 measures") && t.Contains("OFFSET"));
         Shot(report, "new-project-image-report");
@@ -1129,7 +1132,7 @@ public class SceneTests : IDisposable
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NewBlockButton").Command!.Execute(null);
             Dispatcher.UIThread.RunJobs();
 
-            var dialog = Assert.IsType<NewBlockDialog>(window.OwnedWindows.Last());
+            var dialog = Assert.IsType<NewBlockDialog>(window.OwnedDialogs().Last());
             var from = dialog.FindControl<ComboBox>("FromBox")!;
             from.SelectedIndex = from.Items.Count - 1;
             Assert.False(dialog.FindControl<StackPanel>("InheritPanel")!.IsVisible);
@@ -1147,7 +1150,7 @@ public class SceneTests : IDisposable
             File.WriteAllText(invalid, "invalid image");
             file.Text = invalid;
             Create();
-            Assert.Contains(dialog, window.OwnedWindows);
+            Assert.Contains(dialog, window.OwnedDialogs());
             Assert.True(dialog.FindControl<TextBlock>("ImportError")!.IsVisible);
             Assert.Equal(before, code.Text);
 
@@ -1155,7 +1158,7 @@ public class SceneTests : IDisposable
             dialog.FindControl<NumericUpDown>("LevelBox")!.Value = 4;
             Create();
 
-            Assert.DoesNotContain(dialog, window.OwnedWindows);
+            Assert.DoesNotContain(dialog, window.OwnedDialogs());
             Assert.StartsWith(before, code.Text);
             Assert.Contains("\nCOURSE:Easy\nLEVEL:4\nBALLOON:6,10\n\n#START\n#BPMCHANGE 160\n", code.Text);
             Assert.Equal("Easy ★4", editor.Blocks[editor.BlockIndex].Name);
@@ -1186,7 +1189,7 @@ public class SceneTests : IDisposable
             var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NewBlockButton");
             button.Command!.Execute(null);
             Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.IsType<NewBlockDialog>(window.OwnedWindows.Last());
+            var dialog = Assert.IsType<NewBlockDialog>(window.OwnedDialogs().Last());
             var course = dialog.FindControl<ComboBox>("CourseBox")!;
             var level = dialog.FindControl<NumericUpDown>("LevelBox")!;
             var from = dialog.FindControl<ComboBox>("FromBox")!;
@@ -1243,7 +1246,7 @@ public class SceneTests : IDisposable
             // Cancelled: nothing is written.
             button.Command!.Execute(null);
             Dispatcher.UIThread.RunJobs();
-            window.OwnedWindows.Last().Close();
+            window.OwnedDialogs().Last().Close();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(before, code.Text);
         }
