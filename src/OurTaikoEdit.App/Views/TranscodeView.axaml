@@ -67,7 +67,7 @@
         </StackPanel>
         <TextBlock Classes="error" Text="{Binding DownloadError}" TextWrapping="Wrap" IsVisible="{Binding DownloadError, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <Button Classes="accent" x:Name="DownloadButton" Command="{Binding DownloadFfmpegCommand}" IsVisible="{Binding !IsDownloading}">
+          <Button Classes="accent" x:Name="DownloadButton" Command="{Binding DownloadFfmpegCommand}" IsVisible="{Binding CanDownload}">
             <TextBlock Text="{Binding DownloadButtonText}" />
           </Button>
           <Button Content="{l:T Cancel}" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}" />

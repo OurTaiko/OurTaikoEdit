@@ -85,6 +85,19 @@ public class TranscodeSceneTests : IDisposable
         Assert.IsType<ProjectsViewModel>(vm.Scene);
     }
 
+    // Where there is no package (Linux, Intel Macs): no download button, only choosing one.
+    [AvaloniaFact]
+    public void WithoutAPackageForThePlatformThereIsNothingToDownload()
+    {
+        var (window, vm, _) = Open(Path.Combine(root, "no", "ffmpeg"));
+        var tools = new FfmpegTools(Path.Combine(root, "data"), manifest: new Uri(Path.Combine(root, "none.json")), rid: null);
+        vm.Transcode = new TranscodeViewModel(tools, new DialogService(window), vm.Settings, () => vm.Transcode = null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(vm.Transcode.NeedsFfmpeg);
+        Assert.False(Find<Button>(window, "DownloadButton").IsEffectivelyVisible);
+        Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == vm.Transcode.NoDownloadText && t.Text.Length > 0);
+    }
+
     [AvaloniaFact]
     public void FilesAreReadTrimmedAndConverted()
     {
