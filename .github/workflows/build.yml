@@ -149,19 +149,12 @@ jobs:
           signing-key: ${{ secrets.RHYTHMHUB_SIGNING_KEY }}
           prune-previous: ${{ steps.rhythmhub.outputs.prune }}
 
-  # The web version (src/OurTaikoEdit.Browser) as a static site in the same bucket:
-  #   main     -> OurTaikoEdit/web/nightly/   https://distrib.sparkbarry.com/OurTaikoEdit/web/nightly/index.html
-  #   v* tags  -> OurTaikoEdit/web/stable/    https://distrib.sparkbarry.com/OurTaikoEdit/web/stable/index.html
-  # Each channel's folder is replaced in place (build/upload-web.sh). Other refs only build it.
+  # The web version (src/OurTaikoEdit.Browser), built here and published by web-publish.
   web:
     name: Build (Web)
     runs-on: ubuntu-latest
     needs: [version, test]
-    permissions:
-      contents: read
-      id-token: write # AWS through GitHub OIDC
     env:
-      AWS_REGION: ap-northeast-1
       DISPLAY_VERSION: ${{ needs.version.outputs.display }}
     steps:
       - uses: actions/checkout@v4
@@ -170,56 +163,92 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
 
-      # Emscripten, for the relinked runtime (IDBFS, the exported FS).
+      # Emscripten, for the runtime linked again with IDBFS and the exported FS.
       - name: Install wasm-tools
         run: dotnet workload install wasm-tools
 
       - name: Package
         run: |
           set -euo pipefail
-          SITE="$RUNNER_TEMP/site"
-          build/package-web.sh "$SITE" "${{ needs.version.outputs.version }}" "$DISPLAY_VERSION"
-          echo "SITE=$SITE" >> "$GITHUB_ENV"
+          build/package-web.sh "$RUNNER_TEMP/site" "${{ needs.version.outputs.version }}" "$DISPLAY_VERSION"
+          # Without IDBFS the page stops at start (main.js mounts it).
+          grep -q IDBFS "$RUNNER_TEMP"/site/_framework/dotnet.native.*.js
+          python3 -I build/publish-web.py "$RUNNER_TEMP/site" --channel nightly
 
       - uses: actions/upload-artifact@v4
         with:
           name: web
-          path: ${{ env.SITE }}
+          path: ${{ runner.temp }}/site
           if-no-files-found: error
           retention-days: 7
 
+  # To ourtaiko-public behind distrib.ourtaiko.org (and its Aliyun mirror), as the web player
+  # (OurTaikoView_Web) is: edit/<build id>/ never changes; edit-nightly.json (main) or
+  # edit-stable.json (v* tags) names the current one. See build/publish-web.py.
+  # Needs the variable OURTAIKO_PUBLIC_ROLE_ARN (a role that may write edit/* and edit-*.json);
+  # without it this job only says so.
+  web-publish:
+    name: Publish (Web)
+    runs-on: ubuntu-latest
+    needs: [version, web]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    concurrency:
+      group: web-publish-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # AWS through GitHub OIDC
+    env:
+      ROLE: ${{ vars.OURTAIKO_PUBLIC_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Choose channel
         id: channel
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          if [[ -z "$ROLE" ]]; then
+            echo "::warning::The variable OURTAIKO_PUBLIC_ROLE_ARN is not set; the web version is not published."
+            exit 0
+          fi
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "channel=stable" >> "$GITHUB_OUTPUT"
-          elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+          elif [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" == "$GITHUB_SHA" ]]; then
             echo "channel=nightly" >> "$GITHUB_OUTPUT"
           else
-            echo "Not main or a v* tag; not uploading."
+            echo "A newer main commit exists; this build does not replace the nightly manifest." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.channel.outputs.channel != ''
+        with:
+          name: web
+          path: site
 
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         if: steps.channel.outputs.channel != ''
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.ROLE }}
+          aws-region: ap-northeast-1
           role-session-name: ourtaikoedit-web-${{ github.run_id }}
 
-      - name: Upload
+      - name: Upload, check through the CDN, switch the manifest
         if: steps.channel.outputs.channel != ''
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
           set -euo pipefail
-          build/upload-web.sh "$SITE" "s3://sparkbarry-public/OurTaikoEdit/web/$CHANNEL" \
-            "https://distrib.sparkbarry.com/OurTaikoEdit/web/$CHANNEL"
+          python3 -I build/publish-web.py site --channel "$CHANNEL" --publish \
+            --version "${{ needs.version.outputs.display }}" --commit "$GITHUB_SHA" | tee publish.log
           {
-            echo "### Web $DISPLAY_VERSION ($CHANNEL)"
-            echo "https://distrib.sparkbarry.com/OurTaikoEdit/web/$CHANNEL/index.html"
+            echo "### Web ($CHANNEL)"
+            grep -E '^(Entry|Published):' publish.log
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish:

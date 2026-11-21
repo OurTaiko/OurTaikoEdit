@@ -23,7 +23,7 @@ dotnet test OurTaikoEdit.slnx
 - macOS（Apple Silicon，GitHub `macos-latest`）与 Windows（x64，Ubuntu 上交叉发布）都由 `build/package.sh` 自包含发布：macOS 拼成 `OurTaikoEdit.app`（`Info.plist`、图标、ad-hoc 签名，bundle id `org.ourtaiko.edit`），Windows 是带 `OurTaikoEdit.exe` 的文件夹；原生库的 `.pdb` 不带。
 - 两个包都通过 RhythmHub 的 `upload-build` Action 上传到 S3 桶 `sparkbarry-public`（CDN `distrib.sparkbarry.com`），游戏 ID `OurTaikoEdit`：`main` 上线 nightly 频道（只留最新），`v*` 标签上线 stable 频道。仓库需要 Variable `AWS_ROLE_ARN` 与 Secret `RHYTHMHUB_SIGNING_KEY`，CI 角色要信任本仓库（见 sparkbarry/RhythmHub `docs/operations.md` §5）。
 - 同时把 zip 发到 GitHub Release：`main` 覆盖 `nightly` 预发布，`v*` 标签建正式 Release。
-- 网页版（任务 Build (Web)）：装 `wasm-tools` 后由 `build/package-web.sh` 发布成静态网站，`build/upload-web.sh` 传到同一个桶：`main` → `OurTaikoEdit/web/nightly/`，`v*` 标签 → `OurTaikoEdit/web/stable/`，网址是 `https://distrib.sparkbarry.com/OurTaikoEdit/web/<频道>/index.html`（要写 `index.html`，CDN 不补目录首页）。每个文件以它的 Brotli 副本上传、带 `Content-Encoding: br`（CDN 原样给出，约 10 MB）；`_framework` 里带指纹的文件缓存一年，其余每次重新验证；先传新文件、`index.html` 最后，CDN 给出新的 `index.html` 后删掉新版本没有的旧文件。两个频道同源，浏览器里的项目（IndexedDB）是共用的。
+- 网页版：任务 Build (Web) 装 `wasm-tools` 后由 `build/package-web.sh` 发布成静态网站（SDK 由 `global.json` 固定在 10.0.4xx；`WasmBuildNative` 必须开，否则运行时没有 IDBFS、页面停在启动），任务 Publish (Web) 再用 `build/publish-web.py` 照网页播放器（OurTaikoView_Web）的做法发到桶 `ourtaiko-public`（`https://distrib.ourtaiko.org`，国内镜像 `https://static.sakura-bot.cn/ourtaiko/`）：每个构建放进按文件哈希命名、永不修改的 `edit/<构建 id>/`（缓存一年，每个文件以 Brotli 副本上传、带 `Content-Encoding: br`，约 10 MB），全部经 CDN 逐字节核对后才替换清单 `edit-nightly.json`（main）或 `edit-stable.json`（`v*` 标签），清单的 `path` 是入口 `index.html`。旧构建不删。需要仓库变量 `OURTAIKO_PUBLIC_ROLE_ARN`（只能写 `edit/*` 和这两个清单的角色）；没有它这个任务只给出警告。
 
 本地打包：
 
@@ -60,7 +60,7 @@ build/package-web.sh dist/site                                 # 同上，只留
 
 ```
 build/package.sh         自包含发布并打成 .app（osx-arm64）或文件夹（win-x64），CI 与本地共用
-build/package-web.sh     发布网页版的静态网站；build/upload-web.sh 把它传到桶里（CI 用）
+build/package-web.sh     发布网页版的静态网站；build/publish-web.py 把它发到 ourtaiko-public（CI 用）
 external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.13.0）
 src/OurTaikoEdit.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings），Mod 的接口与加载（Mods/）、导入器的接口（Importing/）
 src/OurTaikoEdit.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑

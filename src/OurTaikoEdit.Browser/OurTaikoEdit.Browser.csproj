@@ -10,6 +10,9 @@
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
     <!-- The app reads and writes its JSON (settings, projects) by reflection, as on the desktop. -->
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- The runtime is linked again here (wasm-tools), with IDBFS and the exported FS: without it
+         the prebuilt runtime has neither, and main.js stops at the mount. -->
+    <WasmBuildNative>true</WasmBuildNative>
     <!-- The home folder is kept in IndexedDB (IDBFS, mounted by main.js). -->
     <EmccExtraLDFlags>$(EmccExtraLDFlags) -lidbfs.js</EmccExtraLDFlags>
   </PropertyGroup>
