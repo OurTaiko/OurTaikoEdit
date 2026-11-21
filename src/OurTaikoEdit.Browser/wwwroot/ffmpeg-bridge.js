@@ -33,6 +33,24 @@ async function coreUrls() {
   throw new Error('ffmpeg.wasm could not be downloaded.');
 }
 
+// ffmpeg.wasm's worker (ffmpeg/814.ffmpeg.js) is started from a blob: a worker must come from the
+// page's own origin, and on net.ourtaiko.org/edit/ the build's files (the <base>) are on the CDN.
+// Given its own worker URL (classWorkerURL), ffmpeg.wasm starts it as a module worker, where the
+// script's importScripts does not exist: that one Worker is made classic.
+async function load(f, urls) {
+  const worker = await blobUrl(new URL('ffmpeg/814.ffmpeg.js', document.baseURI).href, 'text/javascript');
+  if (!worker) throw new Error('ffmpeg.wasm could not be downloaded.');
+  const Native = globalThis.Worker;
+  globalThis.Worker = class extends Native {
+    constructor(url, options) { super(url, String(url) === worker ? { ...options, type: 'classic' } : options); }
+  };
+  try {
+    await f.load({ ...urls, classWorkerURL: worker });
+  } finally {
+    globalThis.Worker = Native;
+  }
+}
+
 async function ensure() {
   if (ff) return ff;
   loading ??= (async () => {
@@ -44,7 +62,7 @@ async function ensure() {
         if (m) onTime(Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]));
       }
     });
-    await f.load(await coreUrls());
+    await load(f, await coreUrls());
     ff = f;
     return f;
   })().finally(() => { loading = null; });

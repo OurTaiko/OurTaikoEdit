@@ -12,7 +12,8 @@ path once and keeps it, which is right for the build folders; the manifests are 
 worker rewrites (they are listed in OurTaikoNet's deploy/aliyun-mirror.json).
 
 Each file goes up as its Brotli copy (<file>.br, made by the .NET publish) under the file's own
-name with Content-Encoding: br, where there is one: about 10 MB instead of 28.
+name with Content-Encoding: br, where there is one: about 10 MB instead of 28. index.html goes up
+as it is: OurTaikoNet reads it to serve the editor at net.ourtaiko.org/edit/.
 
 Preview: build/publish-web.py <site> --channel nightly
 Publish: build/publish-web.py <site> --channel nightly --publish
@@ -45,7 +46,9 @@ def entries(site):
         name = path.relative_to(site).as_posix()
         br = path.with_name(path.name + '.br')
         content_type = TYPES.get(path.suffix, 'application/octet-stream')
-        result[name] = (br, content_type, 'br') if br.is_file() else (path, content_type, None)
+        # index.html as it is: other servers read it (OurTaikoNet's /edit/ adds a <base> to it).
+        compress = br.is_file() and name != 'index.html'
+        result[name] = (br, content_type, 'br') if compress else (path, content_type, None)
     if 'index.html' not in result or '_framework/dotnet.js' not in result:
         raise ValueError(f'{site} is not the web version (no index.html or _framework/dotnet.js)')
     return result
