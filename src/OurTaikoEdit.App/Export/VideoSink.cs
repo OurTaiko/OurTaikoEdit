@@ -18,13 +18,18 @@ public abstract class VideoSink
 }
 
 // The desktop: ffmpeg reads the frames through a pipe and the sound from the WAV (H.264 and AAC in
-// an MP4, or, not encoded, raw RGB and PCM in a MOV).
+// an MP4, or, not encoded, raw RGB and PCM in a MOV). Frames to be encoded go as YUV 4:2:0, made
+// here on every core (Yuv420); ffmpeg would make it on one, and it is 3/8 of the bytes.
 public sealed class FfmpegSink : VideoSink
 {
     Process? ffmpeg;
     Stream? input;
     Task<string>? errors;
     Task writing = Task.CompletedTask;
+    // The frame as YUV (null: the frames go as they are); one buffer, as one frame is written at a time.
+    byte[]? yuv;
+    int width, height;
+    bool rgba;
 
     public override async Task StartAsync(VideoExportOptions options, int width, int height, bool rgba, string audio, CancellationToken cancel)
     {
@@ -32,6 +37,13 @@ public sealed class FfmpegSink : VideoSink
         string encoding = VideoEncodings.Normalize(options.Encoding);
         bool raw = encoding == VideoEncodings.None;
         string codec = raw ? "rawvideo" : await VideoExporter.VideoCodecAsync(options.Ffmpeg);
+        this.width = width;
+        this.height = height;
+        this.rgba = rgba;
+        yuv = raw ? null : new byte[Yuv420.Size(width, height)];
+        // BT.709 in the video range, as Yuv420 makes it, said of the input and of the file (players
+        // take an HD video that says nothing for BT.709 anyway).
+        string[] colors = { "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv" };
         var info = new ProcessStartInfo(options.Ffmpeg)
         {
             RedirectStandardInput = true, RedirectStandardError = true, RedirectStandardOutput = true,
@@ -40,14 +52,17 @@ public sealed class FfmpegSink : VideoSink
         foreach (string arg in new[]
         {
             "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "rawvideo", "-pix_fmt", rgba ? "rgba" : "bgra", "-video_size", $"{width}x{height}", "-framerate", options.Fps.ToString(), "-i", "-",
+            "-f", "rawvideo", "-pix_fmt", raw ? (rgba ? "rgba" : "bgra") : "yuv420p", "-video_size", $"{width}x{height}", "-framerate", options.Fps.ToString(),
+        }.Concat(raw ? [] : colors).Concat(new[]
+        {
+            "-i", "-",
             "-i", audio,
             "-map", "0:v", "-map", "1:a",
-        }) info.ArgumentList.Add(arg);
+        })) info.ArgumentList.Add(arg);
         // Not encoded: QuickTime's uncompressed RGB ("raw ") and 16-bit PCM, which editors read.
         string[] video = raw ? new[] { "-c:v", "rawvideo", "-pix_fmt", "rgb24" }
-            : codec == "libx264" ? new[] { "-c:v", "libx264", "-preset", encoding, "-crf", "18", "-pix_fmt", "yuv420p" }
-            : new[] { "-c:v", codec, "-q:v", "2", "-pix_fmt", "yuv420p" };
+            : (codec == "libx264" ? new[] { "-c:v", "libx264", "-preset", encoding, "-crf", "18", "-pix_fmt", "yuv420p" }
+                : new[] { "-c:v", codec, "-q:v", "2", "-pix_fmt", "yuv420p" }).Concat(colors).ToArray();
         string[] sound = raw ? new[] { "-c:a", "pcm_s16le" } : new[] { "-c:a", "aac", "-b:a", "192k" };
         foreach (string arg in video.Concat(sound).Concat(new[] { "-shortest", "-movflags", "+faststart", options.Output }))
             info.ArgumentList.Add(arg);
@@ -62,8 +77,15 @@ public sealed class FfmpegSink : VideoSink
         // The other buffer's write (the frame before) has to have ended before this one starts.
         try { await writing; }
         catch (IOException) { return false; }
-        writing = input!.WriteAsync(pixels, cancel).AsTask();
+        writing = yuv == null ? input!.WriteAsync(pixels, cancel).AsTask() : ConvertAndWriteAsync(pixels, cancel);
         return true;
+    }
+
+    // Off the thread that draws the frames, which goes on to draw the next one meanwhile.
+    async Task ConvertAndWriteAsync(byte[] pixels, CancellationToken cancel)
+    {
+        await Task.Run(() => Yuv420.Convert(pixels, yuv, width, height, rgba), cancel);
+        await input!.WriteAsync(yuv, cancel);
     }
 
     public override async Task FinishAsync(CancellationToken cancel)

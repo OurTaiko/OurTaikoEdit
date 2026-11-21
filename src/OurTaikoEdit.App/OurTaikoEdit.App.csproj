@@ -7,6 +7,8 @@
     <!-- The icon of the Windows executable itself (the window's is set in MainWindow.axaml). -->
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- A video's frames converted to YUV in place (Export/Yuv420). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" Exclude="Assets\**\*.md" />
