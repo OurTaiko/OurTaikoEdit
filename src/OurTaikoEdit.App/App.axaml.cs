@@ -20,6 +20,9 @@ public partial class App : Application
     // The host's last setup once the platform is up and before the first view (a browser's fonts).
     public static Action? Starting { get; set; }
 
+    // The app's one view model where there is one view (a browser): what a host page talks to.
+    public static MainWindowViewModel? Main { get; private set; }
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     static (ProjectRegistry, AppSettings) Start()
@@ -48,7 +51,7 @@ public partial class App : Application
             var (registry, settings) = Start();
             var view = new MainView();
             var dialogs = new DialogService(() => TopLevel.GetTopLevel(view), new OverlayDialogHost(view.Dialogs), PickedFiles ?? new LocalFiles());
-            view.DataContext = new MainWindowViewModel(registry, dialogs, settings);
+            view.DataContext = Main = new MainWindowViewModel(registry, dialogs, settings);
             single.MainView = view;
         }
         base.OnFrameworkInitializationCompleted();

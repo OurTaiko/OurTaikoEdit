@@ -8,6 +8,20 @@ import { video } from './video.js';
 // changed, so it is there next time; everything else (/tmp: files picked to convert) is not kept.
 const HOME = '/home/web_user';
 
+// The editor in a website's page: see listen() below.
+let nextRequest = 1;
+const waiting = new Map();
+const embedded = parent !== window && new URLSearchParams(location.search).has('embed');
+const embed = {
+  save: tja => new Promise(resolve => {
+    const request = nextRequest++;
+    waiting.set(request, resolve);
+    tell({ type: 'save', request, tja });
+  }),
+  leave: () => tell({ type: 'leave' }),
+  dirty: dirty => tell({ type: 'dirty', dirty }),
+};
+
 const runtime = await dotnet
   .withDiagnosticTracing(false)
   .withEnvironmentVariable('HOME', HOME)
@@ -61,7 +75,45 @@ runtime.setModuleImports('main.js', {
   page: {
     loaded: () => document.querySelector('.splash')?.remove(),
   },
+  embed,
 });
 
 const config = runtime.getConfig();
 await runtime.runMain(config.mainAssemblyName, [globalThis.location.href]);
+if (embedded) await listen();
+
+// The editor in a website's page (?embed, in an iframe of the same origin): the page hands it a
+// chart and stores what is saved (Embed.cs, EmbedHost). Messages, each {source, type, …}:
+//   to the page   ready; opened | open-failed {message}; save {request, tja};
+//                 dirty {dirty}; leave
+//   from the page open {chart: {id, name, tjaName, tja, audioName, audio (ArrayBuffer|null)}};
+//                 save-result {request, saved, message?, line?}
+function tell(message) {
+  parent.postMessage({ source: 'ourtaikoedit', ...message }, location.origin);
+}
+
+async function listen() {
+  const exports = await runtime.getAssemblyExports(config.mainAssemblyName);
+  const host = exports.OurTaikoEdit.Browser.Embed;
+  addEventListener('message', event => {
+    if (event.source !== parent || event.origin !== location.origin) return;
+    const message = event.data;
+    if (!message || message.source !== 'ourtaiko-net') return;
+    if (message.type === 'open') {
+      const chart = message.chart;
+      try {
+        const audioPath = host.Prepare(String(chart.id), String(chart.audioName || 'audio'));
+        if (chart.audio) FS.writeFile(audioPath, new Uint8Array(chart.audio));
+        const failed = host.Open(String(chart.id), String(chart.name || ''), String(chart.tjaName || 'chart.tja'), String(chart.tja));
+        tell(failed ? { type: 'open-failed', message: failed } : { type: 'opened' });
+      } catch (e) {
+        tell({ type: 'open-failed', message: String(e?.message ?? e) });
+      }
+    } else if (message.type === 'save-result') {
+      const resolve = waiting.get(message.request);
+      waiting.delete(message.request);
+      resolve?.(JSON.stringify({ saved: !!message.saved, message: message.message ?? null, line: message.line ?? null }));
+    }
+  });
+  tell({ type: 'ready' });
+}

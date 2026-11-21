@@ -136,9 +136,15 @@ public sealed partial class EditorViewModel : ViewModelBase
     // takes its caret into the new block's chart, at the playhead.
     public event Action? BlockChosen;
 
+    // The website the chart came from (null: the person's own project): saving and going back are its.
+    readonly IChartHost? host;
+    public bool IsHosted => host != null;
+
     public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null, Action<PlayViewModel?>? showPlay = null,
-        OurTaikoEdit.Core.Ffmpeg.FfmpegTools? tools = null, Action<IEnumerable<string>?, string?, Action<string>?>? transcode = null)
+        OurTaikoEdit.Core.Ffmpeg.FfmpegTools? tools = null, Action<IEnumerable<string>?, string?, Action<string>?>? transcode = null,
+        IChartHost? host = null)
     {
+        this.host = host;
         this.showPlay = showPlay;
         ffmpegTools = tools;
         this.transcode = transcode;
@@ -909,6 +915,7 @@ public sealed partial class EditorViewModel : ViewModelBase
     [RelayCommand]
     public async Task<bool> Save()
     {
+        if (host != null) return await SaveToHost();
         try
         {
             ChartFile.Write(Project.ChartPath, file with { Text = text });
@@ -925,6 +932,45 @@ public sealed partial class EditorViewModel : ViewModelBase
             return false;
         }
     }
+
+    bool savingToHost;
+
+    // The host stores the text; the copy here (the folder the chart was opened in) follows it.
+    async Task<bool> SaveToHost()
+    {
+        if (savingToHost) return false;
+        savingToHost = true;
+        try
+        {
+            string sent = text;
+            Message = Loc.T("SavingToSite");
+            var result = await host!.SaveAsync(sent);
+            if (!result.Saved)
+            {
+                Message = result.Message;
+                if (result.Line is int line && line > 0) CaretRequested?.Invoke(line, 1);
+                return false;
+            }
+            try
+            {
+                ChartFile.Write(Project.ChartPath, new ChartText(sent));
+                Project.LastBlock = BlockIndex;
+                Project.Save();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            if (file.IsConverted) { file = new ChartText(sent); OnPropertyChanged(nameof(Encoding)); }
+            // Typing that went on while the host stored the text is still unsaved.
+            IsDirty = text != sent;
+            Message = Loc.T("SavedToSite");
+            return true;
+        }
+        finally
+        {
+            savingToHost = false;
+        }
+    }
+
+    partial void OnIsDirtyChanged(bool value) => host?.DirtyChanged(value);
 
     // Reads the file again in another encoding (one undoable change of the whole text).
     public async Task ReopenWith(string encoding)
@@ -948,7 +994,8 @@ public sealed partial class EditorViewModel : ViewModelBase
     {
         if (!await ConfirmLeaveAsync()) return;
         Close();
-        back();
+        if (host != null) host.Leave();
+        else back();
     }
 
     public async Task<bool> ConfirmLeaveAsync()

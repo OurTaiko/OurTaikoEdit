@@ -694,6 +694,58 @@ public class SceneTests : IDisposable
         Assert.Equal((13, 1), (caret.Line, caret.Column));
     }
 
+    // A website the chart came from: takes what is saved, or refuses it.
+    sealed class Site : IChartHost
+    {
+        public List<string> Saved { get; } = new();
+        public List<bool> Dirty { get; } = new();
+        public HostSaveResult Answer { get; set; } = new(true);
+        public int Left { get; private set; }
+        public Task<HostSaveResult> SaveAsync(string text)
+        {
+            if (Answer.Saved) Saved.Add(text);
+            return Task.FromResult(Answer);
+        }
+        public void Leave() => Left++;
+        public void DirtyChanged(bool dirty) => Dirty.Add(dirty);
+    }
+
+    [AvaloniaFact]
+    public void AChartAWebsiteOpenedIsSavedToItAndLeftForIt()
+    {
+        var (window, vm, registry) = Open();
+        var project = SampleProject(registry);
+        var site = new Site();
+        vm.OpenHosted(project, site);
+        Dispatcher.UIThread.RunJobs();
+        var editor = Assert.IsType<EditorViewModel>(vm.Scene);
+        Assert.True(editor.IsHosted);
+        Assert.Contains(Texts(window), t => t == "Back to the chart");
+
+        editor.OnTextChanged(editor.InitialText + "\n// edited");
+        Assert.Equal(new[] { true }, site.Dirty);
+        // Refused: still unsaved, the caret goes to the line the site named.
+        int? caretLine = null;
+        editor.CaretRequested += (line, _) => caretLine = line;
+        site.Answer = new HostSaveResult(false, "Line 3: bad", 3);
+        Assert.False(editor.Save().GetAwaiter().GetResult());
+        Assert.True(editor.IsDirty);
+        Assert.Equal("Line 3: bad", editor.Message);
+        Assert.Equal(3, caretLine);
+        // Taken: saved, and the copy here follows.
+        site.Answer = new HostSaveResult(true);
+        Assert.True(editor.Save().GetAwaiter().GetResult());
+        Assert.False(editor.IsDirty);
+        Assert.Equal(new[] { true, false }, site.Dirty);
+        Assert.EndsWith("// edited", Assert.Single(site.Saved));
+        Assert.EndsWith("// edited", File.ReadAllText(project.ChartPath).TrimEnd());
+        // Back is the site's page, not the project list.
+        editor.BackCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, site.Left);
+        Assert.Same(editor, vm.Scene);
+    }
+
     // Answers every prompt with one line.
     sealed class Answers(string answer) : IDialogService
     {

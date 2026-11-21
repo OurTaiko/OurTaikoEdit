@@ -64,6 +64,9 @@ SaveQuestion,Save {0}?,保存 {0}？,{0} を保存しますか？
 SaveLost,Your changes are lost if you don't save them.,如果不保存，所做的更改将会丢失。,保存しないと変更は失われます。
 CouldNotSave,Could not save,无法保存,保存できませんでした
 Saved,Saved {0},已保存 {0},{0} を保存しました
+BackToChart,Back to the chart,返回谱面,譜面に戻る
+SavingToSite,Saving to the site…,正在保存到网站…,サイトに保存しています…
+SavedToSite,Saved to the site,已保存到网站,サイトに保存しました
 
 # Editor toolbar,,,
 UnsavedChanges,Unsaved changes,有未保存的更改,未保存の変更があります

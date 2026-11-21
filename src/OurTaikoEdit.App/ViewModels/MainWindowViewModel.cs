@@ -55,6 +55,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Title = $"{project.Name} — OurTaikoEdit";
     }
 
+    // A chart a website opened in the editor (IChartHost): not one of the person's projects, so not
+    // in the list; saving and going back are the host's.
+    public void OpenHosted(ChartProject project, IChartHost host)
+    {
+        if (Scene is EditorViewModel open) open.Close();
+        Play = null;
+        Scene = new EditorViewModel(project, dialogs, ShowProjects, Settings, scene => Play = scene, Tools, OpenTranscode, host);
+        Title = $"{project.Name} — OurTaikoEdit";
+    }
+
     void ShowProjects()
     {
         Scene = NewProjects();

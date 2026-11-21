@@ -27,7 +27,10 @@
           <Button Classes="ghost" Command="{Binding BackCommand}">
             <StackPanel>
               <controls:Icon Data="{StaticResource IconBack}" />
-              <TextBlock Text="{l:T Projects}" />
+              <Panel>
+                <TextBlock Text="{l:T Projects}" IsVisible="{Binding !IsHosted}" />
+                <TextBlock Text="{l:T BackToChart}" IsVisible="{Binding IsHosted}" />
+              </Panel>
             </StackPanel>
           </Button>
           <TextBlock Classes="faint" Text="/" VerticalAlignment="Center" Margin="2,0,8,0" />
