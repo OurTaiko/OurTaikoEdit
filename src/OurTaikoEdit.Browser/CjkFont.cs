@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices.JavaScript;
 using Avalonia.Media;
 using Avalonia.Media.Fonts;
 
@@ -8,8 +9,11 @@ namespace OurTaikoEdit.Browser;
 // app's own font (Inter) lacks. Without it (offline, the fetch failed) such text shows as boxes.
 static class CjkFont
 {
-    // google/fonts at a fixed commit: the file cannot change under the app.
-    const string Url = "https://cdn.jsdelivr.net/gh/google/fonts@a85815a42757630ce188fdad368c2dfc444d4773/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf";
+    // On ourtaiko-public at a path that never changes (build/publish-web-vendor.py): from a build's
+    // own folder (edit/<id>/) it is ../../fonts/…, so it comes from wherever the page came from
+    // (distrib.ourtaiko.org or the Aliyun mirror). Elsewhere (dotnet run) distrib is used.
+    const string FontPath = "fonts/noto-sans-sc/a85815a/NotoSansSC-VF.ttf";
+    const string Distrib = "https://distrib.ourtaiko.org/";
     public const string Family = "fonts:OurTaikoEditCjk#Noto Sans SC";
 
     static byte[]? font;
@@ -18,14 +22,24 @@ static class CjkFont
 
     public static async Task LoadAsync()
     {
-        try
+        string page = JSHost.GlobalThis.GetPropertyAsJSObject("document")!.GetPropertyAsString("baseURI")!;
+        using var http = new HttpClient();
+        foreach (var url in new[] { new Uri(new Uri(page), "../../" + FontPath), new Uri(Distrib + FontPath) })
         {
-            using var http = new HttpClient();
-            font = await http.GetByteArrayAsync(Url);
-        }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
-        {
-            Console.WriteLine($"The CJK font could not be loaded: {e.Message}");
+            try
+            {
+                byte[] bytes = await http.GetByteArrayAsync(url);
+                // A TrueType font, not a development server's page in its place.
+                if (bytes.Length > 4 && bytes[0] == 0 && bytes[1] == 1 && bytes[2] == 0 && bytes[3] == 0)
+                {
+                    font = bytes;
+                    return;
+                }
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+            {
+                Console.WriteLine($"The CJK font could not be loaded from {url}: {e.Message}");
+            }
         }
     }
 

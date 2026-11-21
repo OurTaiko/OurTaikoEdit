@@ -41,9 +41,9 @@ build/package.sh osx-arm64 dist/osx
 | 对话框是窗口 | 对话框盖在页面上（`Views/Dialog.cs` 的 `OverlayDialogHost`；桌面用 `WindowDialogHost`，两者显示同一个 `Dialog` 控件） |
 | 选中的文件就地读写 | 复制进 `/tmp/picked`（`BrowserFiles`），做出的文件（视频、转换结果、项目 zip）下载给用户（`IDialogService.OfferAsync`） |
 | OpenAL 播放 | Web Audio（`wwwroot/audio.js`、`WebAudioPlayer`），歌曲与打击音都按 AudioContext 的时钟排 |
-| ffmpeg 程序（转码） | ffmpeg.wasm（`ffmpeg-bridge.js`、`WasmFfmpeg`）：内核 @ffmpeg/core 0.12.10 首次用到时从 jsDelivr 取（约 31 MB），加载器 `wwwroot/ffmpeg/` 两个小文件放在本站；Opus 用 ffmpeg 自带编码器、WebM 是 VP8（`TranscodeFormat.Wasm`） |
+| ffmpeg 程序（转码） | ffmpeg.wasm（`ffmpeg-bridge.js`、`WasmFfmpeg`）：内核 @ffmpeg/core 0.12.10（约 31 MB，Brotli 后 7 MB）首次用到时从 `ourtaiko-public` 的 `edit/vendor/ffmpeg-core-0.12.10/` 取（从构建目录用相对路径，跟页面同一个来源：distrib 或国内镜像；`dotnet run` 时退回 distrib），加载器 `wwwroot/ffmpeg/` 两个小文件放在本站；Opus 用 ffmpeg 自带编码器、WebM 是 VP8（`TranscodeFormat.Wasm`） |
 | ffmpeg 编码视频 | 浏览器的 H.264 编码器（WebCodecs，`video.js`、`WebCodecsSink`），ffmpeg.wasm 只负责配上 AAC 声音、封装 MP4；没有 x264 档位和「不编码」 |
-| 系统的中日文字体 | 启动前从 jsDelivr（google/fonts 固定提交）取 Noto Sans SC（约 9 MB）作回退字体（`CjkFont`） |
+| 系统的中日文字体 | 启动前取 Noto Sans SC（`ourtaiko-public` 的 `fonts/noto-sans-sc/a85815a/`，google/fonts 固定提交，Brotli 后 8.5 MB，取法同上）作回退字体（`CjkFont`） |
 | Mods 文件夹 | 只有内置的 Mod（编进来的「谱面图片导入」） |
 
 需要 .NET 的 `wasm-tools` 工作负载（`sudo dotnet workload install wasm-tools`）。网页版不在 `OurTaikoEdit.slnx` 里（跑测试的 CI 不装这个工作负载；构建网页版的任务自己装，见「发布」）。
@@ -61,6 +61,7 @@ build/package-web.sh dist/site                                 # 同上，只留
 ```
 build/package.sh         自包含发布并打成 .app（osx-arm64）或文件夹（win-x64），CI 与本地共用
 build/package-web.sh     发布网页版的静态网站；build/publish-web.py 把它发到 ourtaiko-public（CI 用）
+build/publish-web-vendor.py  手动运行一次：把字体、ffmpeg.wasm 内核及其源码放到 ourtaiko-public 永不修改的路径（只补缺，从不覆盖）
 external/TJAParser/      子模块，指 TJAParser 的 tag（现在 v0.13.0）
 src/OurTaikoEdit.Core/      项目模型、项目列表、谱面语言扩展点（IChartLanguage）与语言无关的分析模型，界面文字表（Localization）与设置（Settings），Mod 的接口与加载（Mods/）、导入器的接口（Importing/）
 src/OurTaikoEdit.Tja/       TJA 语言：分析、诊断与补全都用 TJAParser 的编辑器接口（TjaDocument、TjaAnalysis、TjaCompletion），高亮（Tja.xshd），时间轴编辑转文本编辑

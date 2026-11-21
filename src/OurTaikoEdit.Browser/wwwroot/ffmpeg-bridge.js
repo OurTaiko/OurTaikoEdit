@@ -1,16 +1,36 @@
-// ffmpeg.wasm for WasmFfmpeg (C#): loaded on first use (the core is about 31 MB, from jsDelivr),
+// ffmpeg.wasm for WasmFfmpeg (C#): loaded on first use (the core is about 31 MB, 7 MB as sent),
 // one job at a time. Files go between .NET's file system (globalThis.ourtaikoedit.FS) and
 // ffmpeg's own; the C# side has already put the names in the arguments.
-const CORE = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/';
+//
+// The core (@ffmpeg/core 0.12.10) is on ourtaiko-public at a path that never changes
+// (build/publish-web-vendor.py), beside the builds: from a build's own folder (edit/<id>/) it is
+// ../vendor/…, so the page takes it from wherever the page itself came from (distrib.ourtaiko.org
+// or the Aliyun mirror). Elsewhere (dotnet run) that path is not there, and distrib is used.
+const CORE_DIR = 'vendor/ffmpeg-core-0.12.10/';
+const CORES = [new URL('../' + CORE_DIR, document.baseURI).href, 'https://distrib.ourtaiko.org/edit/' + CORE_DIR];
 
 let ff = null, loading = null, queue = Promise.resolve();
 let lines = [], onTime = null;
 const net = () => globalThis.ourtaikoedit.FS;
 
+// A file as a blob: URL, or null when `url` does not answer with it (a missing file, or a
+// development server's page in its place).
 async function blobUrl(url, type) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  let response;
+  try { response = await fetch(url); } catch { return null; }
+  if (!response.ok || (response.headers.get('Content-Type') ?? '').startsWith('text/html')) return null;
   return URL.createObjectURL(new Blob([await response.arrayBuffer()], { type }));
+}
+
+async function coreUrls() {
+  for (const dir of CORES) {
+    const coreURL = await blobUrl(dir + 'ffmpeg-core.js', 'text/javascript');
+    if (!coreURL) continue;
+    const wasmURL = await blobUrl(dir + 'ffmpeg-core.wasm', 'application/wasm');
+    if (wasmURL) return { coreURL, wasmURL };
+    URL.revokeObjectURL(coreURL);
+  }
+  throw new Error('ffmpeg.wasm could not be downloaded.');
 }
 
 async function ensure() {
@@ -24,10 +44,7 @@ async function ensure() {
         if (m) onTime(Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]));
       }
     });
-    await f.load({
-      coreURL: await blobUrl(CORE + 'ffmpeg-core.js', 'text/javascript'),
-      wasmURL: await blobUrl(CORE + 'ffmpeg-core.wasm', 'application/wasm'),
-    });
+    await f.load(await coreUrls());
     ff = f;
     return f;
   })().finally(() => { loading = null; });
