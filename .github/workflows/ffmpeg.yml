@@ -106,7 +106,10 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
+      # The signing tool builds against Core, which references the TJAParser submodule.
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - uses: actions/download-artifact@v4
         with:
