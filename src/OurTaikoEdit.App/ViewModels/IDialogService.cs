@@ -8,12 +8,18 @@ public sealed record NewProjectRequest(string Name, string Location, string Char
 
 // What the editor knows when a video is asked for: where it may go, the playhead, where a play
 // from the beginning starts, and whether hit sounds are on.
-public sealed record VideoExportRequest(string SuggestedOutput, double Playhead, double Beginning, bool HitSounds);
+// Tools: the app's ffmpeg (to find the one downloaded, and to download one).
+public sealed record VideoExportRequest(string SuggestedOutput, double Playhead, double Beginning, bool HitSounds)
+{
+    public OurTaikoEdit.Core.Ffmpeg.FfmpegTools? Tools { get; init; }
+}
 
 public interface IDialogService
 {
     Task<string?> PickFolderAsync(string title);
     Task<string?> PickFileAsync(string title, string filterName, params string[] patterns);
+    // Any number of files of any type; none when cancelled.
+    Task<IReadOnlyList<string>> PickFilesAsync(string title);
     Task<NewProjectRequest?> NewProjectAsync(string location);
     Task MessageAsync(string title, string message);
     Task<bool> ConfirmAsync(string title, string message, string confirm);

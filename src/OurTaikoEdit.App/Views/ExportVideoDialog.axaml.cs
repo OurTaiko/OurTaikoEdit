@@ -63,12 +63,62 @@ public partial class ExportVideoDialog : Window
         HitsBox.IsChecked = request.HitSounds;
         OutputBox.Text = WithExtension(request.SuggestedOutput);
         // The one chosen before, else (it is gone) the one found where ffmpeg usually is.
-        FfmpegBox.Text = VideoExporter.FindFfmpeg(settings.Ffmpeg) ?? VideoExporter.FindFfmpeg(null) ?? settings.Ffmpeg ?? "";
+        FfmpegBox.Text = VideoExporter.FindFfmpeg(settings.Ffmpeg) ?? VideoExporter.FindFfmpeg(null, Tools) ?? settings.Ffmpeg ?? "";
         ShowHint();
-        if (VideoExporter.FindFfmpeg(FfmpegBox.Text) == null) ShowError(Loc.T("VideoNoFfmpeg"));
+        if (VideoExporter.FindFfmpeg(FfmpegBox.Text) == null) NoFfmpeg();
     }
 
+    OurTaikoEdit.Core.Ffmpeg.FfmpegTools? Tools => request?.Tools;
+    CancellationTokenSource? download;
+
     bool FromPlayhead => RangeBox.SelectedIndex == 1;
+
+    // No ffmpeg: said, with the app's own to download where there is one for this platform.
+    void NoFfmpeg()
+    {
+        ShowError(Loc.T(Tools?.Rid != null ? "VideoNoFfmpegDownload" : "VideoNoFfmpeg"));
+        DownloadRow.IsVisible = Tools?.Rid != null;
+    }
+
+    async void DownloadFfmpeg(object? sender, RoutedEventArgs e)
+    {
+        if (Tools is not { } tools || download != null) return;
+        download = new CancellationTokenSource();
+        DownloadButton.IsEnabled = OkButton.IsEnabled = false;
+        DownloadBar.IsVisible = true;
+        DownloadBar.IsIndeterminate = true;
+        ShowError(null);
+        try
+        {
+            var manifest = await tools.FetchManifestAsync(download.Token);
+            var installed = await tools.InstallAsync(manifest, new Progress<(long Done, long Total)>(p =>
+            {
+                DownloadBar.IsIndeterminate = false;
+                DownloadBar.Value = p.Total > 0 ? (double)p.Done / p.Total : 0;
+            }), download.Token);
+            FfmpegBox.Text = installed.Ffmpeg;
+            DownloadRow.IsVisible = false;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is HttpRequestException or OurTaikoEdit.Core.Ffmpeg.ToolsManifestException or OurTaikoEdit.Core.Ffmpeg.FfmpegToolsException
+            or IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            ShowError(Loc.F("FfmpegDownloadFailed", ex.Message));
+        }
+        finally
+        {
+            download.Dispose();
+            download = null;
+            DownloadButton.IsEnabled = OkButton.IsEnabled = true;
+            DownloadBar.IsVisible = false;
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        download?.Cancel();
+        base.OnClosed(e);
+    }
     string Encoding => EncodingBox.SelectedIndex >= 0 ? VideoEncodings.All[EncodingBox.SelectedIndex] : VideoEncodings.Default;
     bool Raw => Encoding == VideoEncodings.None;
 
@@ -155,9 +205,9 @@ public partial class ExportVideoDialog : Window
         string? dir = Path.GetDirectoryName(output);
         if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) { ShowError(Loc.T("VideoNeedOutput")); return; }
         string typed = FfmpegBox.Text?.Trim() ?? "";
-        if (VideoExporter.FindFfmpeg(typed.Length > 0 ? typed : null) is not { } ffmpeg) { ShowError(Loc.T("VideoNoFfmpeg")); return; }
+        if (VideoExporter.FindFfmpeg(typed.Length > 0 ? typed : null, Tools) is not { } ffmpeg) { NoFfmpeg(); return; }
         // The ffmpeg chosen by hand is remembered; one found on its own is looked for again next time.
-        settings.Ffmpeg = typed.Length > 0 && typed != VideoExporter.FindFfmpeg(null) ? typed : null;
+        settings.Ffmpeg = typed.Length > 0 && typed != VideoExporter.FindFfmpeg(null, Tools) ? typed : null;
 
         var (width, height, fps) = Chosen();
         Close(new VideoExportOptions(output, width, height, fps, FromPlayhead, HitsBox.IsChecked == true, ffmpeg, Encoding));

@@ -40,12 +40,20 @@
           <c:Logo Size="22" VerticalAlignment="Center" />
           <TextBlock Text="OurTaikoEdit" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
         </StackPanel>
-        <Button Grid.Column="2" Classes="ghost" Command="{Binding SettingsCommand}" VerticalAlignment="Center">
-          <StackPanel>
-            <c:Icon Data="{StaticResource IconSettings}" />
-            <TextBlock Text="{l:T Settings}" />
-          </StackPanel>
-        </Button>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" x:Name="TranscodeButton" Command="{Binding TranscodeCommand}" ToolTip.Tip="{l:T TranscodeTip}">
+            <StackPanel>
+              <c:Icon Data="{StaticResource IconConvert}" />
+              <TextBlock Text="{l:T TranscodeTitle}" />
+            </StackPanel>
+          </Button>
+          <Button Classes="ghost" Command="{Binding SettingsCommand}">
+            <StackPanel>
+              <c:Icon Data="{StaticResource IconSettings}" />
+              <TextBlock Text="{l:T Settings}" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 

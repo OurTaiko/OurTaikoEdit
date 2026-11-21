@@ -258,6 +258,34 @@ sealed class TjaEditing : IChartEditing
         return new EditResult(edits);
     }
 
+    // WAVE: the last one written before the block is changed; without one it is written after
+    // TITLE (or first of all).
+    public EditResult SetAudio(ChartAnalysis analysis, string file)
+    {
+        string text = analysis.Text;
+        int waveLine = 0, titleLine = 0;
+        foreach (var l in TjaLines.Read(text))
+        {
+            if (l.Line >= analysis.StartLine && analysis.StartLine > 0) break;
+            if (l.Kind != TjaLineKind.Header) continue;
+            if (l.Key == "WAVE") waveLine = l.Line;
+            else if (l.Key == "TITLE") titleLine = l.Line;
+        }
+        string[] lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        string newline = text.Contains("\r\n") ? "\r\n" : "\n";
+        TextEdit edit;
+        if (waveLine > 0)
+        {
+            string raw = lines[waveLine - 1];
+            int colon = raw.IndexOf(':');
+            if (raw[(colon + 1)..].Trim() == file) return new EditResult(Array.Empty<TextEdit>());
+            edit = new TextEdit(waveLine, colon + 2, raw.Length - colon - 1, file);
+        }
+        else if (titleLine > 0) edit = new TextEdit(titleLine, lines[titleLine - 1].Length + 1, 0, newline + "WAVE:" + file);
+        else edit = new TextEdit(1, 1, 0, "WAVE:" + file + newline);
+        return new EditResult(new[] { edit });
+    }
+
     // OFFSET is how long before the song's start the chart starts, so the first measure moves
     // later by as much as OFFSET gets smaller. The OFFSET in force for the block is the last one
     // written before it; without one it is written after BPM (or first of all). The value is a

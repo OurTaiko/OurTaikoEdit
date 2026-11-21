@@ -1,0 +1,300 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OurTaikoEdit.App.ViewModels"
+             xmlns:c="using:OurTaikoEdit.App.Controls"
+             xmlns:l="using:OurTaikoEdit.App.Localization"
+             x:Class="OurTaikoEdit.App.Views.TranscodeView"
+             x:DataType="vm:TranscodeViewModel"
+             DragDrop.AllowDrop="True">
+  <UserControl.Styles>
+    <!-- A titled group of choices on the right. -->
+    <Style Selector="Border.group">
+      <Setter Property="Padding" Value="16,14" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+      <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+    </Style>
+    <Style Selector="Grid.choices > StackPanel">
+      <Setter Property="Spacing" Value="5" />
+    </Style>
+    <Style Selector="Grid.choices ComboBox, Grid.choices NumericUpDown">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- The bar: back, the title, and which ffmpeg does the work. -->
+    <Border Classes="bar" Height="44" Padding="8,0,12,0">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" Command="{Binding BackCommand}" IsEnabled="{Binding !IsRunning}">
+            <StackPanel>
+              <c:Icon Data="{StaticResource IconBack}" />
+              <TextBlock Text="{l:T Back}" />
+            </StackPanel>
+          </Button>
+          <TextBlock Classes="faint" Text="/" VerticalAlignment="Center" Margin="2,0,8,0" />
+          <TextBlock Text="{l:T TranscodeTitle}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding HasFfmpeg}">
+          <TextBlock Classes="caption" Text="{Binding FfmpegText}" VerticalAlignment="Center" MaxWidth="420" TextTrimming="PathSegmentEllipsis"
+                     ToolTip.Tip="{Binding FfmpegText}" />
+          <Button Classes="ghost" Content="{Binding OfferText}" IsVisible="{Binding HasOffer}" Command="{Binding DownloadFfmpegCommand}" />
+          <Button Classes="ghost icon" ToolTip.Tip="{l:T FfmpegManage}">
+            <c:Icon Data="{StaticResource IconSettings}" />
+            <Button.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="{l:T FfmpegChoose}" Command="{Binding ChooseFfmpegCommand}" />
+                <MenuItem Header="{l:T FfmpegUseDownloaded}" Command="{Binding ForgetChosenFfmpegCommand}" />
+                <MenuItem Header="{l:T FfmpegRemoveTitle}" Command="{Binding RemoveDownloadedFfmpegCommand}" IsEnabled="{Binding HasDownloaded}" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- No ffmpeg yet: download the app's, or choose one. -->
+    <Border Grid.Row="1" IsVisible="{Binding NeedsFfmpeg}" Classes="group" MaxWidth="560" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="28,24">
+      <StackPanel Spacing="12">
+        <TextBlock Classes="h1" Text="{l:T FfmpegNeededTitle}" />
+        <TextBlock Classes="muted" Text="{l:T FfmpegNeeded}" TextWrapping="Wrap" />
+        <TextBlock Classes="caption" Text="{Binding NoDownloadText}" TextWrapping="Wrap" IsVisible="{Binding !CanDownload}" />
+        <StackPanel Spacing="6" IsVisible="{Binding IsDownloading}">
+          <ProgressBar Minimum="0" Maximum="1" Value="{Binding DownloadProgress}" />
+          <TextBlock Classes="caption" Text="{Binding DownloadText}" />
+        </StackPanel>
+        <TextBlock Classes="error" Text="{Binding DownloadError}" TextWrapping="Wrap" IsVisible="{Binding DownloadError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="accent" x:Name="DownloadButton" Command="{Binding DownloadFfmpegCommand}" IsVisible="{Binding !IsDownloading}">
+            <TextBlock Text="{Binding DownloadButtonText}" />
+          </Button>
+          <Button Content="{l:T Cancel}" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}" />
+          <Button Content="{l:T FfmpegChoose}" Command="{Binding ChooseFfmpegCommand}" IsEnabled="{Binding !IsDownloading}" />
+        </StackPanel>
+        <TextBlock Classes="caption" Text="{l:T FfmpegLicense}" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="360,Auto,*" IsVisible="{Binding HasFfmpeg}">
+      <!-- The files -->
+      <Grid RowDefinitions="Auto,*" Background="{StaticResource BaseBrush}">
+        <Grid ColumnDefinitions="*,Auto" Margin="14,12,10,8">
+          <TextBlock Classes="section" Text="{l:T TranscodeFiles}" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+            <Button Classes="ghost" Command="{Binding AddFilesCommand}" IsEnabled="{Binding !IsRunning}">
+              <StackPanel>
+                <c:Icon Data="{StaticResource IconPlus}" />
+                <TextBlock Text="{l:T TranscodeAdd}" />
+              </StackPanel>
+            </Button>
+            <Button Classes="ghost" Content="{l:T TranscodeClear}" Command="{Binding ClearCommand}" IsEnabled="{Binding !IsRunning}" IsVisible="{Binding !IsEmpty}" />
+          </StackPanel>
+        </Grid>
+        <Border Grid.Row="1" IsVisible="{Binding IsEmpty}" Margin="14,0,14,14" CornerRadius="10" BorderThickness="1"
+                BorderBrush="{StaticResource LineStrongBrush}" VerticalAlignment="Top" Padding="18,36">
+          <StackPanel Spacing="8" HorizontalAlignment="Center">
+            <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold" Text="{l:T TranscodeEmpty}" />
+            <TextBlock Classes="caption" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="260" Text="{l:T TranscodeEmptyHint}" />
+          </StackPanel>
+        </Border>
+        <ListBox Grid.Row="1" Classes="rows" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" IsVisible="{Binding !IsEmpty}" Margin="6,0,6,6">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:TranscodeItem">
+              <Grid ColumnDefinitions="*,Auto" Background="Transparent" Margin="4,3">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />
+                  <TextBlock Classes="caption" Text="{Binding Description}" TextTrimming="CharacterEllipsis" IsVisible="{Binding !HasError}" />
+                  <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" IsVisible="{Binding IsRunning}" Margin="0,3,0,1" />
+                  <TextBlock Classes="caption" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" IsVisible="{Binding !HasError}" Foreground="{StaticResource KaBrush}" />
+                  <TextBlock Classes="error" Text="{Binding StatusText}" TextWrapping="Wrap" IsVisible="{Binding HasError}" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="ghost icon" VerticalAlignment="Top" ToolTip.Tip="{l:T TranscodeRemove}"
+                        Command="{Binding $parent[ListBox].((vm:TranscodeViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}">
+                  <c:Icon Data="{StaticResource IconClose}" />
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+      <Border Grid.Column="1" Width="1" Background="{StaticResource LineBrush}" />
+
+      <!-- The choices, for every file -->
+      <ScrollViewer Grid.Column="2">
+        <StackPanel Margin="20,16,20,20" Spacing="14" MaxWidth="900">
+          <Border Classes="group">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="label" Text="{l:T TranscodeFormat}" />
+              <ComboBox x:Name="FormatBox" ItemsSource="{Binding Formats}" SelectedItem="{Binding Format}" HorizontalAlignment="Stretch" />
+              <TextBlock Classes="muted" Text="{Binding Plan}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <!-- The selected file heard, and cut on its waveform -->
+          <Border Classes="group" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="label" Text="{l:T TranscodeRange}" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding PreviewText}" />
+              </Grid>
+              <c:TrimWaveform x:Name="Wave" Height="120" Waveform="{Binding Waveform}" Duration="{Binding Selected.Duration, FallbackValue=0}"
+                              Start="{Binding Selected.TrimStart, FallbackValue=0}" End="{Binding Selected.TrimEnd, FallbackValue={x:Null}}"
+                              Position="{Binding PreviewPosition}" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Classes="accent icon" Command="{Binding TogglePreviewCommand}" ToolTip.Tip="{l:T PreviewPlayTip}">
+                  <Panel>
+                    <c:Icon Data="{StaticResource IconSolidPlay}" Filled="True" IsVisible="{Binding !IsPreviewPlaying}" />
+                    <c:Icon Data="{StaticResource IconSolidPause}" Filled="True" IsVisible="{Binding IsPreviewPlaying}" />
+                  </Panel>
+                </Button>
+                <Button Content="{l:T TrimStartHere}" Command="{Binding TrimStartHereCommand}" IsEnabled="{Binding CanPreview}" />
+                <Button Content="{l:T TrimEndHere}" Command="{Binding TrimEndHereCommand}" IsEnabled="{Binding CanPreview}" />
+                <Button Classes="ghost" Content="{l:T TrimWhole}" Command="{Binding ResetTrimCommand}" IsVisible="{Binding Selected.IsTrimmed, FallbackValue=False}" />
+                <TextBlock Classes="caption" Text="{Binding Selected.StatusText, FallbackValue=''}" VerticalAlignment="Center" Margin="6,0,0,0" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Audio -->
+          <Border Classes="group">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="section" Text="{l:T TranscodeAudio}" />
+              <Grid Classes="choices" ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                <StackPanel>
+                  <TextBlock Classes="label" Text="{l:T TranscodeTrack}" />
+                  <ComboBox ItemsSource="{Binding AudioTracks}" SelectedItem="{Binding AudioTrack}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Classes="label" Text="{l:T TranscodeEncoder}" />
+                  <ComboBox x:Name="AudioCodecBox" ItemsSource="{Binding AudioCodecs}" SelectedItem="{Binding AudioCodec}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" IsVisible="{Binding ShowRateMode}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeRateMode}" />
+                  <ComboBox ItemsSource="{Binding RateModes}" SelectedItem="{Binding RateMode}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" IsVisible="{Binding ShowBitrate}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeBitrate}" />
+                  <ComboBox ItemsSource="{Binding Bitrates}" SelectedItem="{Binding Bitrate}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" IsVisible="{Binding ShowQuality}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeQuality}" />
+                  <ComboBox ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" IsVisible="{Binding ShowFlac}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeFlacLevel}" />
+                  <ComboBox ItemsSource="{Binding FlacLevels}" SelectedItem="{Binding FlacLevel}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" IsVisible="{Binding ShowDepth}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeDepth}" />
+                  <ComboBox ItemsSource="{Binding PcmDepths}" SelectedItem="{Binding PcmDepth}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" IsVisible="{Binding ShowSampleRate}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeSampleRate}" />
+                  <ComboBox ItemsSource="{Binding SampleRates}" SelectedItem="{Binding SampleRate}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="2" IsVisible="{Binding ShowAudioEncoding}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeChannels}" />
+                  <ComboBox ItemsSource="{Binding ChannelChoices}" SelectedItem="{Binding Channels}" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- Video -->
+          <Border Classes="group" IsVisible="{Binding IsVideo}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="section" Text="{l:T TranscodeVideo}" />
+              <Grid Classes="choices" ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                <StackPanel>
+                  <TextBlock Classes="label" Text="{l:T TranscodeEncoder}" />
+                  <ComboBox ItemsSource="{Binding VideoCodecs}" SelectedItem="{Binding VideoCodec}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" IsVisible="{Binding ShowVideoEncoding}">
+                  <TextBlock Classes="label" Text="{l:T TranscodeCrf}" />
+                  <NumericUpDown Value="{Binding Crf}" Minimum="0" Maximum="{Binding CrfMax}" Increment="1" FormatString="0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" IsVisible="{Binding ShowPreset}">
+                  <TextBlock Classes="label" Text="{l:T TranscodePreset}" />
+                  <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding Preset}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" IsVisible="{Binding ShowVideoEncoding}">
+                  <TextBlock Classes="label" Text="{l:T VideoResolution}" />
+                  <ComboBox ItemsSource="{Binding Heights}" SelectedItem="{Binding Height}" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" IsVisible="{Binding ShowVideoEncoding}">
+                  <TextBlock Classes="label" Text="{l:T VideoFps}" />
+                  <ComboBox ItemsSource="{Binding FrameRates}" SelectedItem="{Binding Fps}" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- More: filters, metadata, the command -->
+          <Border Classes="group">
+            <StackPanel Spacing="10">
+              <ToggleButton Classes="ghost" IsChecked="{Binding ShowAdvanced}" HorizontalAlignment="Left" Padding="4,2">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Panel>
+                    <c:Icon Data="{StaticResource IconChevronDown}" IsVisible="{Binding !ShowAdvanced}" />
+                    <c:Icon Data="{StaticResource IconChevronUp}" IsVisible="{Binding ShowAdvanced}" />
+                  </Panel>
+                  <TextBlock Classes="section" Text="{l:T TranscodeMore}" VerticalAlignment="Center" />
+                </StackPanel>
+              </ToggleButton>
+              <StackPanel Spacing="10" IsVisible="{Binding ShowAdvanced}">
+                <Grid Classes="choices" ColumnDefinitions="*,*,*" ColumnSpacing="12" IsVisible="{Binding ShowAudioEncoding}">
+                  <StackPanel>
+                    <TextBlock Classes="label" Text="{l:T TranscodeVolume}" />
+                    <NumericUpDown Value="{Binding VolumeDb}" Minimum="-30" Maximum="30" Increment="0.5" FormatString="0.0" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="label" Text="{l:T TranscodeFadeIn}" />
+                    <NumericUpDown Value="{Binding FadeIn}" Minimum="0" Maximum="60" Increment="0.5" FormatString="0.0" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Classes="label" Text="{l:T TranscodeFadeOut}" />
+                    <NumericUpDown Value="{Binding FadeOut}" Minimum="0" Maximum="60" Increment="0.5" FormatString="0.0" />
+                  </StackPanel>
+                </Grid>
+                <CheckBox Content="{l:T TranscodeNormalize}" IsChecked="{Binding Normalize}" IsVisible="{Binding ShowAudioEncoding}" />
+                <CheckBox Content="{l:T TranscodeKeepMetadata}" IsChecked="{Binding KeepMetadata}" />
+                <TextBlock Classes="caption" Text="{l:T TranscodeCopyNote}" TextWrapping="Wrap" />
+                <StackPanel Classes="field">
+                  <TextBlock Classes="label" Text="{l:T TranscodeExtra}" />
+                  <TextBox Text="{Binding Extra}" FontFamily="{StaticResource CodeFont}" PlaceholderText="-metadata title=…" />
+                </StackPanel>
+                <StackPanel Classes="field">
+                  <TextBlock Classes="label" Text="{l:T TranscodeCommand}" />
+                  <SelectableTextBlock Classes="mono" Text="{Binding CommandLine}" TextWrapping="Wrap" FontFamily="{StaticResource CodeFont}" FontSize="12" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="group">
+            <StackPanel Classes="field">
+              <TextBlock Classes="label" Text="{l:T TranscodeOutput}" />
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding OutputFolder}" PlaceholderText="{l:T TranscodeSameFolder}" />
+                <Button Grid.Column="1" Content="{l:T Browse}" Command="{Binding BrowseOutputCommand}" />
+                <Button Grid.Column="2" Classes="ghost" Content="{l:T TranscodeSameFolderButton}" Command="{Binding SameFolderCommand}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <Border Grid.Row="2" Classes="footer" IsVisible="{Binding HasFfmpeg}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Classes="muted" Text="{Binding RunText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button Classes="accent wide" x:Name="StartButton" Content="{l:T TranscodeStart}" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}" />
+          <Button Classes="wide" Content="{l:T Cancel}" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

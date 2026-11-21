@@ -13,6 +13,7 @@ public sealed class ViewLocator : IDataTemplate
         ProjectsViewModel => new ProjectsView(),
         EditorViewModel => new EditorView(),
         PlayViewModel => new PlayView(),
+        TranscodeViewModel => new TranscodeView(),
         _ => new TextBlock { Text = "No view for " + param?.GetType().Name },
     };
 

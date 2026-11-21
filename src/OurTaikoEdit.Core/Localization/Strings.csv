@@ -347,3 +347,112 @@ VideoDone,Video exported: {0},视频已导出：{0},動画を書き出しまし�
 VideoCancelled,Video export cancelled,已取消导出视频,動画の書き出しを中止しました
 VideoFailed,The video could not be exported: {0},视频导出失败：{0},動画を書き出せませんでした：{0}
 VideoNoAudioYet,The song is still loading,歌曲还在载入,曲を読み込み中です
+
+# Transcoder,,,
+Back,Back,返回,戻る
+TranscodeTitle,Convert,转换音视频,変換
+TranscodeTip,Convert audio and video files with ffmpeg,用 ffmpeg 转换音频和视频文件,ffmpeg で音声・動画ファイルを変換する
+ConvertSongTip,"Convert the song (to OGG, for example) and use the result as the chart's song",转换歌曲（例如转为 OGG），并把转换结果设为谱面的歌曲,曲を変換し（OGG など）、変換したファイルを譜面の曲にする
+SongChanged,The chart's song is now {0},谱面的歌曲已改为 {0},譜面の曲を {0} に変更しました
+TranscodeFiles,Files,文件,ファイル
+TranscodeAdd,Add…,添加…,追加…
+TranscodeAddTitle,Add files to convert,添加要转换的文件,変換するファイルを追加
+TranscodeClear,Clear,清空,クリア
+TranscodeRemove,Remove from the list,从列表中移除,リストから外す
+TranscodeEmpty,No files yet,还没有文件,ファイルがありません
+TranscodeEmptyHint,"Drop audio or video files here, or click Add.",把音频或视频文件拖到这里，或点击“添加”。,音声・動画ファイルをここにドロップするか、「追加」を押してください。
+TranscodeReading,Reading…,正在读取…,読み込み中…
+TranscodeWaiting,Waiting,等待中,待機中
+TranscodeRunning,Converting… {0}%,正在转换… {0}%,変換中… {0}%
+TranscodeRunningN,Converting {0} of {1}…,正在转换第 {0} / {1} 个…,{1} 件中 {0} 件目を変換中…
+TranscodeDoneAs,Done: {0},完成：{0},完了：{0}
+TranscodeCancelledOne,Not converted,未转换,変換しませんでした
+TranscodeTrimmed,Part: {0} – {1},截取：{0} – {1},範囲：{0} – {1}
+TranscodeNothingInside,There is no audio or video in this file,这个文件里没有音频或视频,このファイルには音声も動画もありません
+TranscodeTracks,{0} audio tracks,{0} 条音轨,音声トラック {0} 本
+TranscodeUndecodable,{0} cannot be decoded,{0} 无法解码,{0} はデコードできません
+TranscodeCannotDecode,cannot be decoded,无法解码,デコード不可
+TranscodeFormat,Convert to,转换为,変換先の形式
+TranscodeVideoFormat,{0} — video,{0}（视频）,{0}（動画）
+TranscodeRange,Part to convert (drag the red ends; click to move where listening starts),转换范围（拖动红色边界调整，点击波形设置试听位置）,変換する範囲（赤い端をドラッグ、クリックで試聴位置を移動）
+PreviewPlayTip,Listen to the part to convert,试听要转换的部分,変換する範囲を試聴する
+PreviewLoading,Loading the waveform…,正在读取波形…,波形を読み込み中…
+TrimStartHere,Start here,设为开始,ここを開始に
+TrimEndHere,End here,设为结束,ここを終了に
+TrimWhole,Whole file,整个文件,ファイル全体
+TranscodeAudio,Audio,音频,音声
+TranscodeVideo,Video,视频,動画
+TranscodeTrack,Track,音轨,トラック
+TranscodeEncoder,Encoder,编码器,エンコーダー
+CodecAuto,Automatic (copy when possible),自动（能直接复制就复制）,自動（可能ならコピー）
+CodecCopy,Copy (do not re-encode),直接复制（不重新编码）,コピー（再エンコードしない）
+TranscodeRateMode,Bitrate mode,码率模式,ビットレートモード
+TranscodeVbr,Variable (VBR),可变码率（VBR）,可変（VBR）
+TranscodeCbr,Constant (CBR),固定码率（CBR）,固定（CBR）
+TranscodeBitrate,Bitrate,码率,ビットレート
+TranscodeQuality,Quality,质量,品質
+TranscodeFlacLevel,Compression level,压缩等级,圧縮レベル
+FlacFastest,{0} (fastest),{0}（最快）,{0}（最速）
+FlacSmallest,{0} (smallest),{0}（最小体积）,{0}（最小サイズ）
+ChoiceDefault,{0} (default),{0}（默认）,{0}（既定）
+TranscodeDepth,Bit depth,位深,ビット深度
+PcmFloat,32 bit float,32 bit 浮点,32 bit 浮動小数点
+TranscodeSampleRate,Sample rate,采样率,サンプリングレート
+TranscodeChannels,Channels,声道,チャンネル
+KeepAsIs,Keep as is,保持原样,そのまま
+Mono,Mono,单声道,モノラル
+Stereo,Stereo,立体声,ステレオ
+ChannelsN,{0} channels,{0} 声道,{0} チャンネル
+TranscodeCrf,"Quality (CRF, lower is better)",画质（CRF，越小越好）,画質（CRF、小さいほど高画質）
+TranscodePreset,Encoding speed,编码速度,エンコード速度
+TranscodeMore,More,更多选项,詳細設定
+TranscodeVolume,Volume (dB),音量（dB）,音量（dB）
+TranscodeFadeIn,Fade in (s),淡入（秒）,フェードイン（秒）
+TranscodeFadeOut,Fade out (s),淡出（秒）,フェードアウト（秒）
+TranscodeNormalize,"Normalize loudness (EBU R128, −16 LUFS)",响度标准化（EBU R128，−16 LUFS）,ラウドネスを正規化（EBU R128、−16 LUFS）
+TranscodeKeepMetadata,"Keep the metadata (title, artist, …)",保留元数据（标题、艺术家等）,メタデータを残す（タイトル、アーティストなど）
+TranscodeCopyNote,A track is copied as it is only when nothing above changes it.,只有在以上选项都不改变音轨时，才会直接复制。,上の設定で何も変えないときだけ、トラックをそのままコピーします。
+TranscodeExtra,More ffmpeg arguments,其他 ffmpeg 参数,追加の ffmpeg 引数
+TranscodeCommand,The command for the selected file,所选文件将执行的命令,選択中のファイルで実行するコマンド
+TranscodeOutput,Save to,保存到,保存先
+TranscodeSameFolder,Next to each file,与原文件相同的文件夹,元のファイルと同じフォルダー
+TranscodeSameFolderButton,Next to each file,与原文件相同,元と同じ
+TranscodeStart,Convert,开始转换,変換開始
+TranscodeFinished,Converted {0} file(s),已转换 {0} 个文件,{0} 件を変換しました
+TranscodeFinishedFailed,"Converted {0}, {1} failed",已转换 {0} 个，{1} 个失败,{0} 件を変換、{1} 件失敗
+TranscodeStopped,Stopped after {0} file(s),已停止（完成 {0} 个）,中止しました（{0} 件完了）
+TranscodeOverwriteTitle,Replace the file?,要覆盖文件吗？,ファイルを置き換えますか？
+TranscodeOverwrite,{0} is already there. Replace it?,{0} 已存在。要覆盖吗？,{0} はすでにあります。置き換えますか？
+TranscodeOverwriteYes,Replace,覆盖,置き換える
+PlanExtract,the audio is taken out of the video,从视频中提取音轨,動画から音声を取り出します
+PlanNoPicture,the file has no picture: an audio format may suit it better,源文件没有画面，建议选择音频格式,画像がないファイルです。音声形式のほうが適しています
+PlanNoAudio,the file has no audio,源文件没有音轨,音声トラックがありません
+PlanNoUsableAudio,none of its audio tracks can be decoded,源文件的音轨都无法解码,デコードできる音声トラックがありません
+PlanAudioCopy,audio copied as it is (lossless and fast),音轨直接复制（无损且很快）,音声をそのままコピー（無劣化・高速）
+PlanAudioEncode,audio encoded as {0},音频重新编码为 {0},音声を {0} でエンコード
+PlanVideoCopy,picture copied as it is,画面直接复制,映像をそのままコピー
+PlanVideoEncode,picture encoded as {0},画面重新编码为 {0},映像を {0} でエンコード
+PlanSeparator,; ,，,、
+# ffmpeg,,,
+FfmpegNeededTitle,ffmpeg is needed,需要 ffmpeg,ffmpeg が必要です
+FfmpegNeeded,"Converting files and exporting videos is done by ffmpeg. OurTaikoEdit can download its own copy (only what it needs, once; it is kept in the app's data folder), or use one you already have.",转换文件和导出视频都由 ffmpeg 完成。OurTaikoEdit 可以下载一份自己的 ffmpeg（只含需要的功能，只需下载一次，保存在应用的数据文件夹里），也可以使用你已有的 ffmpeg。,ファイルの変換と動画の書き出しは ffmpeg が行います。OurTaikoEdit 専用の ffmpeg（必要な機能だけ、一度だけ、アプリのデータフォルダーに保存）をダウンロードするか、お持ちの ffmpeg を使えます。
+FfmpegNoPackage,There is no download for this platform: install ffmpeg (https://ffmpeg.org) and choose it.,这个平台没有可下载的版本：请安装 ffmpeg（https://ffmpeg.org）后选择它。,このプラットフォーム用のダウンロードはありません。ffmpeg（https://ffmpeg.org）をインストールして選んでください。
+FfmpegLicense,The downloaded ffmpeg is free software under the GPL; its licence and where to get its source are in its folder.,下载的 ffmpeg 是 GPL 许可的自由软件，许可证和源码下载位置都在它所在的文件夹里。,ダウンロードする ffmpeg は GPL の自由ソフトウェアです。ライセンスとソースの入手先はそのフォルダーにあります。
+FfmpegDownload,Download ffmpeg ({0}),下载 ffmpeg（{0}）,ffmpeg をダウンロード（{0}）
+FfmpegDownloadShort,Download ffmpeg,下载 ffmpeg,ffmpeg をダウンロード
+FfmpegChecking,Checking…,正在检查…,確認中…
+FfmpegDownloading,Downloading {0} of {1}…,正在下载 {0} / {1}…,ダウンロード中 {0} / {1}…
+FfmpegDownloadFailed,ffmpeg could not be downloaded: {0},ffmpeg 下载失败：{0},ffmpeg をダウンロードできませんでした：{0}
+FfmpegManifestFailed,Could not check for ffmpeg: {0},无法检查 ffmpeg：{0},ffmpeg を確認できませんでした：{0}
+FfmpegUpdate,ffmpeg {0} is available ({1}),有新的 ffmpeg {0}（{1}）,ffmpeg {0} があります（{1}）
+FfmpegChoose,Use another ffmpeg…,使用其他 ffmpeg…,別の ffmpeg を使う…
+FfmpegUseDownloaded,Use the downloaded ffmpeg (or the system's),使用下载的 ffmpeg（或系统中的）,ダウンロードした ffmpeg（またはシステムのもの）を使う
+FfmpegManage,ffmpeg,ffmpeg,ffmpeg
+FfmpegRemoveTitle,Delete the downloaded ffmpeg,删除下载的 ffmpeg,ダウンロードした ffmpeg を削除
+FfmpegRemoveMessage,The ffmpeg downloaded by OurTaikoEdit is deleted from its data folder. It can be downloaded again.,将从数据文件夹中删除 OurTaikoEdit 下载的 ffmpeg，之后可以重新下载。,OurTaikoEdit がダウンロードした ffmpeg をデータフォルダーから削除します。あとで再ダウンロードできます。
+FfmpegMissing,No ffmpeg,没有 ffmpeg,ffmpeg がありません
+FfmpegDownloaded,ffmpeg {0} (downloaded),ffmpeg {0}（已下载）,ffmpeg {0}（ダウンロード済み）
+FfmpegChosen,ffmpeg: {0},ffmpeg：{0},ffmpeg：{0}
+FfmpegSystem,ffmpeg: {0} (installed on the system),ffmpeg：{0}（系统中安装的）,ffmpeg：{0}（システムにインストール済み）
+FfprobeMissing,ffprobe was not found next to ffmpeg,在 ffmpeg 旁边找不到 ffprobe,ffmpeg と同じ場所に ffprobe がありません
+VideoNoFfmpegDownload,"ffmpeg was not found. Download OurTaikoEdit's, or choose one.",找不到 ffmpeg。可以下载 OurTaikoEdit 提供的，或选择已有的。,ffmpeg が見つかりません。OurTaikoEdit 用のものをダウンロードするか、選んでください。

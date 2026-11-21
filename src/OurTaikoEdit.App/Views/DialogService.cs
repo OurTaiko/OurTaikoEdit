@@ -25,6 +25,12 @@ public sealed class DialogService(Window owner) : IDialogService
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
+    public async Task<IReadOnlyList<string>> PickFilesAsync(string title)
+    {
+        var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = title, AllowMultiple = true });
+        return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+    }
+
     public Task<NewProjectRequest?> NewProjectAsync(string location) => new NewProjectDialog(this, location).ShowDialog<NewProjectRequest?>(owner);
 
     public Task MessageAsync(string title, string message) => Ask(title, message, (Loc.T("Ok"), true));

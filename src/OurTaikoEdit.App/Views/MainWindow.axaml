@@ -8,8 +8,17 @@
         Width="1440" Height="900" MinWidth="960" MinHeight="600"
         WindowStartupLocation="CenterScreen">
   <!-- The play scene lies over the editor, which is kept as it is while a chart is played. -->
+  <!-- So does the transcoder, over the project list or the editor. -->
   <Panel>
-    <ContentControl Content="{Binding Scene}" IsVisible="{Binding Play, Converter={x:Static ObjectConverters.IsNull}}" />
+    <ContentControl Content="{Binding Scene}">
+      <ContentControl.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Play" Converter="{x:Static ObjectConverters.IsNull}" />
+          <Binding Path="Transcode" Converter="{x:Static ObjectConverters.IsNull}" />
+        </MultiBinding>
+      </ContentControl.IsVisible>
+    </ContentControl>
+    <ContentControl Content="{Binding Transcode}" IsVisible="{Binding Transcode, Converter={x:Static ObjectConverters.IsNotNull}}" />
     <ContentControl Content="{Binding Play}" IsVisible="{Binding Play, Converter={x:Static ObjectConverters.IsNotNull}}" />
   </Panel>
 </Window>

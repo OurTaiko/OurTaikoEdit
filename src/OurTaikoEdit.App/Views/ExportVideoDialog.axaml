@@ -61,6 +61,11 @@
       </StackPanel>
 
       <TextBlock x:Name="Error" Classes="error" TextWrapping="Wrap" IsVisible="False" />
+      <!-- No ffmpeg: the app's own, downloaded here (or in the transcoder). -->
+      <StackPanel x:Name="DownloadRow" Spacing="6" IsVisible="False">
+        <Button x:Name="DownloadButton" Classes="accent" Content="{l:T FfmpegDownloadShort}" Click="DownloadFfmpeg" />
+        <ProgressBar x:Name="DownloadBar" Minimum="0" Maximum="1" IsVisible="False" />
+      </StackPanel>
     </StackPanel>
   </DockPanel>
 </Window>

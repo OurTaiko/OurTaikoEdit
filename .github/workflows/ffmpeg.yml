@@ -1,0 +1,204 @@
+name: FFmpeg
+run-name: FFmpeg tools build ${{ inputs.build }}
+
+# Builds the ffmpeg + ffprobe that OurTaikoEdit downloads on demand (build/ffmpeg/build.sh), signs a
+# manifest for them and publishes it all to the bucket behind distrib.sparkbarry.com:
+#
+#   OurTaikoEdit/tools/ffmpeg/<version>/<rid>/ffmpeg.zip   immutable
+#   OurTaikoEdit/tools/ffmpeg/<version>/source/...         immutable (GPL corresponding source)
+#   OurTaikoEdit/tools/ffmpeg/manifest.json                short cache, uploaded last
+#
+# <version> is <FFmpeg version from versions.env>-<build>, e.g. 9.1-1. A version is never overwritten:
+# rebuilding the same FFmpeg needs a new build number. See build/ffmpeg/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: Build number (the release is <FFmpeg version>-<build>; must not exist yet)
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffmpeg-tools
+  cancel-in-progress: false
+
+env:
+  BUCKET: sparkbarry-public
+  PREFIX: OurTaikoEdit/tools/ffmpeg
+  CDN: https://distrib.sparkbarry.com
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          BUILD: ${{ inputs.build }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$BUILD" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::build must be a positive integer, got '$BUILD'."
+            exit 1
+          fi
+          source build/ffmpeg/versions.env
+          echo "version=$FFMPEG_VERSION-$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Release $FFMPEG_VERSION-$BUILD"
+
+  build:
+    name: Build (${{ matrix.rid }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - rid: osx-arm64
+            os: macos-latest
+          - rid: win-x64
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install nasm meson ninja pkgconf xz
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mingw-w64 nasm meson ninja-build pkg-config xz-utils zip
+
+      # Source tarballs only (all pinned by hash in versions.env); the libraries are rebuilt every time.
+      - uses: actions/cache@v4
+        with:
+          path: build/ffmpeg/downloads
+          key: ffmpeg-sources-${{ runner.os }}-${{ hashFiles('build/ffmpeg/versions.env') }}
+
+      - name: Build
+        env:
+          FFMPEG_WORK_DIR: ${{ runner.temp }}/ffmpeg-work
+          VERSION: ${{ needs.version.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: build/ffmpeg/build.sh "$RID" build/ffmpeg/out "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.rid }}
+          path: build/ffmpeg/out/
+          if-no-files-found: error
+
+  publish:
+    name: Sign and publish
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # AWS through GitHub OIDC
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ffmpeg-*
+          path: dist
+          merge-multiple: true # both builds carry the same source/ tarballs; their configure files differ by name
+
+      - name: Check the packages
+        run: |
+          set -euo pipefail
+          mkdir -p packages
+          for rid in osx-arm64 win-x64; do
+            test -s "dist/$rid/ffmpeg.zip"
+            mkdir -p "packages/$rid"
+            cp "dist/$rid/ffmpeg.zip" "packages/$rid/"
+          done
+          test -f dist/source/configure-osx-arm64.txt
+          test -f dist/source/configure-win-x64.txt
+          ls -lR dist
+
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ourtaikoedit-ffmpeg-${{ github.run_id }}
+
+      # Published versions are immutable.
+      - name: Check the version is new
+        run: |
+          set -euo pipefail
+          count=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$PREFIX/$VERSION/" --max-keys 1 \
+                    --query 'KeyCount' --output text)
+          if [[ "$count" != "0" ]]; then
+            echo "::error::$PREFIX/$VERSION/ already exists. Use a new build number instead of overwriting a release."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Sign manifest
+        env:
+          OURTAIKOEDIT_TOOLS_SIGNING_KEY: ${{ secrets.OURTAIKOEDIT_TOOLS_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$OURTAIKOEDIT_TOOLS_SIGNING_KEY" ]]; then
+            echo "::error::secrets.OURTAIKOEDIT_TOOLS_SIGNING_KEY is not set."
+            exit 1
+          fi
+          dotnet run --project tools/OurTaikoEdit.FfmpegManifest -c Release -- \
+            sign --version "$VERSION" --root packages --out manifest.json
+          cat manifest.json
+
+      - name: Upload
+        run: |
+          set -euo pipefail
+          sha256() { sha256sum | cut -d' ' -f1; }
+          # wait_for <url> <file>: the CDN must serve exactly these bytes before moving on.
+          wait_for() {
+            local want got
+            want=$(sha256 < "$2")
+            for _ in $(seq 1 30); do
+              got=$(curl -fsS "$1" | sha256) || true
+              [[ "$got" == "$want" ]] && return 0
+              sleep 2
+            done
+            echo "::error::$1 is not served correctly through the CDN."
+            return 1
+          }
+
+          base="s3://$BUCKET/$PREFIX/$VERSION"
+          aws s3 sync dist/source "$base/source/" --only-show-errors \
+            --cache-control "public, max-age=31536000, immutable"
+          for rid in osx-arm64 win-x64; do
+            aws s3 cp "packages/$rid/ffmpeg.zip" "$base/$rid/ffmpeg.zip" --only-show-errors \
+              --cache-control "public, max-age=31536000, immutable" --content-type application/zip
+          done
+          for rid in osx-arm64 win-x64; do
+            wait_for "$CDN/$PREFIX/$VERSION/$rid/ffmpeg.zip" "packages/$rid/ffmpeg.zip"
+          done
+
+          # The commit point: from here on the app sees this version.
+          aws s3 cp manifest.json "s3://$BUCKET/$PREFIX/manifest.json" --only-show-errors \
+            --cache-control "no-cache" --content-type application/json
+          wait_for "$CDN/$PREFIX/manifest.json" manifest.json
+
+          {
+            echo "### FFmpeg tools $VERSION published"
+            echo "Manifest: $CDN/$PREFIX/manifest.json"
+            echo "Source: $CDN/$PREFIX/$VERSION/source/"
+            for rid in osx-arm64 win-x64; do
+              echo "- $rid: $(stat -c %s "packages/$rid/ffmpeg.zip") bytes"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

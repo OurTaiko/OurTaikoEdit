@@ -140,6 +140,10 @@ public interface IChartEditing
     // (TJA: OFFSET). Every block the same header is in force for moves with it.
     EditResult MoveStart(ChartAnalysis analysis, double time);
 
+    // The chart's song made another file (a path relative to the chart; TJA: WAVE), for every
+    // block the same header is in force for.
+    EditResult SetAudio(ChartAnalysis analysis, string file);
+
     // A new block written after the chart's last (see NewBlock).
     EditResult InsertBlock(ChartAnalysis analysis, NewBlock block);
 

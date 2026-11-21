@@ -96,6 +96,9 @@ public sealed partial class EditorViewModel : ViewModelBase
     (PcmAudio Don, PcmAudio Ka)? songHits;
     bool audioLoading;
     string? audioPath;
+    // The app's ffmpeg, and the transcoder (files, format, told of each file converted).
+    readonly OurTaikoEdit.Core.Ffmpeg.FfmpegTools? ffmpegTools;
+    readonly Action<IEnumerable<string>?, string?, Action<string>?>? transcode;
     int audioLoad;
     [ObservableProperty] Waveform? waveform;
     [ObservableProperty] string audioStatus = Loc.T("NoAudio");
@@ -133,9 +136,12 @@ public sealed partial class EditorViewModel : ViewModelBase
     // takes its caret into the new block's chart, at the playhead.
     public event Action? BlockChosen;
 
-    public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null, Action<PlayViewModel?>? showPlay = null)
+    public EditorViewModel(ChartProject project, IDialogService dialogs, Action back, AppSettings? settings = null, Action<PlayViewModel?>? showPlay = null,
+        OurTaikoEdit.Core.Ffmpeg.FfmpegTools? tools = null, Action<IEnumerable<string>?, string?, Action<string>?>? transcode = null)
     {
         this.showPlay = showPlay;
+        ffmpegTools = tools;
+        this.transcode = transcode;
         Settings = settings ?? new AppSettings();
         division = Settings.Division;
         volume = Settings.Volume;
@@ -817,7 +823,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         string folder = Project.Folder;
         string name = string.Join("_", (string.IsNullOrWhiteSpace(Analysis.Title) ? Project.Name : Analysis.Title).Split(Path.GetInvalidFileNameChars()));
         var request = new VideoExportRequest(Path.Combine(folder, $"{name} ({chart.Course}).mp4"), Playhead,
-            Math.Min(0, chart.Notes[0].Time - PlayViewModel.LeadIn), HitSounds);
+            Math.Min(0, chart.Notes[0].Time - PlayViewModel.LeadIn), HitSounds) { Tools = ffmpegTools };
         var options = await dialogs.ExportVideoAsync(Settings, request);
         if (options == null) return;
         Settings.VideoWidth = options.Width;
@@ -842,6 +848,27 @@ public sealed partial class EditorViewModel : ViewModelBase
         {
             Message = Loc.F("VideoFailed", e.Message);
         }
+    }
+
+    // The song converted in the transcoder (to OGG unless asked otherwise); the file it is converted
+    // to becomes the chart's song (TJA: WAVE), as one change to the text.
+    [RelayCommand]
+    void ConvertSong()
+    {
+        if (transcode == null) return;
+        if (IsPlaying) TogglePlay();
+        var files = audioPath != null && File.Exists(audioPath) ? new[] { audioPath } : null;
+        transcode(files, "ogg", output => Dispatcher.UIThread.Post(() => UseSong(output)));
+    }
+
+    // A file as the chart's song: written relative to the project's folder.
+    public void UseSong(string file)
+    {
+        EnsureFresh();
+        string relative = Path.GetRelativePath(Project.Folder, file).Replace('\\', '/');
+        var result = Language.Editing.SetAudio(Analysis, relative);
+        Apply(result);
+        if (result.Ok) Message = Loc.F("SongChanged", relative);
     }
 
     [RelayCommand]

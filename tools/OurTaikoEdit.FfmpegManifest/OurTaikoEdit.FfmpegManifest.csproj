@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Makes, signs and checks the ffmpeg manifest (see src/OurTaikoEdit.Core/Ffmpeg/ToolsManifest.cs);
+       run by .github/workflows/ffmpeg.yml. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/OurTaikoEdit.Core/OurTaikoEdit.Core.csproj" />
+  </ItemGroup>
+</Project>

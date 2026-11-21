@@ -15,13 +15,15 @@ public sealed partial class ProjectsViewModel : ViewModelBase
     readonly IDialogService dialogs;
     readonly Action<ChartProject> open;
     readonly AppSettings settings;
+    readonly Action? transcode;
 
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = new();
     [ObservableProperty] ProjectItemViewModel? selected;
     [ObservableProperty] bool isEmpty;
 
-    public ProjectsViewModel(ProjectRegistry registry, IDialogService dialogs, Action<ChartProject> open, AppSettings? settings = null)
+    public ProjectsViewModel(ProjectRegistry registry, IDialogService dialogs, Action<ChartProject> open, AppSettings? settings = null, Action? transcode = null)
     {
+        this.transcode = transcode;
         this.settings = settings ?? new AppSettings();
         this.registry = registry;
         this.dialogs = dialogs;
@@ -78,6 +80,10 @@ public sealed partial class ProjectsViewModel : ViewModelBase
         }
         open(item.Project);
     }
+
+    // Audio and video converted with ffmpeg.
+    [RelayCommand]
+    void Transcode() => transcode?.Invoke();
 
     [RelayCommand]
     async Task Settings() => await dialogs.SettingsAsync(settings);

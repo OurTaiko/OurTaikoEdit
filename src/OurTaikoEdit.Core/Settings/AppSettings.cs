@@ -50,6 +50,10 @@ public sealed class AppSettings
     [JsonPropertyName("videoEncoding")] public string VideoEncoding { get; set; } = DefaultVideoEncoding;
     [JsonPropertyName("ffmpeg")] public string? Ffmpeg { get; set; }
 
+    // The transcoder's last format, and the folder its files go to (empty: beside each file).
+    [JsonPropertyName("transcodeFormat")] public string TranscodeFormat { get; set; } = "ogg";
+    [JsonPropertyName("transcodeFolder")] public string? TranscodeFolder { get; set; }
+
     // The ids of mods that are found but not loaded (ModRegistry).
     [JsonPropertyName("disabledMods")] public List<string> DisabledMods { get; set; } = new();
 
@@ -101,6 +105,8 @@ public sealed class AppSettings
         VideoHeight = Math.Clamp(VideoHeight, MinVideoSide, MaxVideoSide) & ~1;
         VideoFps = Math.Clamp(VideoFps, 1, MaxVideoFps);
         if (!VideoEncodings.Contains(VideoEncoding)) VideoEncoding = DefaultVideoEncoding;
+        if (!Transcoding.TranscodeFormat.All.Any(f => f.Id == TranscodeFormat)) TranscodeFormat = "ogg";
+        if (string.IsNullOrWhiteSpace(TranscodeFolder)) TranscodeFolder = null;
         DisabledMods = (DisabledMods ?? new()).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (Window is { } w && !(w.Width >= 400 && w.Height >= 300 && double.IsFinite(w.Width) && double.IsFinite(w.Height))) Window = null;
 

@@ -84,10 +84,15 @@
         </StackPanel>
 
         <!-- (The audio's status gives way first when the window is narrow.) -->
-        <Grid Grid.Column="2" ColumnDefinitions="*,Auto">
+        <Grid Grid.Column="2" ColumnDefinitions="*,Auto,Auto">
         <TextBlock Text="{Binding AudioStatus}" Classes="caption" VerticalAlignment="Center" HorizontalAlignment="Right"
-                   TextTrimming="CharacterEllipsis" Margin="12,0,14,0" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                   TextTrimming="CharacterEllipsis" Margin="12,0,4,0" />
+        <!-- The song converted (to OGG) in the transcoder, and used. -->
+        <Button Grid.Column="1" Classes="ghost icon" x:Name="ConvertSongButton" Command="{Binding ConvertSongCommand}" ToolTip.Tip="{l:T ConvertSongTip}"
+                VerticalAlignment="Center" Margin="0,0,10,0">
+          <controls:Icon Data="{StaticResource IconConvert}" />
+        </Button>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <controls:Icon Data="{StaticResource IconVolume}" TextElement.Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" ToolTip.Tip="{l:T VolumeTip}" />
           <Slider Minimum="0" Maximum="1" Value="{Binding Volume}" Width="84" VerticalAlignment="Center" Margin="4,0,6,0" ToolTip.Tip="{l:T VolumeTip}" />
           <ToggleButton Classes="ghost" IsChecked="{Binding HitSounds}" ToolTip.Tip="{l:T HitsTip}">

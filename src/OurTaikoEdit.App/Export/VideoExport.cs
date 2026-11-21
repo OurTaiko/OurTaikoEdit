@@ -146,25 +146,12 @@ public static class VideoExporter
         return result;
     }
 
-    // ffmpeg: the one chosen, else the one found on the PATH or where package managers put it (an
-    // app opened from the Finder does not get the shell's PATH); null when there is none.
-    public static string? FindFfmpeg(string? chosen)
+    // ffmpeg: the one chosen, else the one the app downloaded (with `tools`), else one installed on
+    // the system; null when there is none (see FfmpegTools.Find).
+    public static string? FindFfmpeg(string? chosen, OurTaikoEdit.Core.Ffmpeg.FfmpegTools? tools = null)
     {
         if (!string.IsNullOrWhiteSpace(chosen)) return File.Exists(chosen.Trim()) ? chosen.Trim() : null;
-        string name = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
-        var folders = new List<string> { AppContext.BaseDirectory };
-        folders.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
-        if (!OperatingSystem.IsWindows()) folders.AddRange(new[] { "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/opt/local/bin", "/snap/bin" });
-        foreach (string folder in folders)
-        {
-            try
-            {
-                string path = Path.Combine(folder, name);
-                if (File.Exists(path)) return path;
-            }
-            catch (ArgumentException) { }
-        }
-        return null;
+        return (tools?.Find(null) ?? OurTaikoEdit.Core.Ffmpeg.FfmpegTools.FindOnSystem())?.Ffmpeg;
     }
 
     // The whole export: the play rehearsed for its sounds, the sound mixed, then every frame drawn

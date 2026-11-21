@@ -1,3 +1,4 @@
+using OurTaikoEdit.Core.Ffmpeg;
 using OurTaikoEdit.Core.Localization;
 using OurTaikoEdit.Core.Projects;
 using OurTaikoEdit.Core.Settings;
@@ -19,6 +20,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // The play scene, shown over the editor while a chart is being played (the editor stays
     // underneath as it is: its text, its undo history, its song).
     [ObservableProperty] PlayViewModel? play;
+    // The transcoder, shown over the project list or the editor (which stay as they are).
+    [ObservableProperty] TranscodeViewModel? transcode;
+
+    // The ffmpeg the app downloads into its data folder (and finds).
+    public FfmpegTools Tools { get; }
 
     public MainWindowViewModel(ProjectRegistry registry, IDialogService dialogs, AppSettings? settings = null)
     {
@@ -27,7 +33,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Settings = settings ?? new AppSettings();
         Loc.Instance.Language = Settings.UiLanguage;
         Settings.Changed += SettingsChanged;
-        scene = new ProjectsViewModel(registry, dialogs, Open, Settings);
+        Tools = new FfmpegTools(Settings.DataFolder ?? Path.Combine(Path.GetTempPath(), "OurTaikoEdit"));
+        scene = NewProjects();
     }
 
     void SettingsChanged()
@@ -43,21 +50,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     void Open(ChartProject project)
     {
         registry.MarkOpened(project.Folder);
-        var editor = new EditorViewModel(project, dialogs, ShowProjects, Settings, scene => Play = scene);
+        var editor = new EditorViewModel(project, dialogs, ShowProjects, Settings, scene => Play = scene, Tools, OpenTranscode);
         Scene = editor;
         Title = $"{project.Name} — OurTaikoEdit";
     }
 
     void ShowProjects()
     {
-        Scene = new ProjectsViewModel(registry, dialogs, Open, Settings);
+        Scene = NewProjects();
         Title = "OurTaikoEdit";
     }
+
+    ProjectsViewModel NewProjects() => new(registry, dialogs, Open, Settings, () => OpenTranscode());
+
+    // The transcoder over the scene: with files to start from, a format, and who is told of each
+    // file converted.
+    public void OpenTranscode(IEnumerable<string>? files = null, string? format = null, Action<string>? converted = null)
+        => Transcode = new TranscodeViewModel(Tools, dialogs, Settings, () => Transcode = null, files, format, converted);
 
     // Whether the window may close: the editor asks about unsaved changes.
     public async Task<bool> CanCloseAsync()
     {
         Play?.BackCommand.Execute(null);
+        if (Transcode is { IsRunning: true }) return false;
+        Transcode?.Close();
         if (Scene is not EditorViewModel editor) return true;
         if (!await editor.ConfirmLeaveAsync()) return false;
         editor.Close();

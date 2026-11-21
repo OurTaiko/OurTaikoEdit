@@ -11,6 +11,9 @@
     <Project Path="tests/OurTaikoEdit.Tests/OurTaikoEdit.Tests.csproj" />
     <Project Path="tests/OurTaikoEdit.UiTests/OurTaikoEdit.UiTests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/OurTaikoEdit.FfmpegManifest/OurTaikoEdit.FfmpegManifest.csproj" />
+  </Folder>
   <Folder Name="/external/">
     <Project Path="external/TJAParser/dotnet~/OurTaiko.TjaParser/OurTaiko.TjaParser.csproj" />
   </Folder>
