@@ -162,6 +162,8 @@ public static class VideoExporter
         int width = options.Width & ~1, height = options.Height & ~1;
         if (width <= 0 || height <= 0 || options.Fps <= 0) throw new VideoExportException("Bad size or frame rate.");
 
+        // Not slowed by macOS while the person looks at another window (BusyActivity).
+        using var busy = BusyActivity.Begin("Exporting a video");
         var (hits, frames, begin) = await Task.Run(() => Rehearse(source, options, cancel), cancel);
         string audio = Path.Combine(Path.GetTempPath(), $"ourtaikoedit-video-{Guid.NewGuid():N}.wav");
         try

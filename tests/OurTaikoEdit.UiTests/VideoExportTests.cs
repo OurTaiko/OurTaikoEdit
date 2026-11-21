@@ -24,6 +24,16 @@ public class VideoExportTests
 
     static VideoExportOptions Options(string output = "", int fps = 30) => new(output, 640, 360, fps, false, true, "");
 
+    // macOS is told of an export while it lasts (App Nap off), and told again when it ends; on other
+    // systems nothing happens. Either way beginning and ending (twice) is harmless.
+    [Fact]
+    public void AnExportIsWorkTheSystemDoesNotSlow()
+    {
+        var busy = BusyActivity.Begin("A test");
+        busy.Dispose();
+        busy.Dispose();
+    }
+
     [Fact]
     public void AutoPlaysHitsAreHeardAtTheirNotesWhateverTheFrameRate()
     {
