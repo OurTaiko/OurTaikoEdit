@@ -564,6 +564,7 @@ public sealed partial class EditorViewModel : ViewModelBase
         if (!result.Ok || result.Edits.Count == 0) return;
         BlockIndex = Blocks.Count - 1;
         Message = Loc.F("BlockAdded", Blocks[^1].Name);
+        if (block.Imported?.Report is { } report) await dialogs.MessageAsync(Loc.T("ImportedTitle"), report);
     }
 
     // A branch taken out of the chart, one of its routes kept as what every route plays there.

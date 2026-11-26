@@ -57,11 +57,68 @@ public class ChartImageTests : IDisposable
     public void EveryLongNoteOpensAndClosesOnce()
     {
         // A tail is often past its own measure.
-        ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7000"), Bar(2, "0080") }, new[] { 12 });
-        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7000"), Bar(2, "0000") }, new[] { 12 }));
-        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7050"), Bar(2, "0080") }, new[] { 12 }));
-        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "0080") }, Array.Empty<int>()));
-        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7008") }, Array.Empty<int>()));
+        ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7000"), Bar(2, "0080") }, new int?[] { 12 });
+        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7000"), Bar(2, "0000") }, new int?[] { 12 }));
+        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7050"), Bar(2, "0080") }, new int?[] { 12 }));
+        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "0080") }, Array.Empty<int?>()));
+        Assert.Throws<DecodeException>(() => ChartImageDecoder.VerifyLongNotes(new[] { Bar(1, "7008") }, Array.Empty<int?>()));
+    }
+
+    // A balloon whose count does not read is still written, its place in BALLOON: left empty,
+    // and the chart warns at it rather than the import failing.
+    [Fact]
+    public void AnUnreadBalloonCountIsLeftForTheChartToWarnAbout()
+    {
+        var chart = new DecodedChart(120, new[] { Bar(1, "7008"), Bar(2, "7008") }, new int?[] { null, 12 }, 48);
+        string text = ChartImageImporter.WriteTja(chart, "Test", null);
+        Assert.Contains("BALLOON:,12\n", text);
+        var analysis = Tja.Analyze(text, 0);
+        Assert.False(analysis.HasErrors);
+        Assert.Contains(analysis.Diagnostics, d => d.Code == "TJA2016");
+    }
+
+    // A measure under #BARLINEOFF has no line but is numbered all the same (the user's image,
+    // 2026-11-25): the number places the line, and the commands are written back.
+    [Fact]
+    public void AMeasureNumberWithoutItsLineStillStartsAMeasure()
+    {
+        var pixels = Png.Read(File.ReadAllBytes(Fixture("wrapped_drumrolls.png")));
+        var expected = ChartImageDecoder.Decode(pixels);
+        var rgb = new byte[pixels.Width * pixels.Height * 3];
+        for (int y = 0; y < pixels.Height; y++)
+        for (int x = 0; x < pixels.Width; x++)
+        {
+            // Measure 2's line above the first lane is painted over with the background beside it.
+            var (r, g, b) = x is 215 or 216 && y is >= 62 and <= 79 ? pixels.At(213, y) : pixels.At(x, y);
+            int i = (y * pixels.Width + x) * 3;
+            (rgb[i], rgb[i + 1], rgb[i + 2]) = ((byte)r, (byte)g, (byte)b);
+        }
+        var actual = ChartImageDecoder.Decode(new Pixels(pixels.Width, pixels.Height, rgb));
+        Assert.Equal(expected.Measures.Select(m => m.Notes), actual.Measures.Select(m => m.Notes));
+        Assert.Equal(new[] { "#BARLINEOFF" }, actual.Measures[1].Commands.Where(c => c.NoteIndex == 0).Select(c => c.Text).Where(t => t.StartsWith("#BARLINE")));
+        Assert.Equal(new[] { "#BARLINEON" }, actual.Measures[2].Commands.Select(c => c.Text).Where(t => t.StartsWith("#BARLINE")));
+        Assert.DoesNotContain(actual.Measures.Skip(3), m => m.Commands.Any(c => c.Text.StartsWith("#BARLINE")));
+        Assert.Contains("#BARLINEOFF\n", ChartImageImporter.WriteTja(actual, "Test", null));
+    }
+
+    // A measure that cannot be read is written empty with a comment saying why, and the roll it
+    // cut is left for the chart's warnings rather than failing the import.
+    [Fact]
+    public void AnUnreadMeasureIsWrittenEmptyAndSaysWhy()
+    {
+        var chart = new DecodedChart(120, new[]
+        {
+            Bar(1, "5000"),
+            new DecodedMeasure(2, 4, Array.Empty<char>(), Array.Empty<DecodedCommand>(), "why"),
+            Bar(3, "1000"),
+        }, Array.Empty<int?>(), 48);
+        ChartImageDecoder.VerifyLongNotes(chart.Measures, chart.BalloonHits);
+        string text = ChartImageImporter.WriteTja(chart, "Test", null);
+        Assert.Contains("\n// ", text);
+        Assert.Contains("why\n,\n1000,", text);
+        var analysis = Tja.Analyze(text, 0);
+        Assert.False(analysis.HasErrors);
+        Assert.Equal(3, analysis.Measures.Count);
     }
 
     [Fact]
@@ -70,7 +127,7 @@ public class ChartImageTests : IDisposable
         var chart = ChartImageDecoder.Decode(Fixture("wrapped_drumrolls.png"));
         Assert.Equal(107, chart.Measures.Count);
         Assert.Equal(160, chart.Bpm);
-        Assert.Equal(new[] { 6, 10 }, chart.BalloonHits);
+        Assert.Equal(new int?[] { 6, 10 }, chart.BalloonHits);
         string NotesAt(int number) => new(chart.Measures[number - 1].Notes.ToArray());
         foreach (int offset in new[] { 0, 51 })
         {
@@ -114,7 +171,7 @@ public class ChartImageTests : IDisposable
         var chart = ChartImageDecoder.Decode(Fixture("covered_drumroll_starts.png"));
         Assert.Equal(77, chart.Measures.Count);
         Assert.Equal(128, chart.Bpm);
-        Assert.Equal(new[] { 6, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 }, chart.BalloonHits);
+        Assert.Equal(new int?[] { 6, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 }, chart.BalloonHits);
         string NotesAt(int number) => new(chart.Measures[number - 1].Notes.ToArray());
         // 48 positions of 4 pixels; the ka at 21 hides the start of the drumroll at 24, and the
         // grid would allow 22 and 23 as well.

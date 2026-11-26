@@ -18,13 +18,15 @@ ChartImageNoteClipped,A note in row {0} ending at x={1} is covered too far to te
 ChartImageNoteShape,What ends at x={1} in row {0} is not shaped like a note.,第 {0} 行止于 x={1} 的东西不是音符的形状。,{0} 段目の x={1} で終わるものは、音符の形をしていません。
 ChartImageHeadShape,The start of the drumroll in row {0} at x={1} is not shaped like one.,第 {0} 行 x={1} 处的连打开头不是应有的形状。,{0} 段目 x={1} の連打の始点が、あるべき形をしていません。
 ChartImageHeadCovered,The start of a drumroll in row {0} at x={1} is covered by another note and cannot be placed.,第 {0} 行 x={1} 处的连打开头被别的音符盖住，无法确定位置。,{0} 段目 x={1} の連打の始点が他の音符に隠れていて、位置を決められません。
-ChartImageBalloonCount,The balloon in row {0} at x={1} has no readable hit count.,第 {0} 行 x={1} 处的气球读不出打数。,{0} 段目 x={1} の風船の打数を読めません。
+ChartImageBalloonCount,"The hit count of {0} balloon(s) could not be read; their places in BALLOON: are left empty, and the chart warns at each.",有 {0} 个气球读不出打数，BALLOON: 里对应的位置留空了，谱面会在这些气球处报警告。,{0} 個の風船の打数を読めませんでした。BALLOON: の該当箇所は空にしてあり、譜面がそれぞれの風船で警告します。
+ChartImageMeasureNotFound,It was not found in the image.,图里找不到这个小节。,画像の中に見つかりません。
+ChartImageBlankComment,Measure {0} could not be read and is left empty: {1},第 {0} 小节读不出来，留空了：{1},小節 {0} は読めなかったので空にしました：{1}
+ChartImageBlankMeasures,"Measures written empty, to be filled in by hand: {0}. Each has a comment in the code saying why.",以下小节读不出来，已留空，需要手动补上：{0}。代码里每个空小节前都有一行注释说明原因。,次の小節は読めなかったので空にしました。手で補ってください：{0}。コードの各小節の前に理由のコメントがあります。
 ChartImageNoMeasureLines,Row {0} has no measure lines.,第 {0} 行没有小节线。,{0} 段目に小節線がありません。
 ChartImageMeasureUnlabelled,Row {0} does not number its first measure.,第 {0} 行的第一个小节没有小节号。,{0} 段目の最初の小節に番号がありません。
 ChartImageMeasureLabel,Row {0} numbers measure {1} as {2}.,第 {0} 行把第 {1} 小节标成了 {2}。,{0} 段目で小節 {1} が {2} と書かれています。
 ChartImageWrap,A drumroll or balloon at the edge of row {0} does not match what continues on the next row.,第 {0} 行边缘的连打或气球与下一行接续的部分对不上。,{0} 段目の端の連打・風船が、次の段の続きと合いません。
 ChartImageLayout,The rows of the image are not laid out alike.,图片各行的版式不一致。,画像の各段のレイアウトが揃っていません。
-ChartImageMeasureOrder,Measure {0} is missing: the next one found is {1}.,缺少第 {0} 小节：找到的下一个是第 {1} 小节。,小節 {0} がありません。次に見つかったのは小節 {1} です。
 ChartImageNoBeatLines,"No beat lines were found, so the scale of the image is unknown.",没有找到拍线，无法确定图片的比例。,拍の線が見つからず、画像の縮尺が分かりません。
 ChartImageMeasureWidth,"Measure {0} is {1} px wide, which is not a whole or half number of beats.",第 {0} 小节宽 {1} 像素，不是整数拍或半拍。,小節 {0} の幅は {1} px で、拍の整数倍でも半拍単位でもありません。
 ChartImageNoGrid,What is drawn in measure {0} does not fall on any grid down to 2 px a position.,第 {0} 小节里画的内容落不到任何网格上（最细到每格 2 像素）。,小節 {0} の内容は、どのグリッドにも乗りません（1 マス 2 px まで）。

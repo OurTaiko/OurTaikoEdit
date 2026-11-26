@@ -41,7 +41,7 @@ public sealed class ChartImageImporter : IChartBlockImporter
             var chart = ChartImageDecoder.Decode(source);
             var body = WriteBody(chart);
             VerifyRoundTrip(chart, target, WriteTja(chart, "", null, body));
-            return new ImportedBlock(chart.Bpm, chart.BalloonHits, body);
+            return new ImportedBlock(chart.Bpm, chart.BalloonHits, body, Problems(chart));
         }
         catch (DecodeException e)
         {
@@ -83,6 +83,7 @@ public sealed class ChartImageImporter : IChartBlockImporter
         string signature = "4/4";
         foreach (var measure in chart.Measures)
         {
+            if (measure.Unread != null) lines.Add("// " + Loc.F("ChartImageBlankComment", measure.Number, measure.Unread));
             string next = ChartImageDecoder.TimeSignature(measure.Beats);
             if (next != signature) lines.Add($"#MEASURE {signature = next}");
             // A command inside the measure splits its notes over lines, the command between them.
@@ -114,9 +115,23 @@ public sealed class ChartImageImporter : IChartBlockImporter
             throw new DecodeException("ChartImageRoundTrip", Math.Min(analysis.Measures.Count, chart.Measures.Count) + 1);
         for (int i = 0; i < chart.Measures.Count; i++)
         {
+            if (chart.Measures[i].Unread != null) continue;
             string written = new(chart.Measures[i].Notes.ToArray()), read = string.Concat(analysis.Measures[i].Slots.Select(s => s.Token));
             if (written != read) throw new DecodeException("ChartImageRoundTrip", chart.Measures[i].Number);
         }
+    }
+
+    // What was left for the user to fill in: measures written empty, balloons without a count.
+    static string? Problems(DecodedChart chart)
+    {
+        var parts = new List<string>();
+        var blank = chart.Measures.Where(m => m.Unread != null).ToList();
+        if (blank.Count > 0)
+            parts.Add(Loc.F("ChartImageBlankMeasures", string.Join(", ", blank.Select(m => m.Number)))
+                + "\n" + string.Join("\n", blank.Select(m => Loc.F("ChartImageBlankComment", m.Number, m.Unread))));
+        int unread = chart.BalloonHits.Count(h => h == null);
+        if (unread > 0) parts.Add(Loc.F("ChartImageBalloonCount", unread));
+        return parts.Count > 0 ? string.Join("\n\n", parts) : null;
     }
 
     // What was read, the measures drawn too small to be sure of, and what an image does not say.
@@ -127,6 +142,7 @@ public sealed class ChartImageImporter : IChartBlockImporter
         var report = new StringBuilder(Loc.F("ChartImageReport", chart.Measures.Count, notes, longs));
         var tight = chart.Measures.Where(m => m.Beats * chart.PixelsPerBeat / m.Subdivisions < 4).Select(m => m.Number).ToList();
         if (tight.Count > 0) report.Append("\n\n").Append(Loc.F("ChartImageTight", string.Join(", ", tight)));
+        if (Problems(chart) is { } problems) report.Append("\n\n").Append(problems);
         report.Append("\n\n").Append(Loc.T("ChartImageMissing"));
         return report.ToString();
     }

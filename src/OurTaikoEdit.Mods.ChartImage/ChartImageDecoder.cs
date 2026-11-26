@@ -14,13 +14,14 @@ public sealed record DecodedCommand(int NoteIndex, string Text);
 
 // One measure of the image as the characters of a chart's measure: Number is its label in the
 // image (from 1), Beats its length in quarter notes, Notes its characters in time order with
-// rests and the ends of long notes.
-public sealed record DecodedMeasure(int Number, double Beats, IReadOnlyList<char> Notes, IReadOnlyList<DecodedCommand> Commands)
+// rests and the ends of long notes. A measure that could not be read is written empty, with
+// Unread saying why; its Beats are then the measure before's.
+public sealed record DecodedMeasure(int Number, double Beats, IReadOnlyList<char> Notes, IReadOnlyList<DecodedCommand> Commands, string? Unread = null)
 {
     public int Subdivisions => Notes.Count;
 }
 
-public sealed record DecodedChart(double Bpm, IReadOnlyList<DecodedMeasure> Measures, IReadOnlyList<int> BalloonHits, int PixelsPerBeat);
+public sealed record DecodedChart(double Bpm, IReadOnlyList<DecodedMeasure> Measures, IReadOnlyList<int?> BalloonHits, int PixelsPerBeat);
 
 // Reads a rendered chart image back into measures of note characters and commands.
 //
@@ -148,6 +149,8 @@ public static class ChartImageDecoder
         public int Number;
         public required Lane Lane;
         public int XMin, XMax;
+        // Whether its line is drawn; one that is not is under #BARLINEOFF.
+        public bool LineDrawn = true;
         public List<ShortNote> ShortNotes = new();
         public List<LongNote> LongNotes = new();
         public List<Label> Labels = new();
@@ -160,6 +163,8 @@ public static class ChartImageDecoder
     {
         public required Lane Lane;
         public required List<int> MeasureLineXs;
+        // The lines placed from a measure number, not drawn: those measures are under #BARLINEOFF.
+        public required HashSet<int> UndrawnLineXs;
         public required List<int?> MeasureNumbers;
         public int FirstMeasureNumber, TrailingPadding;
         public required List<ShortNote> ShortNotes;
@@ -223,6 +228,44 @@ public static class ChartImageDecoder
             if (white >= 6) columns.Add(x);
         }
         return RunStarts(columns);
+    }
+
+    // A measure under #BARLINEOFF has no line drawn but is still numbered (the user's image,
+    // 2026-11-25). A number with no line before it stands for one, as far
+    // before its first digit as the drawn lines' numbers starting with that digit are, over the
+    // whole image (digits differ in how far in from the left they start).
+    static List<(int X, char First)> MeasureLabels(Pixels pixels, Lane lane)
+    {
+        var runs = ReadGlyphRuns(lane.YMin + BandMeasureNumber, lane.XMin, lane.XMax, pixels.IsDark);
+        return Cluster(runs.Select(run => run.XMin), LabelGlyphGap)
+            .Select(group => runs.First(run => run.XMin == group[0]))
+            .Select(run => (run.XMin, ChartImageFont.Lookup(run.Rows)))
+            .Where(label => label.Item2 != null).Select(label => (label.XMin, label.Item2!.Value)).ToList();
+    }
+
+    static int? LineBefore(List<int> lineXs, int x)
+        => lineXs.Where(line => line < x && x - line <= MeasureNumberScanWidth).Select(line => (int?)line).LastOrDefault();
+
+    static Dictionary<char, int> MeasureLabelGaps(Pixels pixels, List<Lane> lanes)
+    {
+        var gaps = new List<(char First, int Gap)>();
+        foreach (var lane in lanes)
+        {
+            var lineXs = FindMeasureLines(pixels, lane);
+            foreach (var (x, first) in MeasureLabels(pixels, lane))
+                if (LineBefore(lineXs, x) is { } line) gaps.Add((first, x - line));
+        }
+        return gaps.GroupBy(g => g.First).ToDictionary(g => g.Key,
+            g => g.GroupBy(x => x.Gap).OrderByDescending(x => x.Count()).First().Key);
+    }
+
+    static List<int> AddUndrawnMeasureLines(Pixels pixels, Lane lane, List<int> lineXs, Dictionary<char, int> gaps)
+    {
+        if (lineXs.Count == 0) return lineXs;
+        var added = MeasureLabels(pixels, lane)
+            .Where(label => LineBefore(lineXs, label.X) == null && gaps.ContainsKey(label.First))
+            .Select(label => label.X - gaps[label.First]).Where(x => x > lineXs[0]).ToList();
+        return added.Count == 0 ? lineXs : lineXs.Concat(added).Distinct().Order().ToList();
     }
 
     sealed record GlyphRun(int XMin, int XMax, string[] Rows);
@@ -449,18 +492,21 @@ public static class ChartImageDecoder
         }
     }
 
-    static int ReadBalloonHitCount(Pixels pixels, Lane lane, int xBodyStart)
+    // The number on a balloon's head, or null when it does not read: the balloon is still
+    // written, with its place in BALLOON: left empty for the chart's own warning to point at.
+    static int? ReadBalloonHitCount(Pixels pixels, Lane lane, int xBodyStart)
     {
         var digits = ReadGlyphRuns(lane.YMin + 13, Math.Max(lane.XMin, xBodyStart - 30), xBodyStart, pixels.IsDark)
             .Where(run => run.XMax - run.XMin >= 2).ToList();
-        if (digits.Count == 0) throw new DecodeException("ChartImageBalloonCount", lane.Index + 1, xBodyStart);
-        string text = ReadText(digits, lane);
-        return WholeNumber(text, out int hits) && hits > 0 ? hits : throw new DecodeException("ChartImageBalloonCount", lane.Index + 1, xBodyStart);
+        if (digits.Count == 0) return null;
+        try { return WholeNumber(ReadText(digits, lane), out int hits) && hits > 0 ? hits : null; }
+        catch (DecodeException) { return null; }
     }
 
-    static RawLane ReadLane(Pixels pixels, Lane lane, int previousTrailingPadding)
+    static RawLane ReadLane(Pixels pixels, Lane lane, int previousTrailingPadding, Dictionary<char, int> labelGaps)
     {
-        var lineXs = FindMeasureLines(pixels, lane);
+        var drawnXs = FindMeasureLines(pixels, lane);
+        var lineXs = AddUndrawnMeasureLines(pixels, lane, drawnXs, labelGaps);
         if (lineXs.Count == 0) throw new DecodeException("ChartImageNoMeasureLines", lane.Index + 1);
         int trailingPadding = lane.XMax - lineXs[^1];
         var numbers = lineXs.Select(x => ReadMeasureNumber(pixels, lane, x)).ToList();
@@ -475,7 +521,7 @@ public static class ChartImageDecoder
         FindLongNoteStarts(pixels, lane, longNotes, shortNotes);
         return new RawLane
         {
-            Lane = lane, MeasureLineXs = lineXs, MeasureNumbers = numbers, FirstMeasureNumber = first, TrailingPadding = trailingPadding,
+            Lane = lane, MeasureLineXs = lineXs, UndrawnLineXs = lineXs.Except(drawnXs).ToHashSet(), MeasureNumbers = numbers, FirstMeasureNumber = first, TrailingPadding = trailingPadding,
             ShortNotes = shortNotes,
             LongNotes = longNotes,
             Labels = ReadLabels(pixels, lane),
@@ -524,6 +570,7 @@ public static class ChartImageDecoder
             measures.Add(new RawMeasure
             {
                 Number = number, Lane = rawLane.Lane, XMin = xMin, XMax = xMax ?? -1,
+                LineDrawn = !rawLane.UndrawnLineXs.Contains(xMin),
                 ShortNotes = rawLane.ShortNotes.Where(n => n.X >= xMin && n.X < xEnd).ToList(),
                 // Only the piece with the head starts a note in this measure.
                 LongNotes = rawLane.LongNotes.Where(n => !n.ContinuesLeft && n.HeadX >= xMin && n.HeadX < xEnd).ToList(),
@@ -551,9 +598,10 @@ public static class ChartImageDecoder
         var measures = new List<RawMeasure>();
         var endOffsetsByMeasure = new Dictionary<int, List<int>>();
         LongNote? continued = null;
+        var labelGaps = MeasureLabelGaps(pixels, lanes);
         foreach (var lane in lanes)
         {
-            var rawLane = ReadLane(pixels, lane, paddings.Count > 0 ? paddings.Min() : int.MaxValue);
+            var rawLane = ReadLane(pixels, lane, paddings.Count > 0 ? paddings.Min() : int.MaxValue, labelGaps);
             paddings.Add(rawLane.TrailingPadding);
             continued = ValidateLongNoteContinuation(rawLane, continued);
             CollectLongNoteEnds(rawLane, endOffsetsByMeasure);
@@ -567,10 +615,12 @@ public static class ChartImageDecoder
             if (measure.XMax < 0) measure.XMax = measure.Lane.XMax - padding;
             if (endOffsetsByMeasure.TryGetValue(measure.Number, out var ends)) measure.LongNoteEndOffsets = ends;
         }
-        if (endOffsetsByMeasure.Keys.Any(number => !measures.Any(m => m.Number == number))) throw new DecodeException("ChartImageLayout");
+        // An end filed under a measure that is not there goes with it; the measure is written
+        // empty (Decode), and the chart warns about the roll left open.
         measures = measures.OrderBy(m => m.Number).ToList();
-        for (int i = 0; i < measures.Count; i++)
-            if (measures[i].Number != i + 1) throw new DecodeException("ChartImageMeasureOrder", i + 1, measures[i].Number);
+        for (int i = 1; i < measures.Count; i++)
+            if (measures[i].Number == measures[i - 1].Number) throw new DecodeException("ChartImageLayout");
+        if (measures.Count > 0 && measures[0].Number < 1) throw new DecodeException("ChartImageLayout");
         return measures;
     }
 
@@ -668,8 +718,8 @@ public static class ChartImageDecoder
     {
         public double? Bpm, InitialBpm;
         public double Scroll = 1;
-        public bool GogoOn;
-        public List<int> BalloonHits = new();
+        public bool GogoOn, BarlineOn = true;
+        public List<int?> BalloonHits = new();
     }
 
     static string Number(double value) => value.ToString("0.###############", CultureInfo.InvariantCulture);
@@ -703,7 +753,7 @@ public static class ChartImageDecoder
                 start = candidates[0];
             }
             events.Add((start, LongChar(note.Kind).ToString(), false));
-            if (note is { Kind: LongKind.Balloon, HitCount: { } hits }) state.BalloonHits.Add(hits);
+            if (note.Kind == LongKind.Balloon) state.BalloonHits.Add(note.HitCount);
         }
         foreach (int end in measure.LongNoteEndOffsets) events.Add((end, "8", false));
         foreach (var label in measure.Labels)
@@ -722,6 +772,11 @@ public static class ChartImageDecoder
             if (label.Value == state.Scroll) continue;
             events.Add((at, "#SCROLL " + Number(label.Value), true));
             state.Scroll = label.Value;
+        }
+        if (measure.LineDrawn != state.BarlineOn)
+        {
+            events.Add((0, measure.LineDrawn ? "#BARLINEON" : "#BARLINEOFF", true));
+            state.BarlineOn = measure.LineDrawn;
         }
         foreach (var (offset, on) in gogoChanges)
         {
@@ -744,26 +799,33 @@ public static class ChartImageDecoder
 
     // Every drumroll and balloon opens and closes once, and every balloon has its count. A tail
     // can be past its own measure, so this also catches an end filed under the wrong one.
-    public static void VerifyLongNotes(IReadOnlyList<DecodedMeasure> measures, IReadOnlyList<int> balloonHits)
+    public static void VerifyLongNotes(IReadOnlyList<DecodedMeasure> measures, IReadOnlyList<int?> balloonHits)
     {
         bool open = false;
         int openedIn = 0, balloons = 0;
+        // Around a measure written empty, a roll's head or end may be gone: from there to the next
+        // roll's head nothing is checked, and the chart warns about what is left.
+        bool unsure = false;
         foreach (var measure in measures)
+        {
+            if (measure.Unread != null) { open = false; unsure = true; continue; }
             foreach (char note in measure.Notes)
             {
                 if (note is '5' or '6' or '7')
                 {
-                    if (open) throw new DecodeException("ChartImageLongOpen", openedIn);
+                    if (open && !unsure) throw new DecodeException("ChartImageLongOpen", openedIn);
+                    unsure = false;
                     (open, openedIn) = (true, measure.Number);
                     if (note == '7') balloons++;
                 }
                 else if (note == '8')
                 {
-                    if (!open) throw new DecodeException("ChartImageLongEnd", measure.Number);
+                    if (!open && !unsure) throw new DecodeException("ChartImageLongEnd", measure.Number);
                     open = false;
                 }
             }
-        if (open) throw new DecodeException("ChartImageLongOpen", openedIn);
+        }
+        if (open && !unsure) throw new DecodeException("ChartImageLongOpen", openedIn);
         if (balloons != balloonHits.Count) throw new DecodeException("ChartImageBalloons", balloons, balloonHits.Count);
     }
 
@@ -772,11 +834,34 @@ public static class ChartImageDecoder
         var lanes = FindLanes(pixels);
         int pixelsPerBeat = FindPixelsPerBeat(pixels, lanes);
         var state = new ChartState();
-        var measures = CollectMeasures(pixels, lanes).Select(m => AssembleMeasure(m, pixelsPerBeat, state)).ToList();
+        var raw = CollectMeasures(pixels, lanes);
+        var measures = new List<DecodedMeasure>();
+        int last = raw.Count > 0 ? raw[^1].Number : 0, next = 0;
+        for (int number = 1; number <= last; number++)
+        {
+            double beats = measures.Count > 0 ? measures[^1].Beats : 4;
+            if (raw[next].Number != number)
+            {
+                measures.Add(Blank(number, beats, Loc.T("ChartImageMeasureNotFound")));
+                continue;
+            }
+            var measure = raw[next++];
+            var saved = (state.Bpm, state.InitialBpm, state.Scroll, state.GogoOn, state.BarlineOn, Balloons: state.BalloonHits.Count);
+            try { measures.Add(AssembleMeasure(measure, pixelsPerBeat, state)); }
+            catch (DecodeException e)
+            {
+                (state.Bpm, state.InitialBpm, state.Scroll, state.GogoOn, state.BarlineOn) = (saved.Bpm, saved.InitialBpm, saved.Scroll, saved.GogoOn, saved.BarlineOn);
+                state.BalloonHits.RemoveRange(saved.Balloons, state.BalloonHits.Count - saved.Balloons);
+                measures.Add(Blank(number, beats, e.Message));
+            }
+        }
         if (state.InitialBpm is not { } bpm) throw new DecodeException("ChartImageNoBpm");
         VerifyLongNotes(measures, state.BalloonHits);
         return new DecodedChart(bpm, measures, state.BalloonHits, pixelsPerBeat);
     }
+
+    static DecodedMeasure Blank(int number, double beats, string why)
+        => new(number, beats, Array.Empty<char>(), Array.Empty<DecodedCommand>(), why);
 
     public static DecodedChart Decode(string file)
     {
